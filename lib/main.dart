@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/demo_screen.dart';
+import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -13,11 +13,13 @@ class HoumaniApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // MaterialApp.router : les écrans sont choisis par le routeur
+    // (go_router), défini dans lib/router/app_router.dart
+    return MaterialApp.router(
       title: 'Houmani', // nom affiché de l'application
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light, // couleurs et police définies dans app_theme.dart
-      home: const DemoScreen(),
+      routerConfig: appRouter,
     );
   }
 }
