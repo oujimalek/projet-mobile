@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Bouton d'action principal (orange), sur toute la largeur.
-/// À utiliser UNE seule fois par écran pour l'action la plus importante.
+/// Bouton secondaire : fond blanc, bordure et texte teal, sur toute la largeur.
+/// Même taille et mêmes paramètres que PrimaryButton : à utiliser pour une
+/// action moins importante (ex : "Annuler", "Plus tard") à côté du bouton orange.
 ///
-/// Exemple : PrimaryButton(texte: 'Se connecter', onPressed: () {})
-class PrimaryButton extends StatelessWidget {
+/// Exemple : SecondaryButton(texte: 'Annuler', onPressed: () {})
+class SecondaryButton extends StatelessWidget {
   final String texte;
   final Function()? onPressed; // fonction appelée au clic (null = bouton désactivé)
   final IconData? icone; // icône optionnelle à gauche du texte
 
-  const PrimaryButton({
+  const SecondaryButton({
     super.key,
     required this.texte,
     required this.onPressed,
@@ -34,11 +35,17 @@ class PrimaryButton extends StatelessWidget {
       ),
     );
 
+    // Même widget que PrimaryButton (ElevatedButton) : la taille, les coins
+    // arrondis et le style du texte viennent du thème, seules les couleurs changent
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.accent,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.card,
+        foregroundColor: AppColors.primary,
+        disabledBackgroundColor: AppColors.card,
+        disabledForegroundColor: AppColors.textSecondary,
+        elevation: 0,
+        side: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
