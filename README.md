@@ -69,7 +69,7 @@ flutter test
 | Dossier | Contenu |
 |---|---|
 | `lib/theme/app_theme.dart` | Toutes les couleurs (`AppColors`) et le thème de l'app |
-| `lib/widgets/` | Composants réutilisables : bouton principal, champ de saisie, carte, badge de statut, séparateur en clous, date en arc, barre du bas, logo |
+| `lib/widgets/` | Composants réutilisables : bouton principal (orange) et secondaire (bordure teal), champ de saisie, carte, badge de statut, séparateur en clous, date en arc, barre du bas, logo |
 | `lib/data/models/` | Les modèles de données (Utilisateur, Service, Signalement, Evenement, Sondage) |
 | `lib/data/services/` | Les classes qui fournissent les données (en dur pour l'instant, une API plus tard) |
 | `lib/screens/demo_screen.dart` | Écran d'accueil de démonstration qui ouvre les 4 modules |
