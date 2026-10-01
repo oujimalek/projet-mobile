@@ -1,25 +1,224 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/coming_soon.dart';
+import '../../data/models/utilisateur.dart';
+import '../../data/services/utilisateur_repository.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_text_field.dart';
+import '../../widgets/houmani_logo.dart';
+import '../../widgets/nail_divider.dart';
+import '../../widgets/primary_button.dart';
 
 /// M1 - Utilisateurs : écran de connexion.
 ///
-/// PLACEHOLDER : remplacer le contenu de ce fichier en phase 2
-/// (garder le nom de la classe ConnexionScreen).
-///
-/// À utiliser pour le vrai écran :
-///   - Form + `GlobalKey<FormState>` pour la validation
-///   - AppTextField (email, mot de passe avec motDePasse: true)
-///   - PrimaryButton "Se connecter", HoumaniLogo, texte "Ahla bik !"
-///   - UtilisateurRepository().connexion(email, motDePasse)
-class ConnexionScreen extends StatelessWidget {
+/// Un Form avec deux champs (téléphone ou e-mail, mot de passe).
+/// Le bouton "Se connecter" vérifie les champs, puis interroge
+/// UtilisateurRepository (compte de démo : voir utilisateur_repository.dart).
+class ConnexionScreen extends StatefulWidget {
   const ConnexionScreen({super.key});
+
+  @override
+  State<ConnexionScreen> createState() {
+    return _ConnexionScreenState();
+  }
+}
+
+class _ConnexionScreenState extends State<ConnexionScreen> {
+  // Clé du formulaire : permet d'appeler validate() sur tous les champs
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  // Contrôleurs : permettent de lire le texte saisi dans les champs
+  final TextEditingController _identifiantController = TextEditingController();
+  final TextEditingController _motDePasseController = TextEditingController();
+
+  // Message affiché sous le bouton après une tentative de connexion
+  String _message = '';
+  bool _connexionReussie = false;
+
+  @override
+  void dispose() {
+    // On libère les contrôleurs quand l'écran est fermé
+    _identifiantController.dispose();
+    _motDePasseController.dispose();
+    super.dispose();
+  }
+
+  /// Compte le nombre de chiffres dans un texte (pour le téléphone).
+  int _compterChiffres(String texte) {
+    int nombre = 0;
+    for (int i = 0; i < texte.length; i++) {
+      if ('0123456789'.contains(texte[i])) {
+        nombre++;
+      }
+    }
+    return nombre;
+  }
+
+  /// Validation du champ "Téléphone ou e-mail".
+  String? _validerIdentifiant(String? valeur) {
+    if (valeur == null || valeur.trim().isEmpty) {
+      return 'Saisis ton téléphone ou ton e-mail';
+    }
+    final String texte = valeur.trim();
+
+    // Si le texte contient un @, on le traite comme un e-mail
+    if (texte.contains('@')) {
+      if (!texte.contains('.')) {
+        return 'Adresse e-mail invalide';
+      }
+      return null;
+    }
+
+    // Sinon c'est un téléphone : au moins 8 chiffres (numéro tunisien)
+    if (_compterChiffres(texte) < 8) {
+      return 'Numéro de téléphone invalide (8 chiffres)';
+    }
+    return null;
+  }
+
+  /// Validation du champ "Mot de passe".
+  String? _validerMotDePasse(String? valeur) {
+    if (valeur == null || valeur.isEmpty) {
+      return 'Saisis ton mot de passe';
+    }
+    if (valeur.length < 6) {
+      return 'Au moins 6 caractères';
+    }
+    return null;
+  }
+
+  /// Appelé quand on touche "Se connecter".
+  void _seConnecter() {
+    // 1. On vérifie les champs : si une règle n'est pas respectée, on s'arrête
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // 2. On demande au repository si le compte existe
+    final Utilisateur? utilisateur = UtilisateurRepository().connexion(
+      _identifiantController.text,
+      _motDePasseController.text,
+    );
+
+    // 3. On met à jour le message affiché
+    setState(() {
+      if (utilisateur != null) {
+        _connexionReussie = true;
+        _message = 'Yaatik saha ${utilisateur.prenom}, tu es connecté(e) !';
+      } else {
+        _connexionReussie = false;
+        _message = 'Identifiant ou mot de passe incorrect';
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Connexion')),
-      body: const ComingSoon(module: 'Module 1 - Utilisateurs\nÉcran de connexion'),
+      // Barre du haut discrète (couleur du fond) : seulement la flèche retour
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.textPrimary,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        children: [
+          // ----- En-tête : logo + bienvenue -----
+          const SizedBox(height: 8),
+          const Center(child: HoumaniLogo(taille: 90)),
+          const SizedBox(height: 20),
+          const Text(
+            'Ahla bik !',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Connecte-toi à ta houma',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+          ),
+          const NailDivider(),
+          const SizedBox(height: 12),
+
+          // ----- Formulaire -----
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                AppTextField(
+                  label: 'Téléphone ou e-mail',
+                  hint: '+216 22 345 678',
+                  icone: Icons.person_outline,
+                  controller: _identifiantController,
+                  clavier: TextInputType.emailAddress,
+                  validator: _validerIdentifiant,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  label: 'Mot de passe',
+                  icone: Icons.lock_outline,
+                  controller: _motDePasseController,
+                  motDePasse: true,
+                  validator: _validerMotDePasse,
+                ),
+              ],
+            ),
+          ),
+
+          // ----- Mot de passe oublié (visuel seulement pour l'instant) -----
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                // Écran "mot de passe oublié" : à venir
+              },
+              child: const Text(
+                'Mot de passe oublié ?',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // ----- Bouton principal -----
+          PrimaryButton(texte: 'Se connecter', onPressed: _seConnecter),
+          const SizedBox(height: 12),
+
+          // ----- Résultat de la connexion -----
+          Text(
+            _message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _connexionReussie ? AppColors.primary : AppColors.incident,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 40),
+
+          // ----- Inscription (visuel seulement pour l'instant) -----
+          // Wrap : passe à la ligne si l'écran est trop étroit
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text(
+                'Pas encore de compte ?',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              TextButton(
+                onPressed: () {
+                  // Écran d'inscription : à venir
+                },
+                child: const Text(
+                  'S\'inscrire',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }

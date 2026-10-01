@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:houmani/main.dart';
+import 'package:houmani/screens/module1/connexion_screen.dart';
 
 void main() {
   // Pas de téléchargement de police pendant les tests (pas d'Internet)
@@ -21,14 +21,13 @@ void main() {
     expect(find.text('M4 · Événements'), findsOneWidget);
   });
 
-  testWidgets('Toucher le module 1 ouvre l\'écran "À venir"',
+  testWidgets('Toucher le module 1 ouvre l\'écran de connexion',
       (WidgetTester tester) async {
     await tester.pumpWidget(const HoumaniApp());
 
     await tester.tap(find.text('M1 · Utilisateurs'));
     await tester.pumpAndSettle();
 
-    expect(find.text('À venir'), findsOneWidget);
-    expect(find.byIcon(Icons.construction), findsOneWidget);
+    expect(find.byType(ConnexionScreen), findsOneWidget);
   });
 }

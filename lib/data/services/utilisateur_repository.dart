@@ -15,18 +15,42 @@ class UtilisateurRepository {
     prenom: 'Amira',
     nom: 'Ben Salah',
     email: emailDemo,
-    telephone: '+216 20 000 000',
+    telephone: '+216 22 345 678',
     quartier: 'Cité Ennasr 2',
     residence: 'Résidence Yasmine, Bloc B',
   );
 
-  /// Vérifie l'email et le mot de passe.
+  /// Vérifie l'identifiant (e-mail OU téléphone) et le mot de passe.
   /// Renvoie l'utilisateur si c'est correct, sinon null.
-  Utilisateur? connexion(String email, String motDePasse) {
-    if (email.trim() == emailDemo && motDePasse == motDePasseDemo) {
+  Utilisateur? connexion(String identifiant, String motDePasse) {
+    if (motDePasse != motDePasseDemo) {
+      return null;
+    }
+
+    // Connexion par e-mail
+    if (identifiant.trim() == _utilisateurDemo.email) {
+      return _utilisateurDemo;
+    }
+
+    // Connexion par téléphone : on compare uniquement les chiffres,
+    // donc "+216 22 345 678", "22345678" et "22 345 678" sont acceptés
+    final String chiffresSaisis = _garderChiffres(identifiant);
+    final String chiffresCompte = _garderChiffres(_utilisateurDemo.telephone);
+    if (chiffresSaisis.length >= 8 && chiffresCompte.endsWith(chiffresSaisis)) {
       return _utilisateurDemo;
     }
     return null;
+  }
+
+  /// Garde seulement les chiffres d'un texte ("+216 22" donne "21622").
+  String _garderChiffres(String texte) {
+    String chiffres = '';
+    for (int i = 0; i < texte.length; i++) {
+      if ('0123456789'.contains(texte[i])) {
+        chiffres = chiffres + texte[i];
+      }
+    }
+    return chiffres;
   }
 
   /// L'utilisateur actuellement connecté (fictif pour l'instant).
