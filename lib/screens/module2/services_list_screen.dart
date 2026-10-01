@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../data/models/service.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_card.dart';
 
 /// M2 - Services : liste des services entre voisins.
@@ -77,15 +76,6 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     return '${date.day}/${date.month}';
   }
 
-  /// Quand on touche un onglet de la barre du bas.
-  void _onOngletTouche(int index) {
-    if (index == 0) {
-      // "Accueil" : on revient à l'écran précédent
-      Navigator.pop(context);
-    }
-    // Les autres onglets seront reliés quand toute l'app sera assemblée
-  }
-
   @override
   Widget build(BuildContext context) {
     final List<Service> services = _servicesAffiches();
@@ -130,11 +120,8 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
         shape: const CircleBorder(),
         child: const Icon(Icons.add, size: 30),
       ),
-
-      bottomNavigationBar: AppBottomNav(
-        indexActif: 1, // onglet "Services"
-        onTap: _onOngletTouche,
-      ),
+      // Pas de barre du bas ici : elle est affichée par le routeur
+      // (AppShell dans lib/router/app_router.dart) pour tous les onglets
     );
   }
 
