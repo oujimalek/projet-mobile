@@ -13,12 +13,16 @@ class Sondage {
   final String question;
   final List<OptionSondage> options;
   final DateTime dateFin;
+  final String proposePar; // ex : "l'admin", vide si inconnu
+  final int nombreMembres; // nombre de membres qui peuvent voter
 
   const Sondage({
     required this.id,
     required this.question,
     required this.options,
     required this.dateFin,
+    this.proposePar = '',
+    this.nombreMembres = 0,
   });
 
   /// Nombre total de votes, utile pour calculer les pourcentages.

@@ -41,14 +41,19 @@ class EvenementRepository {
 
   /// Le sondage en cours (utilisé par SondageScreen).
   Sondage getSondageActif() {
+    // Le sondage se termine dans 2 jours (calculé à partir d'aujourd'hui)
+    final DateTime aujourdhui = DateTime.now();
+
     return Sondage(
       id: 'p1',
-      question: 'Quel jour pour la fête des voisins ?',
-      dateFin: DateTime(2026, 10, 10),
+      question: 'Quelle date pour la réunion de résidence ?',
+      dateFin: DateTime(aujourdhui.year, aujourdhui.month, aujourdhui.day + 2),
+      proposePar: 'l\'admin',
+      nombreMembres: 46,
       options: const [
-        OptionSondage(texte: 'Vendredi soir', votes: 8),
-        OptionSondage(texte: 'Samedi après-midi', votes: 14),
-        OptionSondage(texte: 'Dimanche midi', votes: 5),
+        OptionSondage(texte: 'Mardi 6 oct. · 19:00', votes: 12),
+        OptionSondage(texte: 'Jeudi 8 oct. · 19:00', votes: 7),
+        OptionSondage(texte: 'Samedi 10 oct. · 10:00', votes: 3),
       ],
     );
   }
