@@ -8,55 +8,71 @@ class ServiceRepository {
   /// Les catégories utilisées pour les filtres de la liste des services.
   /// "Tous" est le filtre par défaut.
   List<String> getCategories() {
-    return const ['Tous', 'Bricolage', 'Cours', 'Courses', 'Garde', 'Covoiturage'];
+    return const ['Tous', 'Bricolage', 'Prêt d\'outils', 'Garde d\'enfants', 'Courses'];
   }
 
   /// Tous les services du quartier.
   List<Service> getServices() {
-    return const [
+    // Les dates sont calculées à partir de maintenant pour que la liste
+    // affiche toujours "1 h", "3 h", "hier"... comme sur la maquette.
+    final DateTime maintenant = DateTime.now();
+
+    return [
+      // ----- Offres (les 4 de la maquette) -----
       Service(
         id: 's1',
-        titre: 'Réparation de robinets',
-        description: 'Je peux réparer les fuites et changer les joints.',
-        categorie: 'Bricolage',
-        auteur: 'Youssef T.',
+        titre: 'Perceuse à prêter',
+        description: 'Perceuse avec forets, à rendre sous 3 jours.',
+        categorie: 'Prêt d\'outils',
+        auteur: 'Karim M.',
+        bloc: 'Bloc A',
         estOffre: true,
-        prix: '15 DT',
+        datePublication: maintenant.subtract(const Duration(hours: 1)),
       ),
       Service(
         id: 's2',
-        titre: 'Cours de maths (collège)',
-        description: 'Soutien scolaire le soir, niveau 7e à 9e année.',
-        categorie: 'Cours',
-        auteur: 'Salma G.',
+        titre: 'Garde d\'enfants le samedi',
+        description: 'Je peux garder vos enfants le samedi après-midi.',
+        categorie: 'Garde d\'enfants',
+        auteur: 'Leila B.',
+        bloc: 'Bloc C',
         estOffre: true,
-        prix: '20 DT / h',
+        datePublication: maintenant.subtract(const Duration(hours: 3)),
       ),
       Service(
         id: 's3',
-        titre: 'Qui va au marché samedi ?',
-        description: 'Je cherche quelqu\'un pour me ramener des légumes.',
-        categorie: 'Courses',
-        auteur: 'Amira B.',
-        estOffre: false,
+        titre: 'Petits travaux de plomberie',
+        description: 'Fuites, joints, robinets : je passe chez vous.',
+        categorie: 'Bricolage',
+        auteur: 'Nizar H.',
+        bloc: 'Bloc B',
+        estOffre: true,
+        prix: '15 DT',
+        datePublication: maintenant.subtract(const Duration(hours: 26)),
       ),
       Service(
         id: 's4',
-        titre: 'Covoiturage vers Ariana',
-        description: 'Départ chaque matin à 7h30, 2 places libres.',
-        categorie: 'Covoiturage',
-        auteur: 'Karim M.',
+        titre: 'Courses au Carrefour',
+        description: 'Je vais au Carrefour, je peux ramener vos courses.',
+        categorie: 'Courses',
+        auteur: 'Sarra A.',
+        bloc: 'Bloc A',
         estOffre: true,
+        datePublication: maintenant.subtract(const Duration(hours: 30)),
       ),
+
+      // ----- Services communs hebdomadaires (offres) -----
       Service(
         id: 's5',
         titre: 'Nettoyage des escaliers',
         description: 'Service commun : on nettoie ensemble les escaliers du bloc.',
         categorie: 'Bricolage',
-        auteur: 'Syndic Bloc B',
+        auteur: 'Syndic',
+        bloc: 'Bloc B',
         estOffre: true,
         estCommun: true,
         jour: 'Samedi',
+        datePublication: maintenant.subtract(const Duration(days: 3)),
       ),
       Service(
         id: 's6',
@@ -64,9 +80,33 @@ class ServiceRepository {
         description: 'Service commun : un voisin passe à la boulangerie pour tous.',
         categorie: 'Courses',
         auteur: 'Résidence Yasmine',
+        bloc: 'Tous les blocs',
         estOffre: true,
         estCommun: true,
         jour: 'Dimanche',
+        datePublication: maintenant.subtract(const Duration(days: 4)),
+      ),
+
+      // ----- Demandes -----
+      Service(
+        id: 's7',
+        titre: 'Qui va au marché samedi ?',
+        description: 'Je cherche quelqu\'un pour me ramener des légumes.',
+        categorie: 'Courses',
+        auteur: 'Amira B.',
+        bloc: 'Bloc B',
+        estOffre: false,
+        datePublication: maintenant.subtract(const Duration(hours: 5)),
+      ),
+      Service(
+        id: 's8',
+        titre: 'Cherche une échelle',
+        description: 'Pour changer une ampoule au plafond, une heure seulement.',
+        categorie: 'Prêt d\'outils',
+        auteur: 'Youssef T.',
+        bloc: 'Bloc A',
+        estOffre: false,
+        datePublication: maintenant.subtract(const Duration(days: 2)),
       ),
     ];
   }

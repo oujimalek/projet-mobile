@@ -9,6 +9,8 @@ class Service {
   final bool estCommun; // true = service commun hebdomadaire
   final String? jour; // jour du service commun (ex : "Samedi"), sinon null
   final String? prix; // ex : "10 DT", null si gratuit
+  final String bloc; // bloc de l'auteur (ex : "Bloc A"), vide si inconnu
+  final DateTime? datePublication; // date et heure de publication
 
   const Service({
     required this.id,
@@ -20,5 +22,7 @@ class Service {
     this.estCommun = false,
     this.jour,
     this.prix,
+    this.bloc = '',
+    this.datePublication,
   });
 }
