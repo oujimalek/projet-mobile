@@ -72,5 +72,7 @@ flutter test
 | `lib/widgets/` | Composants réutilisables : bouton principal (orange) et secondaire (bordure teal), champ de saisie, carte, badge de statut, séparateur en clous, date en arc, barre du bas, logo |
 | `lib/data/models/` | Les modèles de données (Utilisateur, Service, Signalement, Evenement, Sondage) |
 | `lib/data/services/` | Les classes qui fournissent les données (en dur pour l'instant, une API plus tard) |
-| `lib/screens/demo_screen.dart` | Écran d'accueil de démonstration qui ouvre les 4 modules |
+| `lib/router/app_router.dart` | La navigation (go_router) : les 5 onglets de la barre du bas (Accueil, Services, Signalements, Événements, Profil) et les écrans en plein écran (connexion, démo) |
+| `lib/screens/accueil_screen.dart`, `profil_screen.dart` | Onglets Accueil et Profil (« À venir » pour l'instant) |
+| `lib/screens/demo_screen.dart` | Écran de démonstration qui ouvre les 4 modules (bouton sur l'onglet Accueil) |
 | `assets/images/logo.png` | Le logo officiel Houmani |
