@@ -26,7 +26,13 @@ class PrimaryButton extends StatelessWidget {
       contenu.add(Icon(icone, size: 20));
       contenu.add(const SizedBox(width: 8));
     }
-    contenu.add(Text(texte));
+    // Flexible : si le texte est trop long (petit écran, grande police),
+    // il passe à la ligne au lieu de déborder du bouton
+    contenu.add(
+      Flexible(
+        child: Text(texte, textAlign: TextAlign.center),
+      ),
+    );
 
     return ElevatedButton(
       onPressed: onPressed,
