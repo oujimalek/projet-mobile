@@ -35,6 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   google_fonts: ^9.0.0
+  # Navigation entre les onglets (voir lib/router/app_router.dart).
+  # On reste en version 17 : la version 18 utilise le package material_ui,
+  # incompatible avec le MaterialApp de flutter/material utilisé dans le projet.
+  go_router: ^17.0.0
 
 dev_dependencies:
   flutter_test:
