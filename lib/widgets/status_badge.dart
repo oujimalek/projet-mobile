@@ -20,20 +20,20 @@ class StatusBadge extends StatelessWidget {
     switch (statut) {
       case StatutSignalement.enAttente:
         texte = 'En attente';
-        couleur = AppColors.textSecondary;
-        fond = AppColors.border;
+        couleur = AppColors.badgeEnAttente;
+        fond = AppColors.badgeEnAttenteFond;
       case StatutSignalement.enCours:
         texte = 'En cours';
-        couleur = AppColors.warning;
-        fond = AppColors.warningLight;
+        couleur = AppColors.badgeEnCours;
+        fond = AppColors.badgeEnCoursFond;
       case StatutSignalement.resolu:
         texte = 'Résolu';
-        couleur = AppColors.success;
-        fond = AppColors.successLight;
+        couleur = AppColors.badgeResolu;
+        fond = AppColors.badgeResoluFond;
       case StatutSignalement.refuse:
         texte = 'Refusé';
-        couleur = AppColors.error;
-        fond = AppColors.errorLight;
+        couleur = AppColors.badgeRefuse;
+        fond = AppColors.badgeRefuseFond;
     }
 
     return Container(

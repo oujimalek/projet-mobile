@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/signalement.dart';
 import '../../data/models/sondage.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
+import '../../widgets/status_badge.dart';
 
 /// M4 - Événements : sondage entre voisins.
 ///
@@ -106,21 +109,17 @@ class _SondageScreenState extends State<SondageScreen> {
       cartesOptions.add(_carteOption(i));
     }
 
+    // Badge "En cours" tant que le sondage n'est pas terminé
+    final StatutSignalement statut = _sondage.dateFin.isAfter(DateTime.now())
+        ? StatutSignalement.enCours
+        : StatutSignalement.resolu;
+
     return Scaffold(
-      // Barre du haut claire, comme sur la maquette
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
-        centerTitle: false,
-        title: const Text('Sondage'),
-        titleTextStyle: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
       body: Column(
         children: [
+          // En-tête blanc arrondi, comme sur la maquette
+          const AppHeader(titre: 'Sondage'),
+
           // ----- Question + options (partie qui défile) -----
           Expanded(
             child: ListView(
@@ -133,10 +132,19 @@ class _SondageScreenState extends State<SondageScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  _sousTitre(),
-                  style: const TextStyle(color: AppColors.textSecondary),
+                const SizedBox(height: 8),
+                // Wrap : le badge passe à la ligne si le sous-titre est long
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    StatusBadge(statut: statut),
+                    Text(
+                      _sousTitre(),
+                      style: const TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 Column(children: cartesOptions),
@@ -158,7 +166,7 @@ class _SondageScreenState extends State<SondageScreen> {
                 Text(
                   _aVote ? 'Yaatik saha, ton vote est enregistré !' : '',
                   style: const TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.success,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -211,10 +219,10 @@ class _SondageScreenState extends State<SondageScreen> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: choisie ? AppColors.primaryLight : AppColors.card,
+            color: choisie ? AppColors.secondaryLight : AppColors.card,
             borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
             border: Border.all(
-              color: choisie ? AppColors.primary : AppColors.border,
+              color: choisie ? AppColors.secondary : AppColors.border,
               width: choisie ? 2 : 1,
             ),
           ),
@@ -222,7 +230,7 @@ class _SondageScreenState extends State<SondageScreen> {
             children: [
               Row(
                 children: [
-                  // Rond de sélection (anneau bleu cobalt épais quand choisi)
+                  // Rond de sélection (anneau doré épais quand choisi)
                   Container(
                     width: 22,
                     height: 22,
@@ -230,7 +238,7 @@ class _SondageScreenState extends State<SondageScreen> {
                       color: AppColors.card,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: choisie ? AppColors.primary : AppColors.border,
+                        color: choisie ? AppColors.secondary : AppColors.border,
                         width: choisie ? 6 : 2,
                       ),
                     ),
@@ -259,7 +267,7 @@ class _SondageScreenState extends State<SondageScreen> {
                 minHeight: 6,
                 borderRadius: BorderRadius.circular(4),
                 backgroundColor: AppColors.border,
-                color: choisie ? AppColors.primary : AppColors.textSecondary,
+                color: choisie ? AppColors.secondary : AppColors.textSecondary,
               ),
             ],
           ),

@@ -124,7 +124,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
         children: [
           // ----- En-tête : logo + bienvenue -----
           const SizedBox(height: 8),
-          const Center(child: HoumaniLogo(taille: 90)),
+          const Center(child: HoumaniLogo(taille: 72)),
           const SizedBox(height: 20),
           const Text(
             'Ahla bik !',
@@ -148,7 +148,6 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
                 AppTextField(
                   label: 'Téléphone ou e-mail',
                   hint: '+216 22 345 678',
-                  icone: Icons.person_outline,
                   controller: _identifiantController,
                   clavier: TextInputType.emailAddress,
                   validator: _validerIdentifiant,
@@ -156,7 +155,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
                 const SizedBox(height: 16),
                 AppTextField(
                   label: 'Mot de passe',
-                  icone: Icons.lock_outline,
+                  hint: '••••••••',
                   controller: _motDePasseController,
                   motDePasse: true,
                   validator: _validerMotDePasse,

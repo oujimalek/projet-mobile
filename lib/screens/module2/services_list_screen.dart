@@ -28,13 +28,13 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
 
   // Couleurs des avatars (fond, texte), utilisées à tour de rôle
   final List<Color> _fondsAvatar = [
-    AppColors.primaryLight,
     AppColors.secondaryLight,
-    AppColors.border,
+    AppColors.primaryLight,
+    AppColors.backgroundSecondary,
   ];
   final List<Color> _textesAvatar = [
-    AppColors.primary,
     AppColors.secondary,
+    AppColors.primary,
     AppColors.textSecondary,
   ];
 
@@ -161,7 +161,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.border,
+        color: AppColors.backgroundSecondary,
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
       ),
       child: Row(
@@ -185,7 +185,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: actif ? AppColors.card : AppColors.border,
+          color: actif ? AppColors.card : AppColors.backgroundSecondary,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
@@ -193,56 +193,56 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: actif ? AppColors.textPrimary : AppColors.textSecondary,
+            color: actif ? AppColors.primary : AppColors.textSecondary,
           ),
         ),
       ),
     );
   }
 
-  /// La rangée horizontale des filtres par catégorie.
+  /// Les filtres par catégorie (passent à la ligne s'il n'y a pas la place).
   Widget _filtresCategories() {
-    final List<String> categories = _repository.getCategories();
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal, // défilement de gauche à droite
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          return _filtre(categories[index]);
-        },
+    final List<Widget> filtres = [];
+    for (final categorie in _repository.getCategories()) {
+      filtres.add(_filtre(categorie));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: filtres,
+        ),
       ),
     );
   }
 
-  /// Un filtre de catégorie (bleu cobalt quand il est sélectionné).
+  /// Un filtre de catégorie (doré quand il est sélectionné).
   Widget _filtre(String categorie) {
     final bool actif = _categorieChoisie == categorie;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          setState(() {
-            _categorieChoisie = categorie;
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: actif ? AppColors.primary : AppColors.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: actif ? AppColors.primary : AppColors.border,
-            ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () {
+        setState(() {
+          _categorieChoisie = categorie;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: actif ? AppColors.secondary : AppColors.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: actif ? AppColors.secondary : AppColors.border,
           ),
-          child: Text(
-            categorie,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: actif ? Colors.white : AppColors.textPrimary,
-            ),
+        ),
+        child: Text(
+          categorie,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: actif ? Colors.white : AppColors.textPrimary,
           ),
         ),
       ),

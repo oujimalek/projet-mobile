@@ -4,6 +4,7 @@ import '../../data/models/signalement.dart';
 import '../../data/services/signalement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
 
@@ -77,20 +78,11 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Barre du haut claire, comme sur la maquette
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
-        centerTitle: false,
-        title: const Text('Nouveau signalement'),
-        titleTextStyle: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
       body: Column(
         children: [
+          // En-tête blanc arrondi, comme sur la maquette
+          const AppHeader(titre: 'Nouveau signalement'),
+
           // ----- Partie qui défile : catégories + champs -----
           Expanded(
             child: Form(
@@ -100,16 +92,16 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                 children: [
                   const Text(
                     'Catégorie',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   _grilleCategories(),
                   // Message d'erreur (texte vide s'il n'y a pas d'erreur)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       _erreurCategorie ? 'Choisis une catégorie' : '',
-                      style: const TextStyle(color: AppColors.incident),
+                      style: const TextStyle(color: AppColors.error),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -126,7 +118,6 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                   AppTextField(
                     label: 'Localisation',
                     hint: 'Bloc B, 2e étage',
-                    icone: Icons.place_outlined,
                     controller: _localisationController,
                     validator: _validerObligatoire,
                   ),
@@ -154,7 +145,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                   _message,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.success,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -246,26 +237,67 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     );
   }
 
-  /// Zone "+ Ajouter une photo" (bouton visuel seulement pour l'instant).
+  /// Zone "+ Ajouter une photo" en pointillés (bouton visuel pour l'instant).
   Widget _boutonPhoto() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: TextButton(
-        onPressed: () {
-          // Choix d'une photo : à venir
-        },
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-        ),
-        child: const Text(
-          '+ Ajouter une photo',
-          style: TextStyle(fontWeight: FontWeight.w600),
+    return CustomPaint(
+      painter: _BordurePointillee(),
+      child: SizedBox(
+        width: double.infinity,
+        child: TextButton(
+          onPressed: () {
+            // Choix d'une photo : à venir
+          },
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            ),
+          ),
+          child: const Text(
+            '+ Ajouter une photo',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
       ),
     );
+  }
+}
+
+/// Dessine une bordure arrondie en pointillés (zone d'ajout de photo).
+class _BordurePointillee extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint pinceau = Paint()
+      ..color = AppColors.border
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    // Le contour complet du rectangle arrondi
+    final Path contour = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(AppTheme.radiusSmall),
+        ),
+      );
+
+    // On ne dessine qu'un morceau sur deux : 6 px de trait, 4 px de vide
+    const double trait = 6;
+    const double vide = 4;
+    for (final morceau in contour.computeMetrics()) {
+      double position = 0;
+      while (position < morceau.length) {
+        canvas.drawPath(
+          morceau.extractPath(position, position + trait),
+          pinceau,
+        );
+        position += trait + vide;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BordurePointillee ancien) {
+    return false;
   }
 }

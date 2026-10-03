@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// Champ de saisie au style Houmani, à utiliser dans un Form.
+/// Le libellé est affiché au-dessus du champ (composant Input Field de Figma).
 ///
 /// Exemple :
 ///   AppTextField(
 ///     label: 'Email',
-///     icone: Icons.email_outlined,
+///     hint: 'exemple@mail.com',
 ///     validator: (valeur) {
 ///       if (valeur == null || valeur.isEmpty) {
 ///         return 'Champ obligatoire'; // message d'erreur affiché
@@ -41,19 +42,29 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      obscureText: motDePasse,
-      keyboardType: clavier,
-      maxLines: lignes,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: icone != null
-            ? Icon(icone, color: AppColors.textSecondary)
-            : null,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Libellé au-dessus du champ, comme sur la maquette
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          validator: validator,
+          obscureText: motDePasse,
+          keyboardType: clavier,
+          maxLines: lignes,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: icone != null
+                ? Icon(icone, color: AppColors.textSecondary)
+                : null,
+          ),
+        ),
+      ],
     );
   }
 }

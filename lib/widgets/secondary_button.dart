@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Bouton secondaire : fond blanc, bordure et texte bleu cobalt, sur toute la largeur.
+/// Bouton secondaire : fond blanc, bordure et texte dorés, sur toute la largeur.
 /// Même taille et mêmes paramètres que PrimaryButton : à utiliser pour une
 /// action moins importante (ex : "Annuler", "Plus tard") à côté du bouton principal.
 ///
@@ -41,11 +41,17 @@ class SecondaryButton extends StatelessWidget {
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.card,
-        foregroundColor: AppColors.primary,
-        disabledBackgroundColor: AppColors.card,
-        disabledForegroundColor: AppColors.textSecondary,
+        foregroundColor: AppColors.secondary,
+        // Désactivé : le même bouton à 40 % d'opacité (comme sur Figma)
+        disabledBackgroundColor: AppColors.card.withValues(alpha: 0.4),
+        disabledForegroundColor: AppColors.secondary.withValues(alpha: 0.4),
         elevation: 0,
-        side: const BorderSide(color: AppColors.primary, width: 1.5),
+        side: BorderSide(
+          color: onPressed != null
+              ? AppColors.secondary
+              : AppColors.secondary.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
