@@ -107,7 +107,7 @@ class DemoScreen extends StatelessWidget {
     );
   }
 
-  /// En-tête teal avec le logo et le message de bienvenue.
+  /// En-tête bleu cobalt avec le logo et le message de bienvenue.
   Widget _enTete() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 56, 16, 24),
@@ -117,14 +117,8 @@ class DemoScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppTheme.radius),
-            ),
-            child: const HoumaniLogo(taille: 48),
-          ),
+          // Logo blanc directement sur le fond bleu de l'en-tête
+          const HoumaniLogo(taille: 64, blanc: true),
           const SizedBox(width: 16),
           const Expanded(
             child: Column(

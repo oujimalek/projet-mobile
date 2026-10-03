@@ -29,12 +29,12 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
   // Couleurs des avatars (fond, texte), utilisées à tour de rôle
   final List<Color> _fondsAvatar = [
     AppColors.primaryLight,
-    AppColors.accentLight,
+    AppColors.secondaryLight,
     AppColors.border,
   ];
   final List<Color> _textesAvatar = [
     AppColors.primary,
-    AppColors.accent,
+    AppColors.secondary,
     AppColors.textSecondary,
   ];
 
@@ -110,12 +110,12 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
         ],
       ),
 
-      // Bouton orange "+" pour publier un service (visuel pour l'instant)
+      // Bouton bleu "+" pour publier un service (visuel pour l'instant)
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           // Écran "Publier un service" : à venir
         },
-        backgroundColor: AppColors.accent,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         shape: const CircleBorder(),
         child: const Icon(Icons.add, size: 30),
@@ -125,7 +125,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     );
   }
 
-  /// En-tête teal avec le titre de l'écran.
+  /// En-tête bleu cobalt avec le titre de l'écran.
   Widget _enTete() {
     return Container(
       width: double.infinity,
@@ -216,7 +216,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     );
   }
 
-  /// Un filtre de catégorie (teal quand il est sélectionné).
+  /// Un filtre de catégorie (bleu cobalt quand il est sélectionné).
   Widget _filtre(String categorie) {
     final bool actif = _categorieChoisie == categorie;
     return Padding(

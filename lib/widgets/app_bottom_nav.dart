@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Barre de navigation du bas, commune à toute l'application.
-/// Les couleurs viennent du thème (onglet actif en teal).
+/// Les couleurs viennent du thème (onglet actif en doré).
 ///
 /// Index des onglets :
 ///   0 = Accueil, 1 = Services, 2 = Signalements, 3 = Événements, 4 = Profil

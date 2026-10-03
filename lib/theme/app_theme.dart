@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Toutes les couleurs de Houmani (issues de la maquette Figma).
-/// Utilisation : AppColors.primary, AppColors.accent, ...
+/// Utilisation : AppColors.primary, AppColors.secondary, ...
+/// Le nom de la variable Figma correspondante est indiqué en commentaire.
 class AppColors {
-  // Couleurs principales
-  static const Color primary = Color(0xFF2A9D8F); // teal : headers, navigation, onglet actif
-  static const Color accent = Color(0xFFE85D2C); // orange : bouton d'action principal UNIQUEMENT
+  // Couleurs de marque
+  static const Color primary = Color(0xFF1E4FB8); // brand/primary : bleu cobalt (headers, boutons)
+  static const Color secondary = Color(0xFFC9A227); // brand/secondary : doré (onglet actif, bordures focus)
 
   // Fonds et cartes
   static const Color background = Color(0xFFFBF6EE); // fond crème des écrans
@@ -17,9 +18,17 @@ class AppColors {
   static const Color textPrimary = Color(0xFF1B1B1B);
   static const Color textSecondary = Color(0xFF7A6E5E);
 
-  // Teintes claires
-  static const Color primaryLight = Color(0xFFEAF7F5); // teal clair
-  static const Color accentLight = Color(0xFFFFF3EC); // orange clair
+  // Teintes claires de la marque
+  static const Color primaryLight = Color(0xFFEAF1FB); // bg/brand : bleu très clair
+  static const Color secondaryLight = Color(0xFFFBF3DE); // bg/brand-secondary-soft : doré très clair
+
+  // Statuts (indépendants de la marque)
+  static const Color success = Color(0xFF2A9D8F); // status/success
+  static const Color successLight = Color(0xFFEAF7F5);
+  static const Color warning = Color(0xFFE85D2C); // status/warning
+  static const Color warningLight = Color(0xFFFFF3EC);
+  static const Color error = incident; // status/error
+  static const Color errorLight = incidentLight;
 
   // Catégories de signalement (couleur + version très claire pour les fonds)
   static const Color electricite = Color(0xFFE9A03B);
@@ -48,13 +57,13 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
-        secondary: AppColors.accent,
+        secondary: AppColors.secondary,
         surface: AppColors.card,
         onSurface: AppColors.textPrimary, // couleur du texte principal
       ),
       scaffoldBackgroundColor: AppColors.background,
 
-      // Barre du haut : teal avec texte blanc
+      // Barre du haut : bleu cobalt avec texte blanc
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -67,10 +76,10 @@ class AppTheme {
         ),
       ),
 
-      // Boutons principaux : orange
+      // Boutons principaux : bleu cobalt
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(50),
           shape: RoundedRectangleBorder(
@@ -80,7 +89,7 @@ class AppTheme {
         ),
       ),
 
-      // Boutons texte : teal
+      // Boutons texte : bleu cobalt
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(foregroundColor: AppColors.primary),
       ),
@@ -112,14 +121,14 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSmall),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: const BorderSide(color: AppColors.secondary, width: 2),
         ),
       ),
 
-      // Barre de navigation du bas
+      // Barre de navigation du bas : onglet actif doré
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.card,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: AppColors.secondary,
         unselectedItemColor: AppColors.textSecondary,
         type: BottomNavigationBarType.fixed,
       ),

@@ -189,7 +189,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             _message,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _connexionReussie ? AppColors.primary : AppColors.incident,
+              color: _connexionReussie ? AppColors.success : AppColors.error,
               fontWeight: FontWeight.w600,
             ),
           ),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Bouton d'action principal (orange), sur toute la largeur.
+/// Bouton d'action principal (bleu cobalt), sur toute la largeur.
 /// À utiliser UNE seule fois par écran pour l'action la plus importante.
 ///
 /// Exemple : PrimaryButton(texte: 'Se connecter', onPressed: () {})
@@ -37,7 +37,7 @@ class PrimaryButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.accent,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
       child: Row(

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// Séparateur "en clous", inspiré des portes tunisiennes :
-/// une rangée de 7 petits points, celui du centre est orange et plus gros.
+/// une rangée de 7 petits points, celui du centre est doré et plus gros.
 class NailDivider extends StatelessWidget {
   const NailDivider({super.key});
 
@@ -19,7 +19,7 @@ class NailDivider extends StatelessWidget {
           width: estCentre ? 9 : 5,
           height: estCentre ? 9 : 5,
           decoration: BoxDecoration(
-            color: estCentre ? AppColors.accent : AppColors.border,
+            color: estCentre ? AppColors.secondary : AppColors.border,
             shape: BoxShape.circle,
           ),
         ),

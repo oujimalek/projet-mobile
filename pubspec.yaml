@@ -62,9 +62,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Images de l'application (logo officiel Houmani)
+  # Logos officiels Houmani : couleur (fond clair) et blanc (fond coloré/sombre)
   assets:
-    - assets/images/logo.png
+    - assets/images/logo_couleur.png
+    - assets/images/logo_blanc.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

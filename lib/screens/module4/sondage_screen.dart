@@ -222,7 +222,7 @@ class _SondageScreenState extends State<SondageScreen> {
             children: [
               Row(
                 children: [
-                  // Rond de sélection (anneau teal épais quand choisi)
+                  // Rond de sélection (anneau bleu cobalt épais quand choisi)
                   Container(
                     width: 22,
                     height: 22,

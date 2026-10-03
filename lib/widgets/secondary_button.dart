@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Bouton secondaire : fond blanc, bordure et texte teal, sur toute la largeur.
+/// Bouton secondaire : fond blanc, bordure et texte bleu cobalt, sur toute la largeur.
 /// Même taille et mêmes paramètres que PrimaryButton : à utiliser pour une
-/// action moins importante (ex : "Annuler", "Plus tard") à côté du bouton orange.
+/// action moins importante (ex : "Annuler", "Plus tard") à côté du bouton principal.
 ///
 /// Exemple : SecondaryButton(texte: 'Annuler', onPressed: () {})
 class SecondaryButton extends StatelessWidget {
