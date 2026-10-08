@@ -95,7 +95,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
   }
 
   /// Appelé quand on touche "S'inscrire".
-  void _sInscrire() {
+  Future<void> _sInscrire() async {
     final bool champsValides = _formKey.currentState!.validate();
     setState(() {
       _erreurConditions = !_conditionsAcceptees;
@@ -104,12 +104,15 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
       return;
     }
 
-    UtilisateurRepository().inscription(
+    await UtilisateurRepository().inscription(
       nomComplet: _nomController.text,
       telephone: _telephoneController.text,
       email: _emailController.text,
       motDePasse: _motDePasseController.text,
     );
+    if (!mounted) {
+      return; // l'écran a été fermé pendant l'attente
+    }
     // Étape suivante : vérifier le numéro de téléphone
     context.push('/verification');
   }

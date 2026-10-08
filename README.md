@@ -80,8 +80,17 @@ flutter test
 
 ## M1 · Utilisateurs : parcours et données de démo
 
-Les données sont fictives (`lib/data/services/utilisateur_repository.dart`) :
+Les données sont fictives (`lib/data/services/mock_utilisateur_repository.dart`) :
 rien n'est enregistré quand on relance l'application.
+
+Accès aux données : les écrans n'appellent que le **contrat**
+`UtilisateurRepository` (classe abstraite, méthodes en `Future`), jamais le mock
+directement. Pour brancher Firebase Auth + Firestore plus tard : créer
+`FirebaseUtilisateurRepository implements UtilisateurRepository`, puis changer
+la ligne `instance = ...` dans `utilisateur_repository.dart`. Ni les écrans ni
+les tests ne changent (les tests injectent le mock eux-mêmes). Les modules 2, 3
+et 4 sont invités à suivre la même structure (voir le commentaire en tête de
+`utilisateur_repository.dart`).
 
 | Écran | Chemin | Fichier |
 |---|---|---|

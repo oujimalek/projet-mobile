@@ -22,19 +22,52 @@ class ProfilScreen extends StatefulWidget {
 }
 
 class _ProfilScreenState extends State<ProfilScreen> {
+  final UtilisateurRepository _repository = UtilisateurRepository();
+
+  // Nombre de demandes en attente (affiché à l'admin), chargé au démarrage
+  int _enAttente = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerDemandesEnAttente();
+  }
+
+  Future<void> _chargerDemandesEnAttente() async {
+    if (!_repository.getUtilisateurConnecte().estAdmin) {
+      return;
+    }
+    final int nombre =
+        await _repository.compterMembres(StatutUtilisateur.enAttente);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enAttente = nombre;
+    });
+  }
+
   /// Ouvre un écran, puis redessine le profil au retour
   /// (les données ont pu changer : profil modifié, membres validés...).
   Future<void> _ouvrirPuisRafraichir(String chemin) async {
     await context.push(chemin);
     if (mounted) {
       setState(() {});
+      _chargerDemandesEnAttente();
+    }
+  }
+
+  Future<void> _seDeconnecter() async {
+    await _repository.deconnexion();
+    if (mounted) {
+      // go : on remplace tout, pas de retour vers le profil
+      context.go('/connexion');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final UtilisateurRepository repository = UtilisateurRepository();
-    final Utilisateur utilisateur = repository.getUtilisateurConnecte();
+    final Utilisateur utilisateur = _repository.getUtilisateurConnecte();
 
     return Scaffold(
       body: ListView(
@@ -73,15 +106,12 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 // ----- Liens -----
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(children: _liens(context, repository, utilisateur)),
+                  child: Column(children: _liens(context, utilisateur)),
                 ),
                 const SizedBox(height: 12),
                 Center(
                   child: TextButton(
-                    onPressed: () {
-                      // go : on remplace tout, pas de retour vers le profil
-                      context.go('/connexion');
-                    },
+                    onPressed: _seDeconnecter,
                     style: TextButton.styleFrom(foregroundColor: AppColors.error),
                     child: const Text(
                       'Se déconnecter',
@@ -235,20 +265,15 @@ class _ProfilScreenState extends State<ProfilScreen> {
   }
 
   /// Les lignes de la carte de liens.
-  List<Widget> _liens(
-    BuildContext context,
-    UtilisateurRepository repository,
-    Utilisateur utilisateur,
-  ) {
+  List<Widget> _liens(BuildContext context, Utilisateur utilisateur) {
     final List<Widget> lignes = [];
 
     // Réservé à l'administrateur : gérer les membres du quartier
     if (utilisateur.estAdmin) {
-      final int enAttente = repository.compterMembres(StatutUtilisateur.enAttente);
       lignes.add(
         _ligneLien(
           'Membres du quartier',
-          detail: enAttente > 0 ? '$enAttente en attente' : null,
+          detail: _enAttente > 0 ? '$_enAttente en attente' : null,
           onTap: () {
             _ouvrirPuisRafraichir('/profil/membres');
           },

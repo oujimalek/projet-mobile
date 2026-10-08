@@ -31,15 +31,17 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   final TextEditingController _rechercheController = TextEditingController();
 
   String _code = '';
+  Quartier? _quartierDuCode; // trouvé grâce au code complet (6 caractères)
+  bool _codeInconnu = false; // code complet mais qui ne correspond à rien
   Quartier? _quartierSelectionne; // choisi dans la liste de recherche
+  List<Quartier> _quartiersTrouves = []; // résultat de la recherche
 
   @override
   void initState() {
     super.initState();
+    _rechercher(); // au départ : tous les quartiers
     // On met la liste à jour à chaque lettre tapée dans la recherche
-    _rechercheController.addListener(() {
-      setState(() {});
-    });
+    _rechercheController.addListener(_rechercher);
   }
 
   @override
@@ -48,29 +50,65 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     super.dispose();
   }
 
+  /// Demande au repository les quartiers qui correspondent à la recherche.
+  Future<void> _rechercher() async {
+    final List<Quartier> trouves =
+        await _repository.rechercherQuartiers(_rechercheController.text);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _quartiersTrouves = trouves;
+    });
+  }
+
+  /// Appelé à chaque caractère du code : dès qu'il est complet,
+  /// on cherche le quartier correspondant.
+  Future<void> _codeModifie(String code) async {
+    setState(() {
+      _code = code;
+      _quartierDuCode = null;
+      _codeInconnu = false;
+    });
+    if (code.length < 6) {
+      return;
+    }
+    final Quartier? quartier = await _repository.trouverParCode(code);
+    // Le code a pu changer pendant l'attente : on ignore l'ancienne réponse
+    if (!mounted || code != _code) {
+      return;
+    }
+    setState(() {
+      _quartierDuCode = quartier;
+      _codeInconnu = quartier == null;
+    });
+  }
+
   /// Le quartier qui sera rejoint : celui du code s'il est complet,
   /// sinon celui sélectionné dans la liste.
   Quartier? _quartierChoisi() {
     if (_code.length == 6) {
-      return _repository.trouverParCode(_code);
+      return _quartierDuCode;
     }
     return _quartierSelectionne;
   }
 
-  void _rejoindre() {
+  Future<void> _rejoindre() async {
     final Quartier? quartier = _quartierChoisi();
     if (quartier == null) {
       return;
     }
-    _repository.rejoindreQuartier(quartier);
+    await _repository.rejoindreQuartier(quartier);
+    if (!mounted) {
+      return;
+    }
     // go : après l'envoi de la demande, pas de retour en arrière
     context.go('/attente');
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool codeInconnu =
-        _code.length == 6 && _repository.trouverParCode(_code) == null;
+    final String? aideDemo = _repository.aideDemoCodeQuartier;
 
     return Scaffold(
       body: Column(
@@ -95,13 +133,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 const SizedBox(height: 8),
                 SaisieCode(
                   chiffresSeulement: false,
-                  onChanged: (code) {
-                    setState(() {
-                      _code = code;
-                    });
-                  },
+                  onChanged: _codeModifie,
                 ),
-                if (codeInconnu)
+                if (_codeInconnu)
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
@@ -133,14 +167,16 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Démo : code ${_repository.rechercherQuartiers('').first.codeInvitation}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
+                // Aide de démo (rien avec une vraie source de données)
+                if (aideDemo != null)
+                  Text(
+                    'Démo : code $aideDemo',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -169,9 +205,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   /// Les cartes des quartiers trouvés (avec un bouton radio).
   List<Widget> _listeQuartiers() {
     final List<Widget> cartes = [];
-    final List<Quartier> trouves =
-        _repository.rechercherQuartiers(_rechercheController.text);
-    for (final Quartier quartier in trouves) {
+    for (final Quartier quartier in _quartiersTrouves) {
       cartes.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 10),

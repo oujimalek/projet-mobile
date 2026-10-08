@@ -13,7 +13,7 @@ import '../../widgets/primary_button.dart';
 ///
 /// Un Form avec deux champs (téléphone ou e-mail, mot de passe).
 /// Le bouton "Se connecter" vérifie les champs, puis interroge
-/// UtilisateurRepository (compte de démo : voir utilisateur_repository.dart).
+/// UtilisateurRepository (compte de démo : voir mock_utilisateur_repository.dart).
 /// Selon le statut du compte, on ouvre l'accueil, le choix du quartier
 /// ou l'écran d'attente de validation.
 class ConnexionScreen extends StatefulWidget {
@@ -89,17 +89,21 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
   }
 
   /// Appelé quand on touche "Se connecter".
-  void _seConnecter() {
+  Future<void> _seConnecter() async {
     // 1. On vérifie les champs : si une règle n'est pas respectée, on s'arrête
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
     // 2. On demande au repository si le compte existe
-    final Utilisateur? utilisateur = UtilisateurRepository().connexion(
+    //    (await : la réponse peut prendre du temps avec un vrai serveur)
+    final Utilisateur? utilisateur = await UtilisateurRepository().connexion(
       _identifiantController.text,
       _motDePasseController.text,
     );
+    if (!mounted) {
+      return; // l'écran a été fermé pendant l'attente
+    }
 
     if (utilisateur == null) {
       setState(() {
@@ -129,6 +133,8 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String? aideDemo = UtilisateurRepository().aideDemoConnexion;
+
     return Scaffold(
       // Barre du haut discrète (couleur du fond) : seulement la flèche retour
       appBar: AppBar(
@@ -232,12 +238,16 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Démo : ${UtilisateurRepository.emailDemo} / '
-            '${UtilisateurRepository.motDePasseDemo}',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          ),
+          // Aide de démo (rien avec une vraie source de données)
+          if (aideDemo != null)
+            Text(
+              'Démo : $aideDemo',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
           const SizedBox(height: 16),
         ],
       ),

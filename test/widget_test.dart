@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:houmani/data/services/mock_utilisateur_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
@@ -68,13 +69,13 @@ void main() {
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
-  // Le routeur et les données sont globaux : avant chaque test, on revient
-  // sur l'Accueil, connecté avec le compte de démo (admin)
+  // Le routeur et les données sont globaux : avant chaque test, on repart
+  // de données fictives neuves (compte de démo admin déjà connecté)
+  // et on revient sur l'Accueil.
+  // Les tests injectent toujours le mock : ils restent valables le jour
+  // où l'application utilisera Firebase par défaut.
   setUp(() {
-    UtilisateurRepository().connexion(
-      UtilisateurRepository.emailDemo,
-      UtilisateurRepository.motDePasseDemo,
-    );
+    UtilisateurRepository.instance = MockUtilisateurRepository();
     appRouter.go('/accueil');
   });
 
@@ -130,7 +131,7 @@ void main() {
     // Bon mot de passe : accueil avec la barre du bas
     await tester.enterText(
       find.byType(TextFormField).at(1),
-      UtilisateurRepository.motDePasseDemo,
+      MockUtilisateurRepository.motDePasseDemo,
     );
     await toucher(tester, find.text('Se connecter'));
     expect(find.byType(AccueilScreen), findsOneWidget);
@@ -215,7 +216,7 @@ void main() {
     expect(find.text('Code incorrect, vérifie le SMS reçu'), findsOneWidget);
     await tester.enterText(
       find.byType(TextField),
-      UtilisateurRepository.codeOtpDemo,
+      MockUtilisateurRepository.codeOtpDemo,
     );
     await tester.pump();
     await toucher(tester, find.text('Vérifier'));

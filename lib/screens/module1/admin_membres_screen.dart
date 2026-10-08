@@ -28,6 +28,11 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   // Onglet affiché (par défaut : les demandes en attente)
   StatutUtilisateur _onglet = StatutUtilisateur.enAttente;
 
+  // Les membres de chaque onglet, chargés depuis le repository
+  List<Utilisateur> _enAttente = [];
+  List<Utilisateur> _actifs = [];
+  List<Utilisateur> _bloques = [];
+
   // Couleurs des avatars, choisies à tour de rôle
   static const List<Color> _couleursAvatar = [
     AppColors.primary,
@@ -43,9 +48,52 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   @override
   void initState() {
     super.initState();
+    _charger();
     _rechercheController.addListener(() {
       setState(() {});
     });
+  }
+
+  /// (Re)charge les membres des 3 onglets.
+  Future<void> _charger() async {
+    final List<Utilisateur> enAttente =
+        await _repository.getMembres(StatutUtilisateur.enAttente);
+    final List<Utilisateur> actifs =
+        await _repository.getMembres(StatutUtilisateur.actif);
+    final List<Utilisateur> bloques =
+        await _repository.getMembres(StatutUtilisateur.bloque);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enAttente = enAttente;
+      _actifs = actifs;
+      _bloques = bloques;
+    });
+  }
+
+  /// Les membres chargés pour un statut.
+  List<Utilisateur> _membresDe(StatutUtilisateur statut) {
+    switch (statut) {
+      case StatutUtilisateur.enAttente:
+        return _enAttente;
+      case StatutUtilisateur.actif:
+        return _actifs;
+      case StatutUtilisateur.bloque:
+        return _bloques;
+    }
+  }
+
+  /// Les membres de l'onglet affiché dont le nom contient la recherche.
+  List<Utilisateur> _membresAffiches() {
+    final String texte = _rechercheController.text.trim().toLowerCase();
+    final List<Utilisateur> resultats = [];
+    for (final Utilisateur membre in _membresDe(_onglet)) {
+      if (membre.nomComplet.toLowerCase().contains(texte)) {
+        resultats.add(membre);
+      }
+    }
+    return resultats;
   }
 
   @override
@@ -72,20 +120,20 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     return 'il y a ${ecart.inDays} jours';
   }
 
-  /// Applique une action sur un membre, affiche un message et redessine.
-  void _action(String message, Function() action) {
-    setState(() {
-      action();
-    });
+  /// Applique une action sur un membre, recharge les listes
+  /// et affiche un message.
+  Future<void> _action(String message, Future<void> Function() action) async {
+    await action();
+    await _charger();
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Utilisateur> membres = _repository.getMembres(
-      _onglet,
-      recherche: _rechercheController.text,
-    );
+    final List<Utilisateur> membres = _membresAffiches();
 
     final List<Widget> cartes = [];
     for (int i = 0; i < membres.length; i++) {
@@ -142,10 +190,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   /// En-tête blanc : "Membres", pastille Admin, quartier et nombre de membres.
   Widget _enTete(BuildContext context) {
     final Utilisateur admin = _repository.getUtilisateurConnecte();
-    int total = 0;
-    total += _repository.compterMembres(StatutUtilisateur.enAttente);
-    total += _repository.compterMembres(StatutUtilisateur.actif);
-    total += _repository.compterMembres(StatutUtilisateur.bloque);
+    final int total = _enAttente.length + _actifs.length + _bloques.length;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -211,7 +256,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
 
   Widget _boutonOnglet(String nom, StatutUtilisateur statut) {
     final bool actif = _onglet == statut;
-    final int nombre = _repository.compterMembres(statut);
+    final int nombre = _membresDe(statut).length;
 
     return Expanded(
       child: GestureDetector(
@@ -301,7 +346,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                 texte: 'Valider',
                 onPressed: () {
                   _action('${membre.prenom} a rejoint la houma', () {
-                    _repository.validerMembre(membre.id);
+                    return _repository.validerMembre(membre.id);
                   });
                 },
               ),
@@ -310,7 +355,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
             Expanded(
               child: _boutonRouge('Refuser', () {
                 _action('Demande de ${membre.prenom} refusée', () {
-                  _repository.refuserMembre(membre.id);
+                  return _repository.refuserMembre(membre.id);
                 });
               }),
             ),
@@ -323,7 +368,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         }
         return _boutonRouge('Bloquer', () {
           _action('${membre.prenom} est bloqué(e)', () {
-            _repository.bloquerMembre(membre.id);
+            return _repository.bloquerMembre(membre.id);
           });
         });
       case StatutUtilisateur.bloque:
@@ -331,7 +376,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           texte: 'Débloquer',
           onPressed: () {
             _action('${membre.prenom} est débloqué(e)', () {
-              _repository.debloquerMembre(membre.id);
+              return _repository.debloquerMembre(membre.id);
             });
           },
         );

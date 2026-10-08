@@ -159,20 +159,24 @@ class AttenteValidationScreen extends StatelessWidget {
                 ),
 
                 // ----- Raccourci de démo (pas d'admin réel) -----
-                const SizedBox(height: 16),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: () {
-                      UtilisateurRepository().simulerValidation();
-                      context.go('/accueil');
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
+                if (UtilisateurRepository().estDemo) ...[
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await UtilisateurRepository().simulerValidation();
+                        if (context.mounted) {
+                          context.go('/accueil');
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                      ),
+                      icon: const Icon(Icons.play_circle_outline, size: 18),
+                      label: const Text('Démo : simuler la validation'),
                     ),
-                    icon: const Icon(Icons.play_circle_outline, size: 18),
-                    label: const Text('Démo : simuler la validation'),
                   ),
-                ),
+                ],
               ],
             ),
           ),

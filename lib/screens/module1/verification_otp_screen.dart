@@ -14,7 +14,7 @@ import 'widgets_module1.dart';
 ///
 /// L'utilisateur tape le code à 6 chiffres reçu par SMS.
 /// Un compte à rebours empêche de redemander un code trop vite.
-/// (Démo : le code est toujours UtilisateurRepository.codeOtpDemo.)
+/// (Démo : le code est toujours MockUtilisateurRepository.codeOtpDemo.)
 class VerificationOtpScreen extends StatefulWidget {
   const VerificationOtpScreen({super.key});
 
@@ -65,18 +65,26 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     return '$minutes:$reste';
   }
 
-  void _renvoyerCode() {
+  Future<void> _renvoyerCode() async {
     setState(() {
       _erreur = '';
       _demarrerCompteARebours();
     });
+    await UtilisateurRepository().renvoyerCodeSms();
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Un nouveau code t\'a été envoyé')),
     );
   }
 
-  void _verifier() {
-    if (UtilisateurRepository().verifierCode(_code)) {
+  Future<void> _verifier() async {
+    final bool codeCorrect = await UtilisateurRepository().verifierCode(_code);
+    if (!mounted) {
+      return; // l'écran a été fermé pendant l'attente
+    }
+    if (codeCorrect) {
       // Numéro vérifié : étape suivante, choisir son quartier
       context.push('/code-quartier');
     } else {
@@ -89,6 +97,7 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
   @override
   Widget build(BuildContext context) {
     final String telephone = UtilisateurRepository().telephoneMasque();
+    final String? aideDemo = UtilisateurRepository().aideDemoCodeSms;
 
     return Scaffold(
       body: Column(
@@ -159,11 +168,16 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Démo : le code est ${UtilisateurRepository.codeOtpDemo}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
+                // Aide de démo (rien avec une vraie source de données)
+                if (aideDemo != null)
+                  Text(
+                    'Démo : le code est $aideDemo',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
               ],
             ),
           ),

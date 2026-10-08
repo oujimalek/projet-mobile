@@ -74,16 +74,19 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
     return null;
   }
 
-  void _enregistrer() {
+  Future<void> _enregistrer() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    UtilisateurRepository().modifierProfil(
+    await UtilisateurRepository().modifierProfil(
       nomComplet: _nomController.text,
       telephone: _telephoneController.text,
       logement: _logementController.text,
       competences: _competences,
     );
+    if (!mounted) {
+      return; // l'écran a été fermé pendant l'attente
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Profil enregistré')),
     );
