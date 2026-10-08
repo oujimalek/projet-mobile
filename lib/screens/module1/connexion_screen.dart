@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
 import '../../data/services/utilisateur_repository.dart';
@@ -8,11 +9,13 @@ import '../../widgets/houmani_logo.dart';
 import '../../widgets/nail_divider.dart';
 import '../../widgets/primary_button.dart';
 
-/// M1 - Utilisateurs : écran de connexion.
+/// M1 - Utilisateurs : écran 3, connexion.
 ///
 /// Un Form avec deux champs (téléphone ou e-mail, mot de passe).
 /// Le bouton "Se connecter" vérifie les champs, puis interroge
 /// UtilisateurRepository (compte de démo : voir utilisateur_repository.dart).
+/// Selon le statut du compte, on ouvre l'accueil, le choix du quartier
+/// ou l'écran d'attente de validation.
 class ConnexionScreen extends StatefulWidget {
   const ConnexionScreen({super.key});
 
@@ -30,9 +33,8 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
   final TextEditingController _identifiantController = TextEditingController();
   final TextEditingController _motDePasseController = TextEditingController();
 
-  // Message affiché sous le bouton après une tentative de connexion
+  // Message d'erreur affiché sous le bouton après une tentative ratée
   String _message = '';
-  bool _connexionReussie = false;
 
   @override
   void dispose() {
@@ -99,16 +101,30 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
       _motDePasseController.text,
     );
 
-    // 3. On met à jour le message affiché
-    setState(() {
-      if (utilisateur != null) {
-        _connexionReussie = true;
-        _message = 'Yaatik saha ${utilisateur.prenom}, tu es connecté(e) !';
-      } else {
-        _connexionReussie = false;
+    if (utilisateur == null) {
+      setState(() {
         _message = 'Identifiant ou mot de passe incorrect';
-      }
-    });
+      });
+      return;
+    }
+
+    // 3. On ouvre l'écran qui correspond au statut du compte
+    //    (go : on remplace la connexion, pas de retour possible vers elle)
+    switch (utilisateur.statut) {
+      case StatutUtilisateur.actif:
+        context.go('/accueil');
+      case StatutUtilisateur.enAttente:
+        // Pas encore de quartier : il doit d'abord en choisir un
+        if (utilisateur.quartier.isEmpty) {
+          context.go('/code-quartier');
+        } else {
+          context.go('/attente');
+        }
+      case StatutUtilisateur.bloque:
+        setState(() {
+          _message = 'Ton compte a été bloqué par l\'administrateur';
+        });
+    }
   }
 
   @override
@@ -183,18 +199,18 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
           PrimaryButton(texte: 'Se connecter', onPressed: _seConnecter),
           const SizedBox(height: 12),
 
-          // ----- Résultat de la connexion -----
+          // ----- Erreur de connexion -----
           Text(
             _message,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _connexionReussie ? AppColors.success : AppColors.error,
+            style: const TextStyle(
+              color: AppColors.error,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
 
-          // ----- Inscription (visuel seulement pour l'instant) -----
+          // ----- Inscription -----
           // Wrap : passe à la ligne si l'écran est trop étroit
           Wrap(
             alignment: WrapAlignment.center,
@@ -206,7 +222,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
               ),
               TextButton(
                 onPressed: () {
-                  // Écran d'inscription : à venir
+                  context.push('/inscription');
                 },
                 child: const Text(
                   'S\'inscrire',
@@ -214,6 +230,13 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Démo : ${UtilisateurRepository.emailDemo} / '
+            '${UtilisateurRepository.motDePasseDemo}',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 16),
         ],
