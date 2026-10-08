@@ -7,10 +7,13 @@ import '../theme/app_theme.dart';
 /// La flèche retour bleue n'apparaît que s'il y a un écran précédent.
 ///
 /// Exemple : AppHeader(titre: 'Sondage')
+/// Un widget optionnel (ex : un bouton "Enregistrer") peut être placé à droite :
+///   AppHeader(titre: 'Modifier le profil', action: TextButton(...))
 class AppHeader extends StatelessWidget {
   final String titre;
+  final Widget? action; // affiché à droite du titre (optionnel)
 
-  const AppHeader({super.key, required this.titre});
+  const AppHeader({super.key, required this.titre, this.action});
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +47,7 @@ class AppHeader extends StatelessWidget {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ),
+          ?action, // "?" : ajouté seulement s'il n'est pas null
         ],
       ),
     );

@@ -3,11 +3,19 @@ import 'package:go_router/go_router.dart';
 
 import '../screens/accueil_screen.dart';
 import '../screens/demo_screen.dart';
+import '../screens/module1/admin_membres_screen.dart';
+import '../screens/module1/attente_validation_screen.dart';
+import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
+import '../screens/module1/inscription_screen.dart';
+import '../screens/module1/mot_de_passe_oublie_screen.dart';
+import '../screens/module1/profil_edition_screen.dart';
+import '../screens/module1/profil_screen.dart';
+import '../screens/module1/verification_otp_screen.dart';
 import '../screens/module2/services_list_screen.dart';
 import '../screens/module3/create_signalement_screen.dart';
 import '../screens/module4/sondage_screen.dart';
-import '../screens/profil_screen.dart';
+import '../screens/splash_screen.dart';
 import '../widgets/app_bottom_nav.dart';
 
 /// Les chemins (adresses) des 5 onglets, dans l'ordre de la barre du bas.
@@ -24,10 +32,14 @@ const List<String> cheminsOnglets = [
 ///
 /// - Les 5 onglets sont dans un ShellRoute : ils s'affichent DANS la même
 ///   coquille (AppShell), qui garde la barre du bas visible.
-/// - Les autres écrans (connexion, démo) sont en dehors du ShellRoute :
-///   ils s'ouvrent en plein écran, par-dessus, sans barre du bas.
+/// - Les autres écrans (splash, connexion, inscription, démo...) sont en
+///   dehors du ShellRoute : ils s'ouvrent en plein écran, sans barre du bas.
+///
+/// Parcours du module 1 (M1) :
+///   /splash → /connexion → /inscription → /verification → /code-quartier
+///   → /attente → /accueil
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/accueil', // écran affiché au lancement
+  initialLocation: '/splash', // écran affiché au lancement
   routes: [
     ShellRoute(
       builder: (context, state, child) {
@@ -62,17 +74,68 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/profil',
           builder: (context, state) {
-            return const ProfilScreen();
+            return const ProfilScreen(); // M1
           },
+          routes: [
+            // /profil/membres : reste dans la coquille (onglet Profil actif)
+            GoRoute(
+              path: 'membres',
+              builder: (context, state) {
+                return const AdminMembresScreen(); // M1 (admin)
+              },
+            ),
+          ],
         ),
       ],
     ),
 
     // ----- Écrans en plein écran (sans barre du bas) -----
     GoRoute(
+      path: '/splash',
+      builder: (context, state) {
+        return const SplashScreen();
+      },
+    ),
+    GoRoute(
       path: '/connexion',
       builder: (context, state) {
         return const ConnexionScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/mot-de-passe-oublie',
+      builder: (context, state) {
+        return const MotDePasseOublieScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/inscription',
+      builder: (context, state) {
+        return const InscriptionScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/verification',
+      builder: (context, state) {
+        return const VerificationOtpScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/code-quartier',
+      builder: (context, state) {
+        return const CodeQuartierScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/attente',
+      builder: (context, state) {
+        return const AttenteValidationScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/modifier-profil',
+      builder: (context, state) {
+        return const ProfilEditionScreen(); // M1
       },
     ),
     GoRoute(
