@@ -83,6 +83,11 @@ abstract class UtilisateurRepository {
   /// Déconnecte l'utilisateur.
   Future<void> deconnexion();
 
+  /// Envoie un lien de réinitialisation du mot de passe
+  /// (bouton "Envoyer le lien" de l'écran "Mot de passe oublié").
+  /// Ne dit pas si le compte existe : l'écran affiche toujours le même message.
+  Future<void> envoyerLienReinitialisation(String identifiant);
+
   // =====================================================================
   // Utilisateur connecté et profil
   // =====================================================================
@@ -95,11 +100,13 @@ abstract class UtilisateurRepository {
   String telephoneMasque();
 
   /// Enregistre les modifications du profil de l'utilisateur connecté.
+  /// avatar : identifiant d'un avatar de la galerie, vide = initiales.
   Future<void> modifierProfil({
     required String nomComplet,
     required String telephone,
     required String logement,
     required List<String> competences,
+    String avatar = '',
   });
 
   // =====================================================================

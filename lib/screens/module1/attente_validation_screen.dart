@@ -166,6 +166,14 @@ class AttenteValidationScreen extends StatelessWidget {
                       onPressed: () async {
                         await UtilisateurRepository().simulerValidation();
                         if (context.mounted) {
+                          // Stub assumé : pas de vraie notification push
+                          // sans backend. Le message reste visible sur
+                          // l'accueil (ScaffoldMessenger commun à l'app).
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Notification envoyée (démo)'),
+                            ),
+                          );
                           context.go('/accueil');
                         }
                       },

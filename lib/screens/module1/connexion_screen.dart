@@ -186,12 +186,13 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             ),
           ),
 
-          // ----- Mot de passe oublié (visuel seulement pour l'instant) -----
+          // ----- Mot de passe oublié -----
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: () {
-                // Écran "mot de passe oublié" : à venir
+                // push : la flèche retour ramène à la connexion
+                context.push('/mot-de-passe-oublie');
               },
               child: const Text(
                 'Mot de passe oublié ?',

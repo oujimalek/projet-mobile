@@ -116,6 +116,111 @@ class AvatarInitiales extends StatelessWidget {
   }
 }
 
+/// Un avatar de la galerie (bouton "Changer la photo").
+/// Pas encore d'envoi de vraie photo : on choisit parmi ces dessins.
+class AvatarGalerie {
+  final String id; // enregistré dans Utilisateur.avatar
+  final IconData icone;
+  final Color couleur; // couleur du dessin
+  final Color fond;
+
+  const AvatarGalerie({
+    required this.id,
+    required this.icone,
+    required this.couleur,
+    required this.fond,
+  });
+}
+
+/// Les 6 avatars proposés dans la galerie.
+const List<AvatarGalerie> avatarsGalerie = [
+  AvatarGalerie(
+    id: 'chat',
+    icone: Icons.pets,
+    couleur: AppColors.primary,
+    fond: AppColors.primaryLight,
+  ),
+  AvatarGalerie(
+    id: 'fleur',
+    icone: Icons.local_florist,
+    couleur: AppColors.secondary,
+    fond: AppColors.secondaryLight,
+  ),
+  AvatarGalerie(
+    id: 'soleil',
+    icone: Icons.wb_sunny,
+    couleur: AppColors.secondary,
+    fond: AppColors.backgroundSecondary,
+  ),
+  AvatarGalerie(
+    id: 'cafe',
+    icone: Icons.local_cafe,
+    couleur: AppColors.textSecondary,
+    fond: AppColors.backgroundSecondary,
+  ),
+  AvatarGalerie(
+    id: 'velo',
+    icone: Icons.pedal_bike,
+    couleur: AppColors.primary,
+    fond: AppColors.secondaryLight,
+  ),
+  AvatarGalerie(
+    id: 'maison',
+    icone: Icons.home,
+    couleur: Colors.white,
+    fond: AppColors.primary,
+  ),
+];
+
+/// Retrouve un avatar de la galerie par son id (null si aucun).
+AvatarGalerie? trouverAvatar(String id) {
+  for (final AvatarGalerie avatar in avatarsGalerie) {
+    if (avatar.id == id) {
+      return avatar;
+    }
+  }
+  return null;
+}
+
+/// Avatar d'un utilisateur : le dessin choisi dans la galerie s'il y en a un,
+/// sinon ses initiales (avec les couleurs données).
+class AvatarUtilisateur extends StatelessWidget {
+  final String avatar; // Utilisateur.avatar
+  final String initiales;
+  final double taille;
+  final Color couleur;
+  final Color fond;
+
+  const AvatarUtilisateur({
+    super.key,
+    required this.avatar,
+    required this.initiales,
+    this.taille = 48,
+    this.couleur = AppColors.primary,
+    this.fond = AppColors.primaryLight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final AvatarGalerie? choisi = trouverAvatar(avatar);
+    if (choisi == null) {
+      return AvatarInitiales(
+        initiales: initiales,
+        taille: taille,
+        couleur: couleur,
+        fond: fond,
+      );
+    }
+    return Container(
+      width: taille,
+      height: taille,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: choisi.fond, shape: BoxShape.circle),
+      child: Icon(choisi.icone, color: choisi.couleur, size: taille * 0.5),
+    );
+  }
+}
+
 /// Saisie d'un code en 6 cases (code SMS ou code d'invitation).
 ///
 /// Un seul champ de texte invisible reçoit le clavier ; les cases

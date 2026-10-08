@@ -8,6 +8,7 @@ import '../screens/module1/attente_validation_screen.dart';
 import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
 import '../screens/module1/inscription_screen.dart';
+import '../screens/module1/mot_de_passe_oublie_screen.dart';
 import '../screens/module1/profil_edition_screen.dart';
 import '../screens/module1/profil_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
@@ -99,6 +100,12 @@ final GoRouter appRouter = GoRouter(
       path: '/connexion',
       builder: (context, state) {
         return const ConnexionScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/mot-de-passe-oublie',
+      builder: (context, state) {
+        return const MotDePasseOublieScreen(); // M1
       },
     ),
     GoRoute(

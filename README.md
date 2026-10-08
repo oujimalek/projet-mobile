@@ -96,6 +96,7 @@ et 4 sont invités à suivre la même structure (voir le commentaire en tête de
 |---|---|---|
 | Splash | `/splash` | `screens/splash_screen.dart` |
 | Connexion | `/connexion` | `connexion_screen.dart` |
+| Mot de passe oublié | `/mot-de-passe-oublie` | `mot_de_passe_oublie_screen.dart` |
 | Inscription | `/inscription` | `inscription_screen.dart` |
 | Code SMS (6 chiffres + renvoi) | `/verification` | `verification_otp_screen.dart` |
 | Code du quartier / recherche | `/code-quartier` | `code_quartier_screen.dart` |
@@ -112,7 +113,12 @@ Pour tester :
   / mot de passe `houmani123` ;
 - **Code SMS** : `123456` ;
 - **Code du quartier** : `YAS72B` (Résidence El Yasmine) ;
+- **« Mot de passe oublié ? »** : le lien n'est pas vraiment envoyé, l'écran
+  affiche seulement la confirmation ;
+- **« Changer la photo »** (modifier le profil) : choix parmi 6 avatars
+  prédéfinis (pas encore d'envoi de vraie photo) ;
 - sur l'écran d'attente, le bouton **« Démo : simuler la validation »** fait
-  comme si l'administrateur avait accepté la demande ;
+  comme si l'administrateur avait accepté la demande (message « Notification
+  envoyée (démo) » : pas de vraie notification sans backend) ;
 - dans le profil du compte de démo, **« Membres du quartier »** ouvre la liste
   des membres (valider / refuser / bloquer).

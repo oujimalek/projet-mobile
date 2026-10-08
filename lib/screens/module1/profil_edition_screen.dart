@@ -11,7 +11,8 @@ import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 7, modification du profil.
 ///
-/// Nom, téléphone, bâtiment/appartement et compétences (ajout/suppression).
+/// Avatar (galerie), nom, téléphone, bâtiment/appartement et compétences
+/// (ajout/suppression).
 /// "Enregistrer" sauvegarde dans UtilisateurRepository puis revient au profil.
 class ProfilEditionScreen extends StatefulWidget {
   const ProfilEditionScreen({super.key});
@@ -32,6 +33,9 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
   // Copie modifiable des compétences (enregistrée seulement à la fin)
   final List<String> _competences = [];
 
+  // Avatar choisi dans la galerie ('' = initiales), enregistré à la fin
+  String _avatar = '';
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +47,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
     for (final String competence in utilisateur.competences) {
       _competences.add(competence);
     }
+    _avatar = utilisateur.avatar;
   }
 
   @override
@@ -83,6 +88,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
       telephone: _telephoneController.text,
       logement: _logementController.text,
       competences: _competences,
+      avatar: _avatar,
     );
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
@@ -91,6 +97,63 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
       const SnackBar(content: Text('Profil enregistré')),
     );
     context.pop(); // retour au profil
+  }
+
+  /// Galerie d'avatars (en bas de l'écran) : pas encore d'envoi de vraie
+  /// photo, on choisit un dessin ou on revient aux initiales.
+  Future<void> _choisirPhoto() async {
+    final String? choix = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        final List<Widget> avatars = [];
+        for (final AvatarGalerie avatar in avatarsGalerie) {
+          avatars.add(
+            InkWell(
+              key: Key('avatar_${avatar.id}'),
+              customBorder: const CircleBorder(),
+              onTap: () {
+                Navigator.of(context).pop(avatar.id);
+              },
+              child: AvatarUtilisateur(
+                avatar: avatar.id,
+                initiales: '',
+                taille: 64,
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Choisis ton avatar',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              Wrap(spacing: 16, runSpacing: 16, children: avatars),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(''); // '' = initiales
+                },
+                child: const Text('Utiliser mes initiales'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    // null : la galerie a été fermée sans choisir
+    if (choix != null) {
+      setState(() {
+        _avatar = choix;
+      });
+    }
   }
 
   /// Petite fenêtre pour taper une nouvelle compétence.
@@ -162,7 +225,8 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: AvatarInitiales(
+                    child: AvatarUtilisateur(
+                      avatar: _avatar,
                       initiales: utilisateur.initiales,
                       taille: 88,
                       couleur: AppColors.secondary,
@@ -172,13 +236,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                 ),
                 Center(
                   child: TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Changement de photo : bientôt disponible'),
-                        ),
-                      );
-                    },
+                    onPressed: _choisirPhoto,
                     child: const Text(
                       'Changer la photo',
                       style: TextStyle(fontWeight: FontWeight.w600),

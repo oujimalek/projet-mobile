@@ -13,6 +13,7 @@ import 'package:houmani/screens/module1/attente_validation_screen.dart';
 import 'package:houmani/screens/module1/code_quartier_screen.dart';
 import 'package:houmani/screens/module1/connexion_screen.dart';
 import 'package:houmani/screens/module1/inscription_screen.dart';
+import 'package:houmani/screens/module1/mot_de_passe_oublie_screen.dart';
 import 'package:houmani/screens/module1/profil_edition_screen.dart';
 import 'package:houmani/screens/module1/profil_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
@@ -236,9 +237,59 @@ void main() {
       'Mohamed Zahi',
     );
 
-    // 6. Démo : l'admin valide → accueil
+    // 6. Démo : l'admin valide → accueil, avec le message de démo
     await toucher(tester, find.text('Démo : simuler la validation'));
     expect(find.byType(AccueilScreen), findsOneWidget);
+    expect(find.text('Notification envoyée (démo)'), findsOneWidget);
+  });
+
+  testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
+      (WidgetTester tester) async {
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    await toucher(tester, find.text('Mot de passe oublié ?'));
+    expect(find.byType(MotDePasseOublieScreen), findsOneWidget);
+
+    // Champ vide : message d'erreur, pas d'envoi
+    await toucher(tester, find.text('Envoyer le lien'));
+    expect(find.text('Saisis ton téléphone ou ton e-mail'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField), 'demo@houmani.tn');
+    await toucher(tester, find.text('Envoyer le lien'));
+    expect(
+      find.text('Si ce compte existe, un lien a été envoyé.'),
+      findsOneWidget,
+    );
+
+    await toucher(tester, find.text('Retour à la connexion'));
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
+  testWidgets('Profil : changer la photo avec un avatar de la galerie',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    // Au départ : les initiales
+    expect(find.text('AB'), findsOneWidget);
+
+    await toucher(tester, find.text('Modifier'));
+    // Tap direct (sans toucher) : le bouton est déjà visible, et faire
+    // défiler la liste cacherait l'aperçu de l'avatar vérifié ensuite
+    await tester.tap(find.text('Changer la photo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choisis ton avatar'), findsOneWidget);
+
+    await toucher(tester, find.byKey(const Key('avatar_chat')));
+    // La galerie est fermée, l'aperçu montre le nouvel avatar
+    expect(find.text('Choisis ton avatar'), findsNothing);
+    expect(find.byIcon(Icons.pets), findsOneWidget);
+
+    await toucher(tester, find.text('Enregistrer les modifications'));
+    expect(find.byType(ProfilScreen), findsOneWidget);
+    expect(find.byIcon(Icons.pets), findsOneWidget);
+    expect(find.text('AB'), findsNothing);
+    expect(UtilisateurRepository().getUtilisateurConnecte().avatar, 'chat');
   });
 
   testWidgets('Accueil ouvre la démo, qui ouvre le module 1',

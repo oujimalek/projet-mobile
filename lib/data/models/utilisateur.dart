@@ -34,6 +34,9 @@ class Utilisateur {
   // Date de la demande d'inscription (affichée dans la liste de l'admin)
   final DateTime? dateDemande;
 
+  // Avatar choisi dans la galerie (ex : "chat"), vide = initiales
+  final String avatar;
+
   const Utilisateur({
     required this.id,
     required this.prenom,
@@ -52,6 +55,7 @@ class Utilisateur {
     this.noteMoyenne = 0,
     this.nbSignalements = 0,
     this.dateDemande,
+    this.avatar = '',
   });
 
   String get nomComplet => '$prenom $nom';
@@ -83,6 +87,7 @@ class Utilisateur {
     StatutUtilisateur? statut,
     List<String>? competences,
     DateTime? dateDemande,
+    String? avatar,
   }) {
     return Utilisateur(
       id: id,
@@ -100,6 +105,7 @@ class Utilisateur {
       noteMoyenne: noteMoyenne,
       nbSignalements: nbSignalements,
       dateDemande: dateDemande ?? this.dateDemande,
+      avatar: avatar ?? this.avatar,
     );
   }
 }

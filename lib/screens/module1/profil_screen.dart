@@ -176,7 +176,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              AvatarInitiales(
+              AvatarUtilisateur(
+                avatar: utilisateur.avatar,
                 initiales: utilisateur.initiales,
                 taille: 76,
                 couleur: Colors.white,

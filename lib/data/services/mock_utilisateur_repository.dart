@@ -251,6 +251,11 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     // toujours getUtilisateurConnecte(), même depuis l'écran de démo
   }
 
+  @override
+  Future<void> envoyerLienReinitialisation(String identifiant) async {
+    // Pas de vrai e-mail ni SMS : rien à envoyer
+  }
+
   // =====================================================================
   // Utilisateur connecté et profil
   // =====================================================================
@@ -275,6 +280,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     required String telephone,
     required String logement,
     required List<String> competences,
+    String avatar = '',
   }) async {
     final List<String> mots = nomComplet.trim().split(' ');
     _remplacer(
@@ -284,6 +290,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         telephone: telephone.trim(),
         logement: logement.trim(),
         competences: competences,
+        avatar: avatar,
       ),
     );
   }
