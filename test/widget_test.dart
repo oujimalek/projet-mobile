@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
@@ -315,4 +316,139 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ConnexionScreen), findsOneWidget);
   });
+
+  // -------------------------------------------------------------------
+  // Le bon écran selon le statut du compte (actif, en attente, refusé,
+  // bloqué) : après la connexion, au démarrage et sur l'écran d'attente
+  // -------------------------------------------------------------------
+
+  testWidgets('Connexion d\'un compte refusé : choisir un autre quartier',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteDeTest(StatutUtilisateur.refuse), 'secret123');
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    await seConnecter(tester, 'test@houmani.tn', 'secret123');
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+  });
+
+  testWidgets('Connexion d\'un compte en attente : écran d\'attente',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteDeTest(StatutUtilisateur.enAttente), 'secret123');
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    await seConnecter(tester, 'test@houmani.tn', 'secret123');
+    expect(find.byType(AttenteValidationScreen), findsOneWidget);
+  });
+
+  testWidgets('Connexion d\'un compte bloqué : message, reste sur la connexion',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteDeTest(StatutUtilisateur.bloque), 'secret123');
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    await seConnecter(tester, 'test@houmani.tn', 'secret123');
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+    expect(
+      find.text('Ton compte a été bloqué par l\'administrateur'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Splash : un membre actif resté connecté arrive sur l\'accueil',
+      (WidgetTester tester) async {
+    mock.sessionGardee = compteDeTest(StatutUtilisateur.actif);
+    appRouter.go('/splash');
+    await lancerApp(tester);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(AccueilScreen), findsOneWidget);
+  });
+
+  testWidgets('Splash : une demande en attente rouvre l\'écran d\'attente',
+      (WidgetTester tester) async {
+    mock.sessionGardee = compteDeTest(StatutUtilisateur.enAttente);
+    appRouter.go('/splash');
+    await lancerApp(tester);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(AttenteValidationScreen), findsOneWidget);
+  });
+
+  testWidgets('Attente : demande refusée → message et choix du quartier',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteDeTest(StatutUtilisateur.enAttente), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/attente');
+    await lancerApp(tester);
+
+    await mock.simulerStatut(StatutUtilisateur.refuse);
+    await toucher(tester, find.text('Vérifier ma demande'));
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+    expect(
+      find.text('Ta demande a été refusée : choisis un autre quartier'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Attente : compte bloqué → message et retour à la connexion',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteDeTest(StatutUtilisateur.enAttente), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/attente');
+    await lancerApp(tester);
+
+    await mock.simulerStatut(StatutUtilisateur.bloque);
+    await toucher(tester, find.text('Vérifier ma demande'));
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+    expect(
+      find.text('Ton compte a été bloqué par l\'administrateur'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Membres du quartier : erreur réseau affichée',
+      (WidgetTester tester) async {
+    mock.erreurMembres = 'Serveur injoignable, vérifie ta connexion Internet';
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+
+    await toucher(tester, find.text('Membres du quartier'));
+    expect(find.byType(AdminMembresScreen), findsOneWidget);
+    expect(
+      find.text('Serveur injoignable, vérifie ta connexion Internet'),
+      findsOneWidget,
+    );
+    expect(find.text('Sarra Ben Ali'), findsNothing);
+  });
+}
+
+/// Un compte "test@houmani.tn" du quartier El Yasmine, avec ce statut.
+Utilisateur compteDeTest(StatutUtilisateur statut) {
+  return Utilisateur(
+    id: 'test1',
+    prenom: 'Test',
+    nom: 'Houmani',
+    email: 'test@houmani.tn',
+    telephone: '',
+    quartierId: 'q1',
+    quartier: 'Résidence El Yasmine',
+    residence: 'Résidence El Yasmine',
+    statut: statut,
+    dateDemande: DateTime(2026, 10, 15, 9, 30),
+  );
+}
+
+/// Remplit l'écran de connexion et appuie sur "Se connecter".
+Future<void> seConnecter(
+  WidgetTester tester,
+  String email,
+  String motDePasse,
+) async {
+  await tester.enterText(find.byType(TextFormField).at(0), email);
+  await tester.enterText(find.byType(TextFormField).at(1), motDePasse);
+  await toucher(tester, find.text('Se connecter'));
 }

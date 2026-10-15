@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
+import 'package:houmani/screens/module1/widgets_module1.dart';
 import 'mock_utilisateur_repository.dart';
 
 // Tests de la couche données du Module 1 (sans Firebase).
@@ -372,6 +373,117 @@ void main() {
       // Pas de await : le résultat est directement un Utilisateur
       final Utilisateur u = repo.getUtilisateurConnecte();
       expect(u.id, 'u1');
+    });
+
+    group('session et rafraîchissement du profil', () {
+      test('restaurerSession renvoie null sans session gardée', () async {
+        expect(await repo.restaurerSession(), isNull);
+      });
+
+      test('restaurerSession redonne le profil gardé', () async {
+        repo.sessionGardee = const Utilisateur(
+          id: 'u9',
+          prenom: 'Lina',
+          nom: 'Saidi',
+          email: 'lina@houmani.tn',
+          telephone: '',
+          quartier: 'Cité El Wafa',
+          residence: 'Cité El Wafa',
+        );
+        final Utilisateur? u = await repo.restaurerSession();
+        expect(u?.id, 'u9');
+        // getUtilisateurConnecte répond tout de suite avec ce profil
+        expect(repo.getUtilisateurConnecte().prenom, 'Lina');
+      });
+
+      test('restaurerSession ne restaure pas un compte bloqué', () async {
+        repo.sessionGardee = const Utilisateur(
+          id: 'u8',
+          prenom: 'Walid',
+          nom: 'Ferchichi',
+          email: '',
+          telephone: '',
+          quartier: 'Résidence El Yasmine',
+          residence: 'Résidence El Yasmine',
+          statut: StatutUtilisateur.bloque,
+        );
+        expect(await repo.restaurerSession(), isNull);
+      });
+
+      test('rafraichirProfil renvoie le nouveau statut', () async {
+        await repo.simulerStatut(StatutUtilisateur.refuse);
+        final Resultat<Utilisateur> r = await repo.rafraichirProfil();
+        expect(r.estSucces, true);
+        expect(r.donnee!.statut, StatutUtilisateur.refuse);
+      });
+
+      test('rafraichirProfil déconnecte un compte bloqué', () async {
+        await repo.simulerStatut(StatutUtilisateur.bloque);
+        final Resultat<Utilisateur> r = await repo.rafraichirProfil();
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
+        expect(repo.getUtilisateurConnecte().id, isEmpty);
+      });
+    });
+
+    group('erreurs réseau', () {
+      test('getMembres et compterMembres renvoient le message d\'erreur',
+          () async {
+        repo.erreurMembres = 'Serveur injoignable';
+        final Resultat<List<Utilisateur>> membres =
+            await repo.getMembres(StatutUtilisateur.actif);
+        expect(membres.estSucces, false);
+        expect(membres.donnee, isNull);
+        expect(membres.erreur, 'Serveur injoignable');
+
+        final Resultat<int> nombre =
+            await repo.compterMembres(StatutUtilisateur.enAttente);
+        expect(nombre.estSucces, false);
+        expect(nombre.erreur, 'Serveur injoignable');
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // L'écran ouvert après la connexion, le splash et "Vérifier ma demande"
+  group('cheminSelonStatut', () {
+    Utilisateur avec(StatutUtilisateur statut, {String quartier = 'Cité El Wafa'}) {
+      return Utilisateur(
+        id: 'u1',
+        prenom: 'Amira',
+        nom: 'Ben Salah',
+        email: '',
+        telephone: '',
+        quartier: quartier,
+        residence: quartier,
+        statut: statut,
+      );
+    }
+
+    test('actif → accueil', () {
+      expect(cheminSelonStatut(avec(StatutUtilisateur.actif)), '/accueil');
+    });
+
+    test('en attente avec un quartier → attente', () {
+      expect(cheminSelonStatut(avec(StatutUtilisateur.enAttente)), '/attente');
+    });
+
+    test('en attente sans quartier → vérification de l\'e-mail', () {
+      expect(
+        cheminSelonStatut(avec(StatutUtilisateur.enAttente, quartier: '')),
+        '/verification',
+      );
+    });
+
+    test('refusé → choisir un autre quartier', () {
+      expect(
+        cheminSelonStatut(avec(StatutUtilisateur.refuse)),
+        '/code-quartier',
+      );
+    });
+
+    test('bloqué → null (reste sur la connexion)', () {
+      expect(cheminSelonStatut(avec(StatutUtilisateur.bloque)), isNull);
     });
   });
 }

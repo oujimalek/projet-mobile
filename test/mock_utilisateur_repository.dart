@@ -174,8 +174,29 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   /// Fait comme si l'admin avait validé la demande de l'utilisateur connecté.
   Future<void> simulerValidation() async {
-    _remplacer(_connecte.copier(statut: StatutUtilisateur.actif));
+    await simulerStatut(StatutUtilisateur.actif);
   }
+
+  /// Fait comme si l'admin avait changé le statut de l'utilisateur connecté
+  /// (refusé, bloqué...).
+  Future<void> simulerStatut(StatutUtilisateur statut) async {
+    _remplacer(_connecte.copier(statut: statut));
+  }
+
+  /// Ajoute un compte qui peut se connecter (e-mail déjà vérifié).
+  void ajouterCompte(Utilisateur utilisateur, String motDePasse) {
+    _membres.add(utilisateur);
+    _motsDePasse[utilisateur.id] = motDePasse;
+    _emailsVerifies.add(utilisateur.id);
+  }
+
+  /// Le profil "resté connecté" que restaurerSession() renvoie au
+  /// démarrage (null : personne, comme au premier lancement).
+  Utilisateur? sessionGardee;
+
+  /// Si ce n'est pas null : la liste des membres échoue avec ce message
+  /// (comme Firebase sans réseau).
+  String? erreurMembres;
 
   // =====================================================================
   // Connexion et inscription
@@ -258,13 +279,34 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Utilisateur?> restaurerSession() async {
-    // Pas de session gardée : on passe toujours par la connexion
-    return null;
+    // Par défaut pas de session gardée : on passe par la connexion.
+    // Comme Firebase : un compte bloqué n'est pas restauré.
+    final Utilisateur? session = sessionGardee;
+    if (session == null || session.statut == StatutUtilisateur.bloque) {
+      return null;
+    }
+    _connecte = session;
+    return session;
   }
 
   @override
   Future<Resultat<Utilisateur>> rafraichirProfil() async {
-    // Les données sont déjà en mémoire : rien à recharger
+    // Les données sont déjà en mémoire : rien à recharger.
+    // Comme Firebase : un compte bloqué est déconnecté.
+    if (_connecte.statut == StatutUtilisateur.bloque) {
+      _connecte = const Utilisateur(
+        id: '',
+        prenom: '',
+        nom: '',
+        email: '',
+        telephone: '',
+        quartier: '',
+        residence: '',
+      );
+      return const Resultat.echec(
+        'Ton compte a été bloqué par l\'administrateur',
+      );
+    }
     return Resultat.succes(_connecte);
   }
 
@@ -384,6 +426,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     StatutUtilisateur statut, {
     String recherche = '',
   }) async {
+    if (erreurMembres != null) {
+      return Resultat.echec(erreurMembres!);
+    }
     final String texte = recherche.trim().toLowerCase();
     final List<Utilisateur> resultats = [];
     for (final Utilisateur membre in _membres) {
@@ -399,6 +444,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   @override
   Future<Resultat<int>> compterMembres(StatutUtilisateur statut) async {
     final Resultat<List<Utilisateur>> membres = await getMembres(statut);
+    if (!membres.estSucces) {
+      return Resultat.echec(membres.erreur!);
+    }
     return Resultat.succes(membres.donnee!.length);
   }
 
