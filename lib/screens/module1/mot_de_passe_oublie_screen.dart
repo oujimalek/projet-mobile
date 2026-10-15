@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -66,10 +67,19 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    await UtilisateurRepository().envoyerLienReinitialisation(
+    final Resultat<void> resultat =
+        await UtilisateurRepository().envoyerLienReinitialisation(
       _identifiantController.text.trim(),
     );
     if (!mounted) {
+      return;
+    }
+    // Échec technique (pas de réseau...) : on affiche l'erreur.
+    // "Compte inconnu" n'est pas un échec (on ne révèle rien).
+    if (!resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
       return;
     }
     setState(() {

@@ -1,5 +1,6 @@
 import '../models/quartier.dart';
 import '../models/utilisateur.dart';
+import '../resultat.dart';
 import 'utilisateur_repository.dart';
 
 /// M1 - Implémentation "fictive" de UtilisateurRepository.
@@ -8,13 +9,14 @@ import 'utilisateur_repository.dart';
 /// enregistré quand on relance l'application. Toute l'app partage la même
 /// instance (UtilisateurRepository.instance), donc un changement fait sur un
 /// écran (ex : un membre validé) est visible sur les autres écrans.
+///
+/// Elle suit le même contrat que FirebaseUtilisateurRepository (mêmes
+/// Resultat, mêmes messages d'erreur) : les tests restent valables.
+/// Phase 5 : ce fichier part dans test/ (plus de données fictives dans l'app).
 class MockUtilisateurRepository implements UtilisateurRepository {
   // Compte de démonstration (données fictives, pour tester l'écran de connexion)
   static const String emailDemo = 'demo@houmani.tn';
   static const String motDePasseDemo = 'houmani123';
-
-  // Code de vérification reçu "par SMS" (fictif : on l'affiche dans l'écran)
-  static const String codeOtpDemo = '123456';
 
   static const Utilisateur _utilisateurDemo = Utilisateur(
     id: 'u1',
@@ -22,6 +24,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     nom: 'Ben Salah',
     email: emailDemo,
     telephone: '+216 22 345 678',
+    quartierId: 'q1',
     quartier: 'Résidence El Yasmine',
     residence: 'Résidence El Yasmine, Bloc B',
     logement: 'Bloc B - Appt 12',
@@ -62,6 +65,10 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   // Les mots de passe des comptes (clé = id de l'utilisateur)
   final Map<String, String> _motsDePasse = {'u1': motDePasseDemo};
+
+  // Les comptes dont l'e-mail est vérifié (clé = id). Un nouveau compte
+  // ne l'est pas : il faut "cliquer sur le lien" (simulerVerificationEmail).
+  final Set<String> _emailsVerifies = {'u1'};
 
   // Numéro du prochain compte créé (u100, u101, ...)
   int _prochainNumero = 100;
@@ -173,13 +180,18 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
-  String? get aideDemoCodeSms {
-    return codeOtpDemo;
+  String? get aideDemoCodeQuartier {
+    return _quartiers.first.codeInvitation;
   }
 
   @override
-  String? get aideDemoCodeQuartier {
-    return _quartiers.first.codeInvitation;
+  Future<void> simulerVerificationEmail() async {
+    _emailsVerifies.add(_connecte.id);
+  }
+
+  @override
+  Future<void> simulerValidation() async {
+    _remplacer(_connecte.copier(statut: StatutUtilisateur.actif));
   }
 
   // =====================================================================
@@ -187,35 +199,41 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   // =====================================================================
 
   @override
-  Future<Utilisateur?> connexion(String identifiant, String motDePasse) async {
-    final String texte = identifiant.trim();
-    // Connexion par téléphone : on compare uniquement les chiffres,
-    // donc "+216 22 345 678", "22345678" et "22 345 678" sont acceptés
-    final String chiffresSaisis = _garderChiffres(texte);
-
+  Future<Resultat<Utilisateur>> connexion(
+    String email,
+    String motDePasse,
+  ) async {
+    final String texte = email.trim().toLowerCase();
     for (final Utilisateur membre in _membres) {
-      bool memeCompte = false;
-      if (texte.contains('@')) {
-        memeCompte = membre.email.isNotEmpty && membre.email == texte;
-      } else if (chiffresSaisis.length >= 8) {
-        memeCompte = _garderChiffres(membre.telephone).endsWith(chiffresSaisis);
-      }
-
-      if (memeCompte && _motsDePasse[membre.id] == motDePasse) {
+      if (membre.email.isNotEmpty &&
+          membre.email.toLowerCase() == texte &&
+          _motsDePasse[membre.id] == motDePasse) {
+        // Même règle que Firebase : un compte bloqué reste déconnecté
+        if (membre.statut == StatutUtilisateur.bloque) {
+          return const Resultat.echec(
+            'Ton compte a été bloqué par l\'administrateur',
+          );
+        }
         _connecte = membre;
-        return membre;
+        return Resultat.succes(membre);
       }
     }
-    return null;
+    return const Resultat.echec('E-mail ou mot de passe incorrect');
   }
 
   @override
-  Future<Utilisateur> inscription({
+  Future<Resultat<Utilisateur>> inscription({
     required String nomComplet,
     required String telephone,
     required String email,
     required String motDePasse,
   }) async {
+    for (final Utilisateur membre in _membres) {
+      if (membre.email.isNotEmpty &&
+          membre.email.toLowerCase() == email.trim().toLowerCase()) {
+        return const Resultat.echec('Un compte existe déjà avec cet e-mail');
+      }
+    }
     // Le nom complet est découpé : premier mot = prénom, le reste = nom
     final List<String> mots = nomComplet.trim().split(' ');
     final Utilisateur nouveau = Utilisateur(
@@ -231,18 +249,19 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     _prochainNumero++;
     _motsDePasse[nouveau.id] = motDePasse;
     _connecte = nouveau;
-    // Pas de vrai SMS : le code est toujours codeOtpDemo
-    return nouveau;
+    // Pas de vrai e-mail : la vérification se fait avec simulerVerificationEmail
+    return Resultat.succes(nouveau);
   }
 
   @override
-  Future<void> renvoyerCodeSms() async {
-    // Pas de vrai SMS : rien à faire
+  Future<Resultat<void>> envoyerEmailVerification() async {
+    // Pas de vrai e-mail : rien à envoyer
+    return const Resultat.succes(null);
   }
 
   @override
-  Future<bool> verifierCode(String code) async {
-    return code == codeOtpDemo;
+  Future<Resultat<bool>> emailEstVerifie() async {
+    return Resultat.succes(_emailsVerifies.contains(_connecte.id));
   }
 
   @override
@@ -252,8 +271,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
-  Future<void> envoyerLienReinitialisation(String identifiant) async {
-    // Pas de vrai e-mail ni SMS : rien à envoyer
+  Future<Resultat<void>> envoyerLienReinitialisation(String email) async {
+    // Pas de vrai e-mail : rien à envoyer
+    return const Resultat.succes(null);
   }
 
   // =====================================================================
@@ -266,16 +286,12 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
-  String telephoneMasque() {
-    final String chiffres = _garderChiffres(_connecte.telephone);
-    if (chiffres.length < 3) {
-      return _connecte.telephone;
-    }
-    return '+216 •• ••• ${chiffres.substring(chiffres.length - 3)}';
+  String emailConnecte() {
+    return _connecte.email;
   }
 
   @override
-  Future<void> modifierProfil({
+  Future<Resultat<void>> modifierProfil({
     required String nomComplet,
     required String telephone,
     required String logement,
@@ -293,6 +309,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         avatar: avatar,
       ),
     );
+    return const Resultat.succes(null);
   }
 
   // =====================================================================
@@ -300,7 +317,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   // =====================================================================
 
   @override
-  Future<List<Quartier>> rechercherQuartiers(String recherche) async {
+  Future<Resultat<List<Quartier>>> rechercherQuartiers(String recherche) async {
     final String texte = recherche.trim().toLowerCase();
     final List<Quartier> resultats = [];
     for (final Quartier quartier in _quartiers) {
@@ -309,22 +326,27 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         resultats.add(quartier);
       }
     }
-    return resultats;
+    return Resultat.succes(resultats);
   }
 
   @override
-  Future<Quartier?> trouverParCode(String code) async {
+  Future<Resultat<Quartier?>> trouverParCode(String code) async {
     for (final Quartier quartier in _quartiers) {
       if (quartier.codeInvitation == code.toUpperCase()) {
-        return quartier;
+        return Resultat.succes(quartier);
       }
     }
-    return null;
+    return const Resultat.succes(null);
   }
 
   @override
-  Future<void> rejoindreQuartier(Quartier quartier) async {
+  Future<Resultat<void>> rejoindreQuartier(Quartier quartier) async {
+    // Même règle que firestore.rules : e-mail vérifié obligatoire
+    if (!_emailsVerifies.contains(_connecte.id)) {
+      return const Resultat.echec('Action non autorisée');
+    }
     final Utilisateur demande = _connecte.copier(
+      quartierId: quartier.id,
       quartier: quartier.nom,
       residence: quartier.nom,
       statut: StatutUtilisateur.enAttente,
@@ -342,16 +364,17 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       _membres.add(demande);
     }
     _remplacer(demande);
+    return const Resultat.succes(null);
   }
 
   @override
-  Future<Quartier?> getQuartierConnecte() async {
+  Future<Resultat<Quartier?>> getQuartierConnecte() async {
     for (final Quartier quartier in _quartiers) {
       if (quartier.nom == _connecte.quartier) {
-        return quartier;
+        return Resultat.succes(quartier);
       }
     }
-    return null;
+    return const Resultat.succes(null);
   }
 
   // =====================================================================
@@ -359,7 +382,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   // =====================================================================
 
   @override
-  Future<List<Utilisateur>> getMembres(
+  Future<Resultat<List<Utilisateur>>> getMembres(
     StatutUtilisateur statut, {
     String recherche = '',
   }) async {
@@ -372,64 +395,44 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         resultats.add(membre);
       }
     }
-    return resultats;
+    return Resultat.succes(resultats);
   }
 
   @override
-  Future<int> compterMembres(StatutUtilisateur statut) async {
-    final List<Utilisateur> membres = await getMembres(statut);
-    return membres.length;
+  Future<Resultat<int>> compterMembres(StatutUtilisateur statut) async {
+    final Resultat<List<Utilisateur>> membres = await getMembres(statut);
+    return Resultat.succes(membres.donnee!.length);
   }
 
   @override
-  Future<List<Utilisateur>> getVoisins() {
+  Future<Resultat<List<Utilisateur>>> getVoisins() {
     return getMembres(StatutUtilisateur.actif);
   }
 
   @override
-  Future<void> validerMembre(String id) async {
-    _changerStatut(id, StatutUtilisateur.actif);
+  Future<Resultat<void>> validerMembre(String id) async {
+    return _changerStatut(id, StatutUtilisateur.actif);
   }
 
   @override
-  Future<void> refuserMembre(String id) async {
-    for (int i = 0; i < _membres.length; i++) {
-      if (_membres[i].id == id) {
-        _membres.removeAt(i);
-        return;
-      }
-    }
+  Future<Resultat<void>> refuserMembre(String id) async {
+    // Comme Firebase : le membre passe "refuse" (il n'est plus dans les onglets)
+    return _changerStatut(id, StatutUtilisateur.refuse);
   }
 
   @override
-  Future<void> bloquerMembre(String id) async {
-    _changerStatut(id, StatutUtilisateur.bloque);
+  Future<Resultat<void>> bloquerMembre(String id) async {
+    return _changerStatut(id, StatutUtilisateur.bloque);
   }
 
   @override
-  Future<void> debloquerMembre(String id) async {
-    _changerStatut(id, StatutUtilisateur.actif);
-  }
-
-  @override
-  Future<void> simulerValidation() async {
-    _remplacer(_connecte.copier(statut: StatutUtilisateur.actif));
+  Future<Resultat<void>> debloquerMembre(String id) async {
+    return _changerStatut(id, StatutUtilisateur.actif);
   }
 
   // =====================================================================
   // Outils internes
   // =====================================================================
-
-  /// Garde seulement les chiffres d'un texte ("+216 22" donne "21622").
-  String _garderChiffres(String texte) {
-    String chiffres = '';
-    for (int i = 0; i < texte.length; i++) {
-      if ('0123456789'.contains(texte[i])) {
-        chiffres = chiffres + texte[i];
-      }
-    }
-    return chiffres;
-  }
 
   /// Les mots après le premier, recollés : ["Amira", "Ben", "Salah"] → "Ben Salah".
   String _reste(List<String> mots) {
@@ -455,12 +458,13 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
-  void _changerStatut(String id, StatutUtilisateur statut) {
+  Resultat<void> _changerStatut(String id, StatutUtilisateur statut) {
     for (final Utilisateur membre in _membres) {
       if (membre.id == id) {
         _remplacer(membre.copier(statut: statut));
-        return;
+        return const Resultat.succes(null);
       }
     }
+    return const Resultat.echec('Donnée introuvable');
   }
 }

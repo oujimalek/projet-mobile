@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
@@ -83,7 +84,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    await UtilisateurRepository().modifierProfil(
+    final Resultat<void> resultat = await UtilisateurRepository().modifierProfil(
       nomComplet: _nomController.text,
       telephone: _telephoneController.text,
       logement: _logementController.text,
@@ -92,6 +93,13 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
     );
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
+    }
+    if (!resultat.estSucces) {
+      // On reste sur l'écran pour que l'utilisateur puisse réessayer
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
+      return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Profil enregistré')),

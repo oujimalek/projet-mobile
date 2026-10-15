@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -10,11 +11,14 @@ import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import 'widgets_module1.dart';
 
-/// M1 - Utilisateurs : écran 2, vérification du numéro par SMS.
+/// M1 - Utilisateurs : écran 2, vérification de l'adresse e-mail.
 ///
-/// L'utilisateur tape le code à 6 chiffres reçu par SMS.
-/// Un compte à rebours empêche de redemander un code trop vite.
-/// (Démo : le code est toujours MockUtilisateurRepository.codeOtpDemo.)
+/// Firebase envoie un e-mail avec un lien. L'utilisateur clique dessus
+/// dans sa boîte mail, revient dans l'app et touche "J'ai vérifié mon
+/// e-mail". Un compte à rebours empêche de renvoyer l'e-mail trop vite.
+///
+/// (Ancien écran du code SMS : le nom de la classe et la route
+/// '/verification' sont gardés pour ne pas toucher au routeur commun.)
 class VerificationOtpScreen extends StatefulWidget {
   const VerificationOtpScreen({super.key});
 
@@ -27,7 +31,6 @@ class VerificationOtpScreen extends StatefulWidget {
 class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
   static const int dureeAttente = 60; // secondes avant de pouvoir renvoyer
 
-  String _code = '';
   String _erreur = '';
   int _secondesRestantes = dureeAttente;
   Timer? _minuteur;
@@ -65,39 +68,48 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     return '$minutes:$reste';
   }
 
-  Future<void> _renvoyerCode() async {
+  Future<void> _renvoyerEmail() async {
     setState(() {
       _erreur = '';
       _demarrerCompteARebours();
     });
-    await UtilisateurRepository().renvoyerCodeSms();
+    final Resultat<void> resultat =
+        await UtilisateurRepository().envoyerEmailVerification();
     if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Un nouveau code t\'a été envoyé')),
+      SnackBar(
+        content: Text(
+          resultat.estSucces ? 'Un nouvel e-mail t\'a été envoyé' : resultat.erreur!,
+        ),
+      ),
     );
   }
 
   Future<void> _verifier() async {
-    final bool codeCorrect = await UtilisateurRepository().verifierCode(_code);
+    final Resultat<bool> resultat =
+        await UtilisateurRepository().emailEstVerifie();
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
-    if (codeCorrect) {
-      // Numéro vérifié : étape suivante, choisir son quartier
+    if (!resultat.estSucces) {
+      setState(() {
+        _erreur = resultat.erreur!;
+      });
+    } else if (resultat.donnee!) {
+      // E-mail vérifié : étape suivante, choisir son quartier
       context.push('/code-quartier');
     } else {
       setState(() {
-        _erreur = 'Code incorrect, vérifie le SMS reçu';
+        _erreur = 'E-mail pas encore vérifié : clique sur le lien reçu';
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String telephone = UtilisateurRepository().telephoneMasque();
-    final String? aideDemo = UtilisateurRepository().aideDemoCodeSms;
+    final String email = UtilisateurRepository().emailConnecte();
 
     return Scaffold(
       body: Column(
@@ -108,24 +120,27 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
               padding: const EdgeInsets.all(24),
               children: [
                 TitreEcran(
-                  titre: 'Vérifie ton numéro',
-                  sousTitre: 'Nous avons envoyé un code à 6 chiffres au\n$telephone',
+                  titre: 'Vérifie ton e-mail',
+                  sousTitre: 'Nous avons envoyé un lien de vérification à\n$email',
                 ),
                 const SizedBox(height: 24),
 
-                // ----- Les 6 cases + compte à rebours -----
+                // ----- Explication + compte à rebours -----
                 AppCard(
                   padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
                   child: Column(
                     children: [
-                      SaisieCode(
-                        chiffresSeulement: true,
-                        onChanged: (code) {
-                          setState(() {
-                            _code = code;
-                            _erreur = '';
-                          });
-                        },
+                      const Icon(
+                        Icons.mark_email_unread_outlined,
+                        size: 48,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Ouvre ta boîte mail, clique sur le lien, '
+                        'puis reviens ici.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 12),
                       _ligneRenvoi(),
@@ -146,38 +161,44 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                   ),
                 const SizedBox(height: 24),
 
-                // Le bouton reste désactivé tant que les 6 chiffres ne sont pas tapés
                 PrimaryButton(
-                  texte: 'Vérifier',
-                  onPressed: _code.length == 6 ? _verifier : null,
+                  texte: 'J\'ai vérifié mon e-mail',
+                  onPressed: _verifier,
                 ),
                 const SizedBox(height: 8),
                 Center(
                   child: TextButton(
                     onPressed: () {
-                      // Retour à l'inscription pour corriger le numéro
+                      // Retour à l'inscription
                       context.pop();
                     },
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.primary,
                     ),
                     child: const Text(
-                      'Modifier le numéro',
+                      'Retour',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                // Aide de démo (rien avec une vraie source de données)
-                if (aideDemo != null)
-                  Text(
-                    'Démo : le code est $aideDemo',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
+
+                // ----- Raccourci de démo (pas de vraie boîte mail) -----
+                if (UtilisateurRepository().estDemo) ...[
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await UtilisateurRepository().simulerVerificationEmail();
+                        _verifier();
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                      ),
+                      icon: const Icon(Icons.play_circle_outline, size: 18),
+                      label: const Text('Démo : simuler le clic sur le lien'),
                     ),
                   ),
+                ],
               ],
             ),
           ),
@@ -186,12 +207,12 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     );
   }
 
-  /// "Renvoyer le code dans 00:42", puis un lien "Renvoyer le code".
+  /// "Renvoyer l'e-mail dans 00:42", puis un lien "Renvoyer l'e-mail".
   Widget _ligneRenvoi() {
     if (_secondesRestantes > 0) {
       return Text.rich(
         TextSpan(
-          text: 'Renvoyer le code dans ',
+          text: 'Renvoyer l\'e-mail dans ',
           style: const TextStyle(color: AppColors.textSecondary),
           children: [
             TextSpan(
@@ -206,9 +227,9 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
       );
     }
     return TextButton(
-      onPressed: _renvoyerCode,
+      onPressed: _renvoyerEmail,
       child: const Text(
-        'Renvoyer le code',
+        'Renvoyer l\'e-mail',
         style: TextStyle(fontWeight: FontWeight.w600),
       ),
     );

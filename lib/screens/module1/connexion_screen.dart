@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_text_field.dart';
@@ -11,7 +12,7 @@ import '../../widgets/primary_button.dart';
 
 /// M1 - Utilisateurs : écran 3, connexion.
 ///
-/// Un Form avec deux champs (téléphone ou e-mail, mot de passe).
+/// Un Form avec deux champs (e-mail, mot de passe).
 /// Le bouton "Se connecter" vérifie les champs, puis interroge
 /// UtilisateurRepository (compte de démo : voir mock_utilisateur_repository.dart).
 /// Selon le statut du compte, on ouvre l'accueil, le choix du quartier
@@ -30,7 +31,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   // Contrôleurs : permettent de lire le texte saisi dans les champs
-  final TextEditingController _identifiantController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _motDePasseController = TextEditingController();
 
   // Message d'erreur affiché sous le bouton après une tentative ratée
@@ -39,40 +40,19 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
   @override
   void dispose() {
     // On libère les contrôleurs quand l'écran est fermé
-    _identifiantController.dispose();
+    _emailController.dispose();
     _motDePasseController.dispose();
     super.dispose();
   }
 
-  /// Compte le nombre de chiffres dans un texte (pour le téléphone).
-  int _compterChiffres(String texte) {
-    int nombre = 0;
-    for (int i = 0; i < texte.length; i++) {
-      if ('0123456789'.contains(texte[i])) {
-        nombre++;
-      }
-    }
-    return nombre;
-  }
-
-  /// Validation du champ "Téléphone ou e-mail".
-  String? _validerIdentifiant(String? valeur) {
+  /// Validation du champ "E-mail" (on se connecte avec l'e-mail).
+  String? _validerEmail(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton téléphone ou ton e-mail';
+      return 'Saisis ton e-mail';
     }
     final String texte = valeur.trim();
-
-    // Si le texte contient un @, on le traite comme un e-mail
-    if (texte.contains('@')) {
-      if (!texte.contains('.')) {
-        return 'Adresse e-mail invalide';
-      }
-      return null;
-    }
-
-    // Sinon c'est un téléphone : au moins 8 chiffres (numéro tunisien)
-    if (_compterChiffres(texte) < 8) {
-      return 'Numéro de téléphone invalide (8 chiffres)';
+    if (!texte.contains('@') || !texte.contains('.')) {
+      return 'Adresse e-mail invalide';
     }
     return null;
   }
@@ -97,20 +77,21 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
 
     // 2. On demande au repository si le compte existe
     //    (await : la réponse peut prendre du temps avec un vrai serveur)
-    final Utilisateur? utilisateur = await UtilisateurRepository().connexion(
-      _identifiantController.text,
-      _motDePasseController.text,
-    );
+    final Resultat<Utilisateur> resultat = await UtilisateurRepository()
+        .connexion(_emailController.text, _motDePasseController.text);
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
 
-    if (utilisateur == null) {
+    // Échec (mauvais mot de passe, pas de réseau, compte bloqué...) :
+    // le repository donne le message à afficher
+    if (!resultat.estSucces) {
       setState(() {
-        _message = 'Identifiant ou mot de passe incorrect';
+        _message = resultat.erreur!;
       });
       return;
     }
+    final Utilisateur utilisateur = resultat.donnee!;
 
     // 3. On ouvre l'écran qui correspond au statut du compte
     //    (go : on remplace la connexion, pas de retour possible vers elle)
@@ -118,12 +99,15 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
       case StatutUtilisateur.actif:
         context.go('/accueil');
       case StatutUtilisateur.enAttente:
-        // Pas encore de quartier : il doit d'abord en choisir un
+        // Pas encore de quartier : vérifier l'e-mail, puis en choisir un
         if (utilisateur.quartier.isEmpty) {
-          context.go('/code-quartier');
+          context.go('/verification');
         } else {
           context.go('/attente');
         }
+      case StatutUtilisateur.refuse:
+        // Demande refusée : il peut choisir un autre quartier
+        context.go('/code-quartier');
       case StatutUtilisateur.bloque:
         setState(() {
           _message = 'Ton compte a été bloqué par l\'administrateur';
@@ -168,11 +152,11 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             child: Column(
               children: [
                 AppTextField(
-                  label: 'Téléphone ou e-mail',
-                  hint: '+216 22 345 678',
-                  controller: _identifiantController,
+                  label: 'E-mail',
+                  hint: 'exemple@mail.com',
+                  controller: _emailController,
                   clavier: TextInputType.emailAddress,
-                  validator: _validerIdentifiant,
+                  validator: _validerEmail,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(

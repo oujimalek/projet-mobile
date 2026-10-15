@@ -124,10 +124,13 @@ void main() {
     await lancerApp(tester);
 
     // Mauvais mot de passe : message d'erreur
-    await tester.enterText(find.byType(TextFormField).at(0), '+216 22 345 678');
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      MockUtilisateurRepository.emailDemo,
+    );
     await tester.enterText(find.byType(TextFormField).at(1), 'mauvais1');
     await toucher(tester, find.text('Se connecter'));
-    expect(find.text('Identifiant ou mot de passe incorrect'), findsOneWidget);
+    expect(find.text('E-mail ou mot de passe incorrect'), findsOneWidget);
 
     // Bon mot de passe : accueil avec la barre du bas
     await tester.enterText(
@@ -182,7 +185,7 @@ void main() {
   });
 
   testWidgets(
-      'Parcours complet : inscription, code SMS, quartier, attente, accueil',
+      'Parcours complet : inscription, e-mail, quartier, attente, accueil',
       (WidgetTester tester) async {
     appRouter.go('/connexion');
     await lancerApp(tester);
@@ -194,6 +197,7 @@ void main() {
     // 2. Inscription : les conditions doivent être acceptées
     await tester.enterText(find.byType(TextFormField).at(0), 'Mohamed Zahi');
     await tester.enterText(find.byType(TextFormField).at(1), '+216 55 123 456');
+    await tester.enterText(find.byType(TextFormField).at(2), 'mohamed@houmani.tn');
     await tester.enterText(find.byType(TextFormField).at(3), 'motdepasse');
     await toucher(tester, find.widgetWithText(ElevatedButton, 'S\'inscrire'));
     expect(
@@ -203,24 +207,22 @@ void main() {
     await toucher(tester, find.byType(Checkbox));
     await toucher(tester, find.widgetWithText(ElevatedButton, 'S\'inscrire'));
 
-    // 3. Vérification du code SMS
+    // 3. Vérification de l'adresse e-mail
     expect(find.byType(VerificationOtpScreen), findsOneWidget);
-    expect(find.textContaining('+216 •• ••• 456'), findsOneWidget);
+    expect(find.textContaining('mohamed@houmani.tn'), findsOneWidget);
     // Compte à rebours (texte en plusieurs morceaux : RichText)
     expect(
-      find.textContaining('Renvoyer le code dans', findRichText: true),
+      find.textContaining('Renvoyer l\'e-mail dans', findRichText: true),
       findsOneWidget,
     );
-    await tester.enterText(find.byType(TextField), '000000');
-    await tester.pump();
-    await toucher(tester, find.text('Vérifier'));
-    expect(find.text('Code incorrect, vérifie le SMS reçu'), findsOneWidget);
-    await tester.enterText(
-      find.byType(TextField),
-      MockUtilisateurRepository.codeOtpDemo,
+    // Lien pas encore cliqué : message d'erreur
+    await toucher(tester, find.text('J\'ai vérifié mon e-mail'));
+    expect(
+      find.text('E-mail pas encore vérifié : clique sur le lien reçu'),
+      findsOneWidget,
     );
-    await tester.pump();
-    await toucher(tester, find.text('Vérifier'));
+    // Démo : on simule le clic sur le lien reçu par e-mail
+    await toucher(tester, find.text('Démo : simuler le clic sur le lien'));
 
     // 4. Code du quartier (6 caractères, en majuscules)
     expect(find.byType(CodeQuartierScreen), findsOneWidget);

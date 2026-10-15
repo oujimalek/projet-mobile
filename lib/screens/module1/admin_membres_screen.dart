@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/utilisateur.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -56,19 +57,20 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
 
   /// (Re)charge les membres des 3 onglets.
   Future<void> _charger() async {
-    final List<Utilisateur> enAttente =
+    final Resultat<List<Utilisateur>> enAttente =
         await _repository.getMembres(StatutUtilisateur.enAttente);
-    final List<Utilisateur> actifs =
+    final Resultat<List<Utilisateur>> actifs =
         await _repository.getMembres(StatutUtilisateur.actif);
-    final List<Utilisateur> bloques =
+    final Resultat<List<Utilisateur>> bloques =
         await _repository.getMembres(StatutUtilisateur.bloque);
     if (!mounted) {
       return;
     }
     setState(() {
-      _enAttente = enAttente;
-      _actifs = actifs;
-      _bloques = bloques;
+      // En cas d'échec, l'onglet reste vide
+      _enAttente = enAttente.donnee ?? [];
+      _actifs = actifs.donnee ?? [];
+      _bloques = bloques.donnee ?? [];
     });
   }
 
@@ -81,6 +83,8 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         return _actifs;
       case StatutUtilisateur.bloque:
         return _bloques;
+      case StatutUtilisateur.refuse:
+        return []; // pas d'onglet pour les demandes refusées
     }
   }
 
@@ -122,13 +126,19 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
 
   /// Applique une action sur un membre, recharge les listes
   /// et affiche un message.
-  Future<void> _action(String message, Future<void> Function() action) async {
-    await action();
+  Future<void> _action(
+    String message,
+    Future<Resultat<void>> Function() action,
+  ) async {
+    final Resultat<void> resultat = await action();
     await _charger();
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    // Succès : le message prévu ; échec : le message d'erreur
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(resultat.estSucces ? message : resultat.erreur!)),
+    );
   }
 
   @override
@@ -380,6 +390,8 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
             });
           },
         );
+      case StatutUtilisateur.refuse:
+        return const SizedBox(); // pas d'onglet "refusés"
     }
   }
 

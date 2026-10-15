@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -37,13 +38,13 @@ class _ProfilScreenState extends State<ProfilScreen> {
     if (!_repository.getUtilisateurConnecte().estAdmin) {
       return;
     }
-    final int nombre =
+    final Resultat<int> resultat =
         await _repository.compterMembres(StatutUtilisateur.enAttente);
     if (!mounted) {
       return;
     }
     setState(() {
-      _enAttente = nombre;
+      _enAttente = resultat.donnee ?? 0; // échec : on n'affiche rien
     });
   }
 

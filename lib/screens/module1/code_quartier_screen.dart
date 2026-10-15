@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/quartier.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
@@ -52,13 +53,14 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
   /// Demande au repository les quartiers qui correspondent à la recherche.
   Future<void> _rechercher() async {
-    final List<Quartier> trouves =
+    final Resultat<List<Quartier>> resultat =
         await _repository.rechercherQuartiers(_rechercheController.text);
     if (!mounted) {
       return;
     }
     setState(() {
-      _quartiersTrouves = trouves;
+      // En cas d'échec (pas de réseau...), la liste reste vide
+      _quartiersTrouves = resultat.donnee ?? [];
     });
   }
 
@@ -73,7 +75,8 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     if (code.length < 6) {
       return;
     }
-    final Quartier? quartier = await _repository.trouverParCode(code);
+    final Resultat<Quartier?> resultat = await _repository.trouverParCode(code);
+    final Quartier? quartier = resultat.donnee;
     // Le code a pu changer pendant l'attente : on ignore l'ancienne réponse
     if (!mounted || code != _code) {
       return;
@@ -98,8 +101,14 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     if (quartier == null) {
       return;
     }
-    await _repository.rejoindreQuartier(quartier);
+    final Resultat<void> resultat = await _repository.rejoindreQuartier(quartier);
     if (!mounted) {
+      return;
+    }
+    if (!resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
       return;
     }
     // go : après l'envoi de la demande, pas de retour en arrière

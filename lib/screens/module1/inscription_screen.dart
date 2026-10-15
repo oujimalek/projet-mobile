@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/models/utilisateur.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -10,9 +12,9 @@ import '../../widgets/primary_button.dart';
 
 /// M1 - Utilisateurs : écran 1, création de compte.
 ///
-/// Nom, téléphone, e-mail (optionnel), mot de passe + conditions d'utilisation.
+/// Nom, téléphone, e-mail, mot de passe + conditions d'utilisation.
 /// Si tout est correct, on crée le compte puis on passe à la vérification
-/// du numéro (écran OTP).
+/// de l'adresse e-mail.
 class InscriptionScreen extends StatefulWidget {
   const InscriptionScreen({super.key});
 
@@ -74,9 +76,9 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
   }
 
   String? _validerEmail(String? valeur) {
-    // Optionnel : un champ vide est accepté
+    // Obligatoire : c'est l'identifiant de connexion
     if (valeur == null || valeur.trim().isEmpty) {
-      return null;
+      return 'Saisis ton adresse e-mail';
     }
     if (!valeur.contains('@') || !valeur.contains('.')) {
       return 'Adresse e-mail invalide';
@@ -104,7 +106,8 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
       return;
     }
 
-    await UtilisateurRepository().inscription(
+    final Resultat<Utilisateur> resultat =
+        await UtilisateurRepository().inscription(
       nomComplet: _nomController.text,
       telephone: _telephoneController.text,
       email: _emailController.text,
@@ -113,7 +116,14 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
-    // Étape suivante : vérifier le numéro de téléphone
+    // Échec (e-mail déjà utilisé, pas de réseau...) : on affiche le message
+    if (!resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
+      return;
+    }
+    // Étape suivante : vérifier l'adresse e-mail
     context.push('/verification');
   }
 
@@ -168,7 +178,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
-                      label: 'Adresse e-mail (optionnel)',
+                      label: 'Adresse e-mail',
                       hint: 'exemple@mail.com',
                       controller: _emailController,
                       clavier: TextInputType.emailAddress,
