@@ -8,9 +8,12 @@ import 'package:houmani/data/models/message_chat.dart';
 import 'package:houmani/data/models/statut_demande.dart';
 import 'package:houmani/data/services/chat_repository.dart';
 import 'package:houmani/data/services/service_repository.dart';
+import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module2/chat_screen.dart';
 import 'package:houmani/screens/module2/mes_demandes_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
+
+import 'mock_utilisateur_repository.dart';
 
 /// Affiche un écran dans une MaterialApp avec le thème Houmani.
 Future<void> afficher(WidgetTester tester, Widget ecran) async {
@@ -31,7 +34,10 @@ void main() {
   });
 
   // Les listes sont static : on remet tout à zéro, sans réponse automatique
+  // Utilisateur connecté de démo (Amira B.) : sans ce mock, l'app
+  // utiliserait Firebase
   setUp(() {
+    UtilisateurRepository.instance = MockUtilisateurRepository();
     ChatRepository.reponseAutomatiqueActive = false;
     serviceRepository.reinitialiser();
     chat.reinitialiser();

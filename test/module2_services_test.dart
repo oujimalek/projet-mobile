@@ -9,6 +9,7 @@ import 'package:houmani/data/models/evaluation.dart';
 import 'package:houmani/data/models/service.dart';
 import 'package:houmani/data/models/statut_demande.dart';
 import 'package:houmani/data/services/service_repository.dart';
+import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
 import 'package:houmani/screens/module2/evaluation_screen.dart';
@@ -19,6 +20,8 @@ import 'package:houmani/screens/module2/service_form_screen.dart';
 import 'package:houmani/screens/module2/services_communs_screen.dart';
 import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
+
+import 'mock_utilisateur_repository.dart';
 
 /// Affiche un écran dans une MaterialApp avec le thème Houmani.
 Future<void> afficher(WidgetTester tester, Widget ecran) async {
@@ -40,7 +43,10 @@ void main() {
   });
 
   // Les listes du repository sont static : on les remet à zéro avant chaque test
+  // Utilisateur connecté de démo (Amira B., Résidence El Yasmine) :
+  // sans ce mock, l'app utiliserait Firebase
   setUp(() {
+    UtilisateurRepository.instance = MockUtilisateurRepository();
     repository.reinitialiser();
   });
 
@@ -486,7 +492,7 @@ void main() {
       await afficher(tester, const ServicesCommunsScreen());
 
       expect(find.text('Services communs'), findsOneWidget);
-      expect(find.text('Résidence Yasmine, Bloc B'), findsOneWidget);
+      expect(find.text('Résidence El Yasmine, Bloc B'), findsOneWidget);
       for (final jour in ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']) {
         expect(find.text(jour), findsOneWidget);
       }
