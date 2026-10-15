@@ -71,14 +71,19 @@ Ne jamais ajouter ces deux fichiers dans un commit
 > Si la compilation Android échoue avec `AAPT: error: failed to open file`,
 > lancer `flutter clean`, puis relancer.
 
-Les règles de sécurité de la base sont dans `firestore.rules` (brouillon,
-pas encore déployé).
+Les règles de sécurité de la base sont dans `firestore.rules` et les index
+dans `firestore.indexes.json`. Le schéma complet des 4 modules est dans
+[`docs/schema_firestore.md`](docs/schema_firestore.md). Mohamed les déploie
+(`firebase deploy --only firestore`) une fois chaque partie validée.
 
 Avant chaque commit, vérifier que tout va bien :
 ```bash
 flutter analyze
 flutter test
 ```
+
+Les règles se testent à part, sur l'émulateur Firebase : voir
+[`test_regles/README.md`](test_regles/README.md).
 
 ## Organisation de l'équipe : les branches
 
@@ -105,7 +110,7 @@ flutter test
 
 | Module | Dossier | Écran (fichier · classe) |
 |---|---|---|
-| M1 · Utilisateurs | `lib/screens/module1/` | 8 écrans : inscription, code SMS, connexion, code du quartier, attente de validation, profil, modification du profil, membres (admin) — voir ci-dessous |
+| M1 · Utilisateurs | `lib/screens/module1/` | 9 écrans : inscription, vérification de l'e-mail, connexion, mot de passe oublié, code du quartier, attente de validation, profil, modification du profil, membres (admin) — voir ci-dessous |
 | M2 · Services | `lib/screens/module2/` | `services_list_screen.dart` · `ServicesListScreen` (liste + filtres) |
 | M3 · Signalements | `lib/screens/module3/` | `create_signalement_screen.dart` · `CreateSignalementScreen` (GridView des catégories) |
 | M4 · Événements | `lib/screens/module4/` | `sondage_screen.dart` · `SondageScreen` (sondage avec vote) |
@@ -117,26 +122,45 @@ flutter test
 | `lib/theme/app_theme.dart` | Toutes les couleurs (`AppColors`) et le thème de l'app |
 | `lib/widgets/` | Composants réutilisables : bouton principal (bleu cobalt) et secondaire (bordure dorée), champ de saisie, carte, badge de statut, séparateur en clous, date en arc, barre du bas, en-tête (avec une action optionnelle à droite), logo |
 | `lib/data/models/` | Les modèles de données (Utilisateur, Quartier, Service, Signalement, Evenement, Sondage) |
-| `lib/data/services/` | Les classes qui fournissent les données (en dur pour l'instant, une API plus tard) |
+| `lib/data/services/` | Les classes qui fournissent les données. M1 est sur Firebase. M2 à M4 sont encore en dur, à brancher en suivant [`docs/guide_modules_firebase.md`](docs/guide_modules_firebase.md). `firestore_commun.dart` regroupe les outils Firestore communs aux modules. |
+| `lib/data/resultat.dart` | `Resultat<T>` : la réponse d'un repository, succès (avec la donnée) ou échec (avec un message à afficher) |
 | `lib/router/app_router.dart` | La navigation (go_router) : les 5 onglets de la barre du bas (Accueil, Services, Signalements, Événements, Profil) et les écrans en plein écran (splash, connexion, inscription, démo...) |
 | `lib/screens/splash_screen.dart` | Écran de lancement : logo blanc sur fond bleu cobalt, puis la connexion |
 | `lib/screens/accueil_screen.dart` | Onglet Accueil |
 | `lib/screens/demo_screen.dart` | Écran de démonstration qui ouvre les 4 modules (bouton sur l'onglet Accueil) |
 | `assets/images/logo_couleur.png`, `logo_blanc.png` | Le logo officiel Houmani (version couleur, et version blanche pour les fonds bleus) |
 
-## M1 · Utilisateurs : parcours et données de démo
+## M1 · Utilisateurs : architecture et parcours
 
-Les données sont fictives (`lib/data/services/mock_utilisateur_repository.dart`) :
-rien n'est enregistré quand on relance l'application.
+Les comptes sont de vrais comptes **Firebase Auth** (e-mail + mot de passe),
+et les profils sont enregistrés dans **Cloud Firestore**.
 
-Accès aux données : les écrans n'appellent que le **contrat**
-`UtilisateurRepository` (classe abstraite, méthodes en `Future`), jamais le mock
-directement. Pour brancher Firebase Auth + Firestore plus tard : créer
-`FirebaseUtilisateurRepository implements UtilisateurRepository`, puis changer
-la ligne `instance = ...` dans `utilisateur_repository.dart`. Ni les écrans ni
-les tests ne changent (les tests injectent le mock eux-mêmes). Les modules 2, 3
-et 4 sont invités à suivre la même structure (voir le commentaire en tête de
-`utilisateur_repository.dart`).
+```
+Écrans (lib/screens/module1/)
+   │  appellent seulement le contrat
+   ▼
+UtilisateurRepository            (classe abstraite, méthodes en Future,
+   │                              réponses en Resultat<T>)
+   ├── FirebaseUtilisateurRepository → Firebase Auth + Cloud Firestore
+   │        └── CacheLocal (Hive)   → copie du profil sur le téléphone
+   └── MockUtilisateurRepository    → test/ : données fictives des tests
+```
+
+- **Chargement, succès, erreur :** chaque écran garde un booléen
+  `_enChargement` (avec `setState`). Pendant l'appel, il affiche un indicateur
+  de chargement. Ensuite, il affiche soit le résultat, soit le message d'erreur
+  du `Resultat` (« Pas de connexion Internet », « E-mail ou mot de passe incorrect »…).
+- **Cache local (Hive) :** au redémarrage, le profil s'affiche tout de suite
+  et l'app reste utilisable sans Internet. Firebase met ensuite le profil à
+  jour.
+- **Le statut décide de l'écran** : `actif` → accueil ; `enAttente` → attente
+  de validation (ou vérification de l'e-mail s'il n'y a pas encore de
+  quartier) ; `refuse` → choisir un autre quartier ; `bloque` → déconnexion
+  avec un message.
+- `UtilisateurRepository().getUtilisateurConnecte()` reste **synchrone** et ne
+  lève jamais d'exception : les autres modules peuvent l'appeler directement.
+- Les modules 2, 3 et 4 suivent la même structure : voir
+  [`docs/guide_modules_firebase.md`](docs/guide_modules_firebase.md).
 
 | Écran | Chemin | Fichier |
 |---|---|---|
@@ -144,27 +168,60 @@ et 4 sont invités à suivre la même structure (voir le commentaire en tête de
 | Connexion | `/connexion` | `connexion_screen.dart` |
 | Mot de passe oublié | `/mot-de-passe-oublie` | `mot_de_passe_oublie_screen.dart` |
 | Inscription | `/inscription` | `inscription_screen.dart` |
-| Code SMS (6 chiffres + renvoi) | `/verification` | `verification_otp_screen.dart` |
+| Vérification de l'e-mail (lien + renvoi) | `/verification` | `verification_otp_screen.dart` |
 | Code du quartier / recherche | `/code-quartier` | `code_quartier_screen.dart` |
 | Attente de validation | `/attente` | `attente_validation_screen.dart` |
 | Profil (onglet) | `/profil` | `profil_screen.dart` |
 | Modifier le profil | `/modifier-profil` | `profil_edition_screen.dart` |
 | Membres du quartier (admin) | `/profil/membres` | `admin_membres_screen.dart` |
 
-Parcours d'un nouveau voisin : splash → connexion → inscription → code SMS →
-code du quartier → attente de validation → accueil.
+Parcours d'un nouveau voisin : splash → connexion → inscription →
+vérification de l'e-mail → code du quartier → attente de validation → accueil.
 
-Pour tester :
-- **Compte de démo** (administrateur) : `demo@houmani.tn` (ou `+216 22 345 678`)
-  / mot de passe `houmani123` ;
-- **Code SMS** : `123456` ;
-- **Code du quartier** : `YAS72B` (Résidence El Yasmine) ;
-- **« Mot de passe oublié ? »** : le lien n'est pas vraiment envoyé, l'écran
-  affiche seulement la confirmation ;
-- **« Changer la photo »** (modifier le profil) : choix parmi 6 avatars
-  prédéfinis (pas encore d'envoi de vraie photo) ;
-- sur l'écran d'attente, le bouton **« Démo : simuler la validation »** fait
-  comme si l'administrateur avait accepté la demande (message « Notification
-  envoyée (démo) » : pas de vraie notification sans backend) ;
-- dans le profil du compte de démo, **« Membres du quartier »** ouvre la liste
-  des membres (valider / refuser / bloquer).
+### Avoir un compte pour tester
+
+Il n'y a plus de compte de démo : chacun crée **son propre compte**.
+
+1. Récupérer les 2 fichiers de configuration Firebase (voir
+   [Configuration Firebase](#configuration-firebase)).
+2. Dans l'app : **S'inscrire** avec une vraie adresse e-mail, puis cliquer sur
+   le lien reçu par e-mail (regarder aussi les spams).
+3. Entrer le code du quartier : `YAS72B` (Résidence El Yasmine). Le champ
+   `residence` du profil reçoit le nom du quartier.
+4. Faire valider la demande, au choix :
+   - par un admin du quartier, dans Profil → **« Membres du quartier »** ;
+   - ou par Mohamed, dans la console Firebase → Firestore → `utilisateurs` →
+     ton document → `statut` = `actif`.
+5. Pour tester l'écran admin : demander à Mohamed de passer ton `role` à
+   `admin`.
+
+Autres points :
+- **« Mot de passe oublié ? »** envoie un vrai e-mail de réinitialisation
+  (Firebase).
+- **« Changer la photo »** (modifier le profil) propose 6 avatars prédéfinis.
+  L'envoi d'une vraie photo n'est pas encore fait.
+- **« Membres du quartier »** (admin) permet de valider, refuser, bloquer ou
+  débloquer un membre de son quartier.
+
+### Tests
+
+- `flutter test` : 80 tests. Ils couvrent les modèles, les validateurs, le
+  repository (avec le mock), le cache Hive, la couche Firestore commune et les
+  parcours d'écrans selon le statut.
+- `test_regles/` : 32 tests des règles de sécurité du module 1, lancés sur
+  l'émulateur Firebase.
+
+### Notions du cours utilisées
+
+| Notion | Où dans le module 1 |
+|---|---|
+| `StatefulWidget` + `setState` | Tous les écrans (formulaires, `_enChargement`) |
+| `Form`, `TextFormField`, validateurs | Connexion, inscription, profil, mot de passe oublié |
+| Navigation (go_router, `context.go` / `push`) | `app_router.dart`, choix de l'écran selon le statut |
+| `ListView`, widgets réutilisables | Membres du quartier, `widgets_module1.dart` |
+| Classe abstraite, `factory`, `static` | `UtilisateurRepository` |
+| `Future`, `async` / `await` | Toutes les méthodes du repository |
+| Gestion succès / erreur / chargement | `Resultat<T>` + indicateur de chargement |
+| Stockage local | `CacheLocal` (Hive) |
+| Firebase Auth et Cloud Firestore | `FirebaseUtilisateurRepository` |
+| Tests unitaires et tests de widgets | `test/` |
