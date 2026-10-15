@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Firebase : fichiers de configuration du projet houmani-235bb.
+# Pas des mots de passe, mais on ne les publie pas sur un repo public.
+# Chaque membre les régénère (voir README, "Configuration Firebase").
+android/app/google-services.json
+lib/firebase_options.dart

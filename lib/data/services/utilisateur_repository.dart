@@ -1,85 +1,160 @@
+import '../models/quartier.dart';
 import '../models/utilisateur.dart';
+import '../resultat.dart';
+import 'firebase_utilisateur_repository.dart';
 
-/// M1 - Accès aux données des utilisateurs.
+/// M1 - Accès aux données des utilisateurs et des quartiers : le CONTRAT.
 ///
-/// Pour l'instant les données sont écrites en dur.
-/// Plus tard, seul l'intérieur de ces méthodes changera (appel à une API) :
-/// les écrans, eux, ne changeront pas.
-class UtilisateurRepository {
-  // Compte de démonstration (données fictives, pour tester l'écran de connexion)
-  static const String emailDemo = 'demo@houmani.tn';
-  static const String motDePasseDemo = 'houmani123';
+/// Cette classe abstraite liste ce que les écrans peuvent demander, sans dire
+/// d'où viennent les données. Les écrans et les tests n'appellent QUE ces
+/// méthodes, via `UtilisateurRepository()`.
+///
+/// Implémentations :
+/// - FirebaseUtilisateurRepository : Firebase Auth + Cloud Firestore
+///   (celle de l'application) ;
+/// - MockUtilisateurRepository (dans test/) : données fictives en mémoire,
+///   que les tests installent avec `UtilisateurRepository.instance = ...`.
+///
+/// Les opérations qui passent par le réseau renvoient un
+/// `Future<Resultat<...>>` : il faut `await`, puis regarder
+/// `resultat.estSucces`. En cas d'échec, `resultat.erreur` contient un
+/// message en français à afficher (voir lib/data/resultat.dart).
+///
+/// ---------------------------------------------------------------------
+/// RECOMMANDATION POUR LES MODULES 2, 3 ET 4 (Services, Signalements,
+/// Événements) : ServiceRepository, SignalementRepository et
+/// EvenementRepository sont encore des classes concrètes avec des données
+/// en dur et des méthodes synchrones. Pour que toute l'équipe accède aux
+/// données de la même façon, suivez ce même modèle avant de brancher une
+/// vraie source :
+///   1. `abstract class XRepository` (le contrat, avec des Future) ;
+///   2. `MockXRepository implements XRepository` (les données fictives) ;
+///   3. `static XRepository instance = MockXRepository();` + le `factory`
+///      ci-dessous, pour que les écrans continuent d'écrire `XRepository()`.
+/// ---------------------------------------------------------------------
+abstract class UtilisateurRepository {
+  /// L'implémentation utilisée par toute l'application.
+  /// Les tests la remplacent par un mock neuf avant chaque test.
+  static UtilisateurRepository instance = FirebaseUtilisateurRepository();
 
-  static const Utilisateur _utilisateurDemo = Utilisateur(
-    id: 'u1',
-    prenom: 'Amira',
-    nom: 'Ben Salah',
-    email: emailDemo,
-    telephone: '+216 22 345 678',
-    quartier: 'Cité Ennasr 2',
-    residence: 'Résidence Yasmine, Bloc B',
-  );
-
-  /// Vérifie l'identifiant (e-mail OU téléphone) et le mot de passe.
-  /// Renvoie l'utilisateur si c'est correct, sinon null.
-  Utilisateur? connexion(String identifiant, String motDePasse) {
-    if (motDePasse != motDePasseDemo) {
-      return null;
-    }
-
-    // Connexion par e-mail
-    if (identifiant.trim() == _utilisateurDemo.email) {
-      return _utilisateurDemo;
-    }
-
-    // Connexion par téléphone : on compare uniquement les chiffres,
-    // donc "+216 22 345 678", "22345678" et "22 345 678" sont acceptés
-    final String chiffresSaisis = _garderChiffres(identifiant);
-    final String chiffresCompte = _garderChiffres(_utilisateurDemo.telephone);
-    if (chiffresSaisis.length >= 8 && chiffresCompte.endsWith(chiffresSaisis)) {
-      return _utilisateurDemo;
-    }
-    return null;
+  /// `UtilisateurRepository()` ne crée pas d'objet : il renvoie l'instance
+  /// ci-dessus. Les écrans écrivent donc toujours `UtilisateurRepository()`,
+  /// quelle que soit l'implémentation branchée.
+  factory UtilisateurRepository() {
+    return instance;
   }
 
-  /// Garde seulement les chiffres d'un texte ("+216 22" donne "21622").
-  String _garderChiffres(String texte) {
-    String chiffres = '';
-    for (int i = 0; i < texte.length; i++) {
-      if ('0123456789'.contains(texte[i])) {
-        chiffres = chiffres + texte[i];
-      }
-    }
-    return chiffres;
-  }
+  // =====================================================================
+  // Connexion et inscription (Firebase Auth : e-mail + mot de passe)
+  // =====================================================================
 
-  /// L'utilisateur actuellement connecté (fictif pour l'instant).
-  Utilisateur getUtilisateurConnecte() {
-    return _utilisateurDemo;
-  }
+  /// Vérifie l'e-mail et le mot de passe, puis charge le profil.
+  /// Succès : l'utilisateur (l'écran regarde ensuite son statut).
+  /// Échec : mauvais identifiants, pas de réseau, compte bloqué...
+  Future<Resultat<Utilisateur>> connexion(String email, String motDePasse);
 
-  /// La liste des voisins de la résidence.
-  List<Utilisateur> getVoisins() {
-    return const [
-      _utilisateurDemo,
-      Utilisateur(
-        id: 'u2',
-        prenom: 'Youssef',
-        nom: 'Trabelsi',
-        email: 'youssef@houmani.tn',
-        telephone: '+216 22 111 111',
-        quartier: 'Cité Ennasr 2',
-        residence: 'Résidence Yasmine, Bloc A',
-      ),
-      Utilisateur(
-        id: 'u3',
-        prenom: 'Salma',
-        nom: 'Gharbi',
-        email: 'salma@houmani.tn',
-        telephone: '+216 55 222 222',
-        quartier: 'Cité Ennasr 2',
-        residence: 'Résidence Yasmine, Bloc C',
-      ),
-    ];
-  }
+  /// Crée le compte (statut "en attente", sans quartier), le connecte,
+  /// et envoie l'e-mail de vérification.
+  /// Le téléphone est seulement un champ du profil.
+  Future<Resultat<Utilisateur>> inscription({
+    required String nomComplet,
+    required String telephone,
+    required String email,
+    required String motDePasse,
+  });
+
+  /// (Ré)envoie l'e-mail de vérification à l'utilisateur connecté.
+  Future<Resultat<void>> envoyerEmailVerification();
+
+  /// L'utilisateur a-t-il cliqué sur le lien reçu par e-mail ?
+  /// (bouton "J'ai vérifié mon e-mail")
+  Future<Resultat<bool>> emailEstVerifie();
+
+  /// Déconnecte l'utilisateur.
+  Future<void> deconnexion();
+
+  /// Au démarrage de l'app : retrouve l'utilisateur resté connecté
+  /// (version à jour du serveur ; sans réseau, le profil du cache local).
+  /// null = personne de connecté, il faut passer par l'écran de connexion.
+  Future<Utilisateur?> restaurerSession();
+
+  /// Recharge le profil de l'utilisateur connecté depuis le serveur
+  /// (ex : écran d'attente, pour voir si l'admin a validé la demande).
+  Future<Resultat<Utilisateur>> rafraichirProfil();
+
+  /// Envoie un lien de réinitialisation du mot de passe à cet e-mail.
+  /// Ne dit pas si le compte existe : l'écran affiche toujours le même message.
+  Future<Resultat<void>> envoyerLienReinitialisation(String email);
+
+  // =====================================================================
+  // Utilisateur connecté et profil
+  // =====================================================================
+
+  /// L'utilisateur connecté. SYNCHRONE et ne lève jamais d'exception :
+  /// l'implémentation garde en mémoire le profil chargé à la connexion
+  /// (les modules Services et Signalements s'en servent aussi).
+  /// Personne de connecté : un utilisateur vide (id '').
+  Utilisateur getUtilisateurConnecte();
+
+  /// L'adresse e-mail affichée sur l'écran de vérification.
+  String emailConnecte();
+
+  /// Enregistre les modifications du profil de l'utilisateur connecté.
+  /// avatar : identifiant d'un avatar de la galerie, vide = initiales.
+  Future<Resultat<void>> modifierProfil({
+    required String nomComplet,
+    required String telephone,
+    required String logement,
+    required List<String> competences,
+    String avatar = '',
+  });
+
+  // =====================================================================
+  // Quartiers
+  // =====================================================================
+
+  /// Les quartiers dont le nom ou la localisation contient le texte cherché.
+  Future<Resultat<List<Quartier>>> rechercherQuartiers(String recherche);
+
+  /// Le quartier qui a ce code d'invitation.
+  /// Succès avec `donnee == null` : le code n'existe pas.
+  Future<Resultat<Quartier?>> trouverParCode(String code);
+
+  /// Envoie la demande pour rejoindre un quartier :
+  /// l'utilisateur connecté passe "en attente" de validation.
+  /// (Firebase exige un e-mail vérifié.)
+  Future<Resultat<void>> rejoindreQuartier(Quartier quartier);
+
+  /// Le quartier de l'utilisateur connecté (`donnee == null` s'il n'en a pas).
+  Future<Resultat<Quartier?>> getQuartierConnecte();
+
+  // =====================================================================
+  // Administration des membres
+  // =====================================================================
+
+  /// Les membres du quartier de l'utilisateur connecté qui ont ce statut,
+  /// et dont le nom contient la recherche.
+  Future<Resultat<List<Utilisateur>>> getMembres(
+    StatutUtilisateur statut, {
+    String recherche = '',
+  });
+
+  /// Le nombre de membres qui ont ce statut (pour les compteurs).
+  Future<Resultat<int>> compterMembres(StatutUtilisateur statut);
+
+  /// La liste des voisins actifs du quartier.
+  Future<Resultat<List<Utilisateur>>> getVoisins();
+
+  /// L'admin accepte une demande : le membre devient actif.
+  Future<Resultat<void>> validerMembre(String id);
+
+  /// L'admin refuse une demande : le membre passe "refuse"
+  /// (il pourra choisir un autre quartier).
+  Future<Resultat<void>> refuserMembre(String id);
+
+  /// L'admin bloque un membre actif.
+  Future<Resultat<void>> bloquerMembre(String id);
+
+  /// L'admin débloque un membre : il redevient actif.
+  Future<Resultat<void>> debloquerMembre(String id);
 }

@@ -39,6 +39,15 @@ dependencies:
   # On reste en version 17 : la version 18 utilise le package material_ui,
   # incompatible avec le MaterialApp de flutter/material utilisé dans le projet.
   go_router: ^17.0.0
+  # Firebase (demandé par le professeur) : connexion au projet,
+  # comptes (e-mail + mot de passe) et base de données Firestore.
+  firebase_core: ^5.0.0
+  firebase_auth: ^7.0.0
+  cloud_firestore: ^7.0.0
+  # Cache local (demandé par le professeur) : garde le profil connecté sur
+  # le téléphone pour l'afficher sans réseau. hive_ce = version maintenue de Hive.
+  hive_ce: ^2.22.0
+  hive_ce_flutter: ^2.5.0
 
 dev_dependencies:
   flutter_test:
