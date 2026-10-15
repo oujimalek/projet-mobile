@@ -4,82 +4,349 @@ rules_version = '2';
 // L'application ne fait pas confiance au téléphone : c'est ICI que Firebase
 // décide qui peut lire ou écrire quoi.
 //
-// BROUILLON (Phase 1) : couvre les utilisateurs et les quartiers.
-// Les collections des modules 2, 3 et 4 seront ajoutées en Phase 2.
+// BROUILLON (Phase 2) : couvre les 4 modules, selon docs/schema_firestore.md.
+// Pas encore déployé ; testé avec l'émulateur en phase 7.
 // Tout ce qui n'est pas listé ci-dessous est REFUSÉ.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ----- Fonctions utiles -----
+    // ===================== Fonctions utiles =====================
 
     function connecte() {
       return request.auth != null;
     }
 
+    function monUid() {
+      return request.auth.uid;
+    }
+
     // Le document de l'utilisateur connecté (collection "utilisateurs")
     function moi() {
-      return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data;
+      return get(/databases/$(database)/documents/utilisateurs/$(monUid())).data;
     }
 
     function aUnProfil() {
       return connecte()
-        && exists(/databases/$(database)/documents/utilisateurs/$(request.auth.uid));
+        && exists(/databases/$(database)/documents/utilisateurs/$(monUid()));
     }
 
-    // Compte validé par l'admin (ni "enAttente", ni "bloque")
+    // Compte validé par l'admin (ni "enAttente", ni "refuse", ni "bloque")
     function actif() {
       return aUnProfil() && moi().statut == 'actif';
     }
 
-    // Admin actif du quartier q
-    function adminDe(q) {
-      return actif() && moi().role == 'admin' && moi().quartierId == q;
+    // Membre actif du quartier q
+    function membreDe(q) {
+      return actif() && moi().quartierId == q;
     }
 
-    // ----- Utilisateurs -----
+    // Admin actif du quartier q
+    function adminDe(q) {
+      return membreDe(q) && moi().role == 'admin';
+    }
+
+    // Seuls ces champs changent dans la modification
+    function changeSeulement(champs) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(champs);
+    }
+
+    // ===================== M1 · Utilisateurs =====================
     match /utilisateurs/{uid} {
 
-      // Lire : SON propre document (même en attente ou bloqué : l'app doit
-      // pouvoir afficher "en attente" / "bloqué"), ou un membre ACTIF du
+      // Lire : SON propre document (même en attente, refusé ou bloqué :
+      // l'app doit pouvoir afficher le bon écran), ou un membre ACTIF du
       // même quartier.
       allow read: if connecte() && (
-        request.auth.uid == uid
+        monUid() == uid
         || (actif() && moi().quartierId == resource.data.quartierId)
       );
 
       // Créer : uniquement son propre document, à l'inscription,
       // toujours "enAttente" et "resident" (on ne peut pas se déclarer admin).
       allow create: if connecte()
-        && request.auth.uid == uid
+        && monUid() == uid
+        && request.resource.data.email == request.auth.token.email
         && request.resource.data.statut == 'enAttente'
         && request.resource.data.role == 'resident';
 
-      // Modifier son profil : pas si bloqué, et jamais son statut ni son rôle.
-      // Le quartier ne peut changer que tant que le compte est en attente
-      // (écran "rejoindre un quartier").
+      // Modifier son profil (compte actif) : jamais son statut, son rôle,
+      // ni son quartier.
       allow update: if connecte()
-        && request.auth.uid == uid
-        && resource.data.statut in ['enAttente', 'actif']
-        && request.resource.data.statut == resource.data.statut
+        && monUid() == uid
+        && resource.data.statut == 'actif'
+        && request.resource.data.statut == 'actif'
         && request.resource.data.role == resource.data.role
-        && (request.resource.data.quartierId == resource.data.quartierId
-            || resource.data.statut == 'enAttente');
+        && request.resource.data.quartierId == resource.data.quartierId;
+
+      // Rejoindre / changer de quartier (compte en attente ou refusé) :
+      // e-mail vérifié, quartier existant, et le statut (re)devient "enAttente".
+      allow update: if connecte()
+        && monUid() == uid
+        && request.auth.token.email_verified == true
+        && resource.data.statut in ['enAttente', 'refuse']
+        && request.resource.data.statut == 'enAttente'
+        && request.resource.data.role == resource.data.role
+        && exists(/databases/$(database)/documents/quartiers/$(request.resource.data.quartierId));
 
       // Admin du quartier : change UNIQUEMENT le statut d'un membre
-      // (valider, refuser, bloquer, débloquer).
+      // (valider, refuser, bloquer, débloquer), jamais le sien.
       allow update: if adminDe(resource.data.quartierId)
-        && request.auth.uid != uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut'])
+        && monUid() != uid
+        && changeSeulement(['statut'])
         && request.resource.data.statut in ['actif', 'bloque', 'refuse'];
     }
 
-    // ----- Quartiers -----
+    // ===================== M1 · Codes d'invitation =====================
+    // get (lire LE code tapé) : oui. list (lister tous les codes) : non.
+    // Création : à la main dans la console (voir docs/schema_firestore.md).
+    match /codesQuartier/{code} {
+      allow get: if connecte();
+      allow list, write: if false;
+    }
+
+    // ===================== Quartiers et leurs données =====================
     // Lecture pour tout compte connecté, même en attente : il faut pouvoir
-    // chercher un quartier AVANT d'être validé. Seul nom/localisation y sont.
-    // Création/modification : à la main dans la console (voir README).
-    match /quartiers/{quartierId} {
+    // chercher un quartier AVANT d'être validé. Seuls nom/localisation y sont.
+    match /quartiers/{q} {
       allow read: if connecte();
       allow write: if false;
+
+      // ---------- M2 · Services ----------
+      match /services/{serviceId} {
+        allow read: if membreDe(q);
+        allow create: if membreDe(q)
+          && request.resource.data.auteurId == monUid();
+        allow update: if membreDe(q)
+          && resource.data.auteurId == monUid()
+          && request.resource.data.auteurId == monUid();
+        allow delete: if membreDe(q)
+          && (resource.data.auteurId == monUid() || adminDe(q));
+      }
+
+      // ---------- M2 · Demandes de service ----------
+      match /demandes/{demandeId} {
+        function concerne(d) {
+          return monUid() == d.demandeurId || monUid() == d.auteurServiceId;
+        }
+
+        // Les requêtes doivent filtrer sur demandeurId ou auteurServiceId.
+        allow read: if membreDe(q) && concerne(resource.data);
+
+        // Le demandeur crée la demande, "enAttente", pour le service d'un autre.
+        allow create: if membreDe(q)
+          && request.resource.data.demandeurId == monUid()
+          && request.resource.data.auteurServiceId != monUid()
+          && request.resource.data.auteurServiceId
+             == get(/databases/$(database)/documents/quartiers/$(q)/services/$(request.resource.data.serviceId)).data.auteurId
+          && request.resource.data.statut == 'enAttente'
+          && request.resource.data.evaluee == false;
+
+        // L'auteur du service accepte ou refuse.
+        allow update: if membreDe(q)
+          && monUid() == resource.data.auteurServiceId
+          && changeSeulement(['statut'])
+          && resource.data.statut == 'enAttente'
+          && request.resource.data.statut in ['acceptee', 'refusee'];
+
+        // L'un des deux marque le service comme réalisé.
+        allow update: if membreDe(q)
+          && concerne(resource.data)
+          && changeSeulement(['statut'])
+          && resource.data.statut == 'acceptee'
+          && request.resource.data.statut == 'realisee';
+
+        // Le demandeur marque la demande comme évaluée (avec l'évaluation).
+        allow update: if membreDe(q)
+          && monUid() == resource.data.demandeurId
+          && changeSeulement(['evaluee'])
+          && resource.data.statut == 'realisee'
+          && request.resource.data.evaluee == true;
+
+        // ----- Chat de la demande -----
+        match /messages/{messageId} {
+          function demande() {
+            return get(/databases/$(database)/documents/quartiers/$(q)/demandes/$(demandeId)).data;
+          }
+
+          allow read: if membreDe(q) && concerne(demande());
+          allow create: if membreDe(q)
+            && concerne(demande())
+            && request.resource.data.auteurId == monUid()
+            && request.resource.data.lu == false;
+          // Le destinataire marque le message comme lu, rien d'autre.
+          allow update: if membreDe(q)
+            && concerne(demande())
+            && resource.data.auteurId != monUid()
+            && changeSeulement(['lu'])
+            && request.resource.data.lu == true;
+        }
+      }
+
+      // ---------- M2 · Évaluations (id du document = id de la demande) ----------
+      match /evaluations/{demandeId} {
+        function demande() {
+          return get(/databases/$(database)/documents/quartiers/$(q)/demandes/$(demandeId)).data;
+        }
+
+        allow read: if membreDe(q);
+        allow create: if membreDe(q)
+          && demande().demandeurId == monUid()
+          && demande().statut == 'realisee'
+          && request.resource.data.auteurId == monUid()
+          && request.resource.data.evalueId == demande().auteurServiceId
+          && request.resource.data.note is int
+          && request.resource.data.note >= 1
+          && request.resource.data.note <= 5;
+        allow update, delete: if false;
+      }
+
+      // ---------- M2 · Créneaux des services communs ----------
+      match /creneaux/{creneauId} {
+        function auteurDuService(serviceId) {
+          return get(/databases/$(database)/documents/quartiers/$(q)/services/$(serviceId)).data.auteurId == monUid();
+        }
+
+        allow read: if membreDe(q);
+        allow create: if membreDe(q)
+          && auteurDuService(request.resource.data.serviceId)
+          && request.resource.data.inscritId == null;
+        allow delete: if membreDe(q) && auteurDuService(resource.data.serviceId);
+
+        // S'inscrire (créneau libre), se désinscrire, changer le rappel :
+        // avant et après, l'inscrit est "personne" ou "moi".
+        allow update: if membreDe(q)
+          && changeSeulement(['inscritId', 'inscritNom', 'rappelVeille'])
+          && resource.data.get('inscritId', null) in [null, monUid()]
+          && request.resource.data.get('inscritId', null) in [null, monUid()];
+      }
+
+      // ---------- M3 · Signalements ----------
+      match /signalements/{signalementId} {
+        function chemin() {
+          return /databases/$(database)/documents/quartiers/$(q)/signalements/$(signalementId);
+        }
+        function maConfirmation() {
+          return /databases/$(database)/documents/quartiers/$(q)/signalements/$(signalementId)/confirmations/$(monUid());
+        }
+
+        allow read: if membreDe(q);
+
+        allow create: if membreDe(q)
+          && request.resource.data.auteurId == monUid()
+          && request.resource.data.statut == 'enAttente'
+          && request.resource.data.nbConfirmations == 0;
+
+        // L'auteur corrige son signalement tant qu'il est en attente.
+        allow update: if membreDe(q)
+          && resource.data.auteurId == monUid()
+          && resource.data.statut == 'enAttente'
+          && changeSeulement(['titre', 'description', 'categorieId', 'lieu']);
+
+        // L'admin change le statut.
+        allow update: if adminDe(q)
+          && changeSeulement(['statut'])
+          && request.resource.data.statut in ['enAttente', 'enCours', 'resolu', 'refuse'];
+
+        // Compteur "moi aussi" : +1 seulement si MA confirmation est créée
+        // dans le même WriteBatch, et qu'elle n'existait pas avant.
+        allow update: if membreDe(q)
+          && changeSeulement(['nbConfirmations'])
+          && request.resource.data.nbConfirmations == resource.data.nbConfirmations + 1
+          && !exists(maConfirmation())
+          && existsAfter(maConfirmation());
+
+        allow delete: if (membreDe(q) && resource.data.auteurId == monUid()
+                          && resource.data.statut == 'enAttente')
+          || adminDe(q);
+
+        // ----- Confirmations (id du document = uid) -----
+        match /confirmations/{uidConfirmation} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidConfirmation == monUid()
+            && get(chemin()).data.auteurId != monUid()
+            && getAfter(chemin()).data.nbConfirmations
+               == get(chemin()).data.nbConfirmations + 1;
+          allow update, delete: if false;
+        }
+      }
+
+      // ---------- M4 · Événements ----------
+      match /evenements/{evenementId} {
+        function chemin() {
+          return /databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId);
+        }
+        function maParticipation() {
+          return /databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid());
+        }
+
+        allow read: if membreDe(q);
+
+        allow create: if membreDe(q)
+          && request.resource.data.organisateurId == monUid()
+          && request.resource.data.nbParticipants == 0;
+
+        // L'organisateur modifie son événement (pas le compteur).
+        allow update: if membreDe(q)
+          && resource.data.organisateurId == monUid()
+          && changeSeulement(['titre', 'description', 'date', 'lieu']);
+
+        // Compteur de participants : +1 avec ma fiche créée, -1 avec ma
+        // fiche supprimée, dans le même WriteBatch.
+        allow update: if membreDe(q)
+          && changeSeulement(['nbParticipants'])
+          && (
+            (request.resource.data.nbParticipants == resource.data.nbParticipants + 1
+              && !exists(maParticipation()) && existsAfter(maParticipation()))
+            || (request.resource.data.nbParticipants == resource.data.nbParticipants - 1
+              && exists(maParticipation()) && !existsAfter(maParticipation()))
+          );
+
+        allow delete: if (membreDe(q) && resource.data.organisateurId == monUid())
+          || adminDe(q);
+
+        // ----- Participants (id du document = uid) -----
+        match /participants/{uidParticipant} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidParticipant == monUid()
+            && getAfter(chemin()).data.nbParticipants
+               == get(chemin()).data.nbParticipants + 1;
+          allow delete: if membreDe(q)
+            && uidParticipant == monUid()
+            && getAfter(chemin()).data.nbParticipants
+               == get(chemin()).data.nbParticipants - 1;
+          allow update: if false;
+        }
+      }
+
+      // ---------- M4 · Sondages ----------
+      match /sondages/{sondageId} {
+        allow read: if membreDe(q);
+        allow create: if membreDe(q)
+          && request.resource.data.proposeParId == monUid()
+          && request.resource.data.options is list
+          && request.resource.data.options.size() >= 2;
+        allow delete: if (membreDe(q) && resource.data.proposeParId == monUid())
+          || adminDe(q);
+        allow update: if false;
+
+        // ----- Votes (id du document = uid) : 1 vote, définitif -----
+        match /votes/{uidVote} {
+          function sondage() {
+            return get(/databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)).data;
+          }
+
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidVote == monUid()
+            && request.time < sondage().dateFin
+            && request.resource.data.choix is int
+            && request.resource.data.choix >= 0
+            && request.resource.data.choix < sondage().options.size();
+          allow update, delete: if false;
+        }
+      }
     }
   }
 }
