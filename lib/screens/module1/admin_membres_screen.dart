@@ -34,6 +34,9 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   List<Utilisateur> _actifs = [];
   List<Utilisateur> _bloques = [];
 
+  bool _enChargement = true; // true jusqu'au premier chargement
+  String _erreur = ''; // ex : pas de réseau
+
   // Couleurs des avatars, choisies à tour de rôle
   static const List<Color> _couleursAvatar = [
     AppColors.primary,
@@ -67,10 +70,17 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
       return;
     }
     setState(() {
-      // En cas d'échec, l'onglet reste vide
+      _enChargement = false;
+      // En cas d'échec, l'onglet reste vide et on affiche pourquoi
       _enAttente = enAttente.donnee ?? [];
       _actifs = actifs.donnee ?? [];
       _bloques = bloques.donnee ?? [];
+      _erreur = '';
+      for (final Resultat<List<Utilisateur>> r in [enAttente, actifs, bloques]) {
+        if (!r.estSucces) {
+          _erreur = r.erreur!;
+        }
+      }
     });
   }
 
@@ -154,7 +164,20 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         ),
       );
     }
-    if (cartes.isEmpty) {
+    if (_enChargement) {
+      cartes.add(const IndicateurChargement());
+    } else if (_erreur.isNotEmpty) {
+      cartes.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 32),
+          child: Text(
+            _erreur,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.error),
+          ),
+        ),
+      );
+    } else if (cartes.isEmpty) {
       cartes.add(
         const Padding(
           padding: EdgeInsets.only(top: 32),

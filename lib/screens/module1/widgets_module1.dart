@@ -1,10 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/models/utilisateur.dart';
 import '../../theme/app_theme.dart';
 
 // Petits widgets utilisés par plusieurs écrans du module 1.
 // (Les composants communs à toute l'app restent dans lib/widgets/.)
+
+/// L'écran à ouvrir pour un utilisateur connecté, selon son statut
+/// (utilisé après la connexion et au démarrage, dans le splash).
+/// null : compte bloqué, il reste sur l'écran de connexion.
+String? cheminSelonStatut(Utilisateur utilisateur) {
+  switch (utilisateur.statut) {
+    case StatutUtilisateur.actif:
+      return '/accueil';
+    case StatutUtilisateur.enAttente:
+      // Pas encore de quartier : vérifier l'e-mail, puis en choisir un
+      if (utilisateur.quartier.isEmpty) {
+        return '/verification';
+      }
+      return '/attente';
+    case StatutUtilisateur.refuse:
+      // Demande refusée : il peut choisir un autre quartier
+      return '/code-quartier';
+    case StatutUtilisateur.bloque:
+      return null;
+  }
+}
+
+/// Roue de chargement affichée sous un bouton pendant qu'on attend
+/// la réponse du serveur.
+class IndicateurChargement extends StatelessWidget {
+  const IndicateurChargement({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
 
 /// Petite étiquette arrondie (ex : "Résident", "Admin", une compétence).
 /// Si onSupprimer est donné, une croix permet de la retirer.

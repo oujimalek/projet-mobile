@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:houmani/data/services/mock_utilisateur_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
@@ -21,6 +20,13 @@ import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
+
+import 'mock_utilisateur_repository.dart';
+
+/// Le faux repository injecté dans chaque test (voir setUp).
+MockUtilisateurRepository get mock {
+  return UtilisateurRepository.instance as MockUtilisateurRepository;
+}
 
 /// Touche un onglet de la barre du bas (et pas un autre texte identique).
 Future<void> toucherOnglet(WidgetTester tester, String nom) async {
@@ -73,8 +79,8 @@ void main() {
   // Le routeur et les données sont globaux : avant chaque test, on repart
   // de données fictives neuves (compte de démo admin déjà connecté)
   // et on revient sur l'Accueil.
-  // Les tests injectent toujours le mock : ils restent valables le jour
-  // où l'application utilisera Firebase par défaut.
+  // L'application utilise Firebase par défaut : les tests injectent le mock
+  // (pas de réseau, pas de vrai compte).
   setUp(() {
     UtilisateurRepository.instance = MockUtilisateurRepository();
     appRouter.go('/accueil');
@@ -221,8 +227,9 @@ void main() {
       find.text('E-mail pas encore vérifié : clique sur le lien reçu'),
       findsOneWidget,
     );
-    // Démo : on simule le clic sur le lien reçu par e-mail
-    await toucher(tester, find.text('Démo : simuler le clic sur le lien'));
+    // On simule le clic sur le lien reçu par e-mail, puis on revérifie
+    await mock.simulerVerificationEmail();
+    await toucher(tester, find.text('J\'ai vérifié mon e-mail'));
 
     // 4. Code du quartier (6 caractères, en majuscules)
     expect(find.byType(CodeQuartierScreen), findsOneWidget);
@@ -239,10 +246,11 @@ void main() {
       'Mohamed Zahi',
     );
 
-    // 6. Démo : l'admin valide → accueil, avec le message de démo
-    await toucher(tester, find.text('Démo : simuler la validation'));
+    // 6. L'admin valide (simulé), puis "Vérifier ma demande" → accueil
+    await mock.simulerValidation();
+    await toucher(tester, find.text('Vérifier ma demande'));
     expect(find.byType(AccueilScreen), findsOneWidget);
-    expect(find.text('Notification envoyée (démo)'), findsOneWidget);
+    expect(find.text('Ta demande a été acceptée !'), findsOneWidget);
   });
 
   testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
@@ -255,7 +263,7 @@ void main() {
 
     // Champ vide : message d'erreur, pas d'envoi
     await toucher(tester, find.text('Envoyer le lien'));
-    expect(find.text('Saisis ton téléphone ou ton e-mail'), findsOneWidget);
+    expect(find.text('Saisis ton e-mail'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField), 'demo@houmani.tn');
     await toucher(tester, find.text('Envoyer le lien'));

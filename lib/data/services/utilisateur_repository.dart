@@ -1,7 +1,7 @@
 import '../models/quartier.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
-import 'mock_utilisateur_repository.dart';
+import 'firebase_utilisateur_repository.dart';
 
 /// M1 - Accès aux données des utilisateurs et des quartiers : le CONTRAT.
 ///
@@ -10,10 +10,10 @@ import 'mock_utilisateur_repository.dart';
 /// méthodes, via `UtilisateurRepository()`.
 ///
 /// Implémentations :
-/// - FirebaseUtilisateurRepository : Firebase Auth + Cloud Firestore ;
-/// - MockUtilisateurRepository : données fictives en mémoire (tests, et
-///   l'application jusqu'à la phase 5).
-/// Pour changer de source, on change UNE ligne ci-dessous (`instance = ...`).
+/// - FirebaseUtilisateurRepository : Firebase Auth + Cloud Firestore
+///   (celle de l'application) ;
+/// - MockUtilisateurRepository (dans test/) : données fictives en mémoire,
+///   que les tests installent avec `UtilisateurRepository.instance = ...`.
 ///
 /// Les opérations qui passent par le réseau renvoient un
 /// `Future<Resultat<...>>` : il faut `await`, puis regarder
@@ -34,10 +34,8 @@ import 'mock_utilisateur_repository.dart';
 /// ---------------------------------------------------------------------
 abstract class UtilisateurRepository {
   /// L'implémentation utilisée par toute l'application.
-  /// C'est la SEULE ligne à changer pour passer aux vraies données
-  /// (phase 5 : FirebaseUtilisateurRepository()).
   /// Les tests la remplacent par un mock neuf avant chaque test.
-  static UtilisateurRepository instance = MockUtilisateurRepository();
+  static UtilisateurRepository instance = FirebaseUtilisateurRepository();
 
   /// `UtilisateurRepository()` ne crée pas d'objet : il renvoie l'instance
   /// ci-dessus. Les écrans écrivent donc toujours `UtilisateurRepository()`,
@@ -45,26 +43,6 @@ abstract class UtilisateurRepository {
   factory UtilisateurRepository() {
     return instance;
   }
-
-  // =====================================================================
-  // Mode démo (supprimé en phase 5, avec le mock qui part dans test/)
-  // =====================================================================
-
-  /// true avec les données fictives : les écrans affichent alors les aides
-  /// de démo et les raccourcis "simuler ...".
-  bool get estDemo;
-
-  /// Aides affichées sous les formulaires en mode démo (null = rien à afficher).
-  String? get aideDemoConnexion; // ex : "demo@houmani.tn / houmani123"
-  String? get aideDemoCodeQuartier; // ex : "YAS72B"
-
-  /// DÉMO : fait comme si l'utilisateur avait cliqué sur le lien reçu par
-  /// e-mail. Ne fait rien avec Firebase.
-  Future<void> simulerVerificationEmail();
-
-  /// DÉMO : simule la validation par l'admin de la demande de l'utilisateur
-  /// connecté. Ne fait rien avec Firebase.
-  Future<void> simulerValidation();
 
   // =====================================================================
   // Connexion et inscription (Firebase Auth : e-mail + mot de passe)
@@ -99,6 +77,10 @@ abstract class UtilisateurRepository {
   /// (version à jour du serveur ; sans réseau, le profil du cache local).
   /// null = personne de connecté, il faut passer par l'écran de connexion.
   Future<Utilisateur?> restaurerSession();
+
+  /// Recharge le profil de l'utilisateur connecté depuis le serveur
+  /// (ex : écran d'attente, pour voir si l'admin a validé la demande).
+  Future<Resultat<Utilisateur>> rafraichirProfil();
 
   /// Envoie un lien de réinitialisation du mot de passe à cet e-mail.
   /// Ne dit pas si le compte existe : l'écran affiche toujours le même message.

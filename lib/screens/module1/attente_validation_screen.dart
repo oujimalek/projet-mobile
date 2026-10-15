@@ -3,21 +3,35 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/models/signalement.dart';
 import '../../data/models/utilisateur.dart';
+import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/houmani_logo.dart';
 import '../../widgets/nail_divider.dart';
+import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../../widgets/status_badge.dart';
+import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 5, attente de la validation par l'admin.
 ///
 /// Une frise en 3 étapes montre où en est la demande :
 /// envoyée → validation par l'admin → accès à la houma.
-class AttenteValidationScreen extends StatelessWidget {
+/// "Vérifier ma demande" relit le profil sur Firestore pour savoir
+/// si l'admin a accepté (ou refusé) la demande.
+class AttenteValidationScreen extends StatefulWidget {
   const AttenteValidationScreen({super.key});
+
+  @override
+  State<AttenteValidationScreen> createState() {
+    return _AttenteValidationScreenState();
+  }
+}
+
+class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
+  bool _enChargement = false; // true pendant la lecture du profil
 
   /// L'heure de la demande, ex : "Aujourd'hui, 15:42".
   String _heureDemande(DateTime? date) {
@@ -27,6 +41,57 @@ class AttenteValidationScreen extends StatelessWidget {
     final String heures = date.hour.toString().padLeft(2, '0');
     final String minutes = date.minute.toString().padLeft(2, '0');
     return 'Aujourd\'hui, $heures:$minutes';
+  }
+
+  void _afficherMessage(String texte) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(texte)),
+    );
+  }
+
+  /// Relit le profil sur le serveur et ouvre l'écran qui correspond
+  /// au nouveau statut.
+  Future<void> _verifierDemande() async {
+    setState(() {
+      _enChargement = true;
+    });
+    final Resultat<Utilisateur> resultat =
+        await UtilisateurRepository().rafraichirProfil();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enChargement = false;
+    });
+    if (!resultat.estSucces) {
+      _afficherMessage(resultat.erreur!);
+      // Compte bloqué ou supprimé : le repository a déconnecté
+      if (UtilisateurRepository().getUtilisateurConnecte().id.isEmpty) {
+        context.go('/connexion');
+      }
+      return;
+    }
+    final Utilisateur utilisateur = resultat.donnee!;
+    // Le message reste visible sur l'écran suivant (ScaffoldMessenger commun)
+    _afficherMessage(_messageSelonStatut(utilisateur.statut));
+    // Même choix d'écran qu'à la connexion et au démarrage
+    final String? chemin = cheminSelonStatut(utilisateur);
+    if (chemin != null && chemin != '/attente') {
+      context.go(chemin);
+    }
+  }
+
+  String _messageSelonStatut(StatutUtilisateur statut) {
+    switch (statut) {
+      case StatutUtilisateur.actif:
+        return 'Ta demande a été acceptée !';
+      case StatutUtilisateur.refuse:
+        return 'Ta demande a été refusée : choisis un autre quartier';
+      case StatutUtilisateur.bloque:
+        return 'Ton compte a été bloqué par l\'administrateur';
+      case StatutUtilisateur.enAttente:
+        return 'Toujours en attente de validation';
+    }
   }
 
   void _contacterAdmin(BuildContext context) {
@@ -86,8 +151,8 @@ class AttenteValidationScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   'L\'administrateur de ${utilisateur.quartier} doit valider '
-                  'ton inscription. Tu recevras une notification dès que '
-                  'c\'est fait.',
+                  'ton inscription. Reviens vérifier ta demande un peu plus '
+                  'tard.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: AppColors.textSecondary,
@@ -139,6 +204,13 @@ class AttenteValidationScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
 
+                // null pendant le chargement : bouton désactivé
+                PrimaryButton(
+                  texte: 'Vérifier ma demande',
+                  onPressed: _enChargement ? null : _verifierDemande,
+                ),
+                if (_enChargement) const IndicateurChargement(),
+                const SizedBox(height: 12),
                 SecondaryButton(
                   texte: 'Modifier mon quartier',
                   onPressed: () {
@@ -157,34 +229,6 @@ class AttenteValidationScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // ----- Raccourci de démo (pas d'admin réel) -----
-                if (UtilisateurRepository().estDemo) ...[
-                  const SizedBox(height: 16),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        await UtilisateurRepository().simulerValidation();
-                        if (context.mounted) {
-                          // Stub assumé : pas de vraie notification push
-                          // sans backend. Le message reste visible sur
-                          // l'accueil (ScaffoldMessenger commun à l'app).
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Notification envoyée (démo)'),
-                            ),
-                          );
-                          context.go('/accueil');
-                        }
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary,
-                      ),
-                      icon: const Icon(Icons.play_circle_outline, size: 18),
-                      label: const Text('Démo : simuler la validation'),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

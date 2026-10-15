@@ -9,12 +9,13 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/houmani_logo.dart';
 import '../../widgets/nail_divider.dart';
 import '../../widgets/primary_button.dart';
+import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 3, connexion.
 ///
 /// Un Form avec deux champs (e-mail, mot de passe).
 /// Le bouton "Se connecter" vérifie les champs, puis interroge
-/// UtilisateurRepository (compte de démo : voir mock_utilisateur_repository.dart).
+/// UtilisateurRepository (Firebase Auth).
 /// Selon le statut du compte, on ouvre l'accueil, le choix du quartier
 /// ou l'écran d'attente de validation.
 class ConnexionScreen extends StatefulWidget {
@@ -36,6 +37,9 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
 
   // Message d'erreur affiché sous le bouton après une tentative ratée
   String _message = '';
+
+  // true pendant qu'on attend la réponse du serveur
+  bool _enChargement = false;
 
   @override
   void dispose() {
@@ -75,13 +79,23 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
       return;
     }
 
-    // 2. On demande au repository si le compte existe
+    // 2. Chargement : la roue tourne et le bouton est désactivé
+    //    (pas de double clic pendant l'attente)
+    setState(() {
+      _enChargement = true;
+      _message = '';
+    });
+
+    // 3. On demande au repository si le compte existe
     //    (await : la réponse peut prendre du temps avec un vrai serveur)
     final Resultat<Utilisateur> resultat = await UtilisateurRepository()
         .connexion(_emailController.text, _motDePasseController.text);
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
+    setState(() {
+      _enChargement = false;
+    });
 
     // Échec (mauvais mot de passe, pas de réseau, compte bloqué...) :
     // le repository donne le message à afficher
@@ -91,34 +105,21 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
       });
       return;
     }
-    final Utilisateur utilisateur = resultat.donnee!;
 
-    // 3. On ouvre l'écran qui correspond au statut du compte
+    // 4. On ouvre l'écran qui correspond au statut du compte
     //    (go : on remplace la connexion, pas de retour possible vers elle)
-    switch (utilisateur.statut) {
-      case StatutUtilisateur.actif:
-        context.go('/accueil');
-      case StatutUtilisateur.enAttente:
-        // Pas encore de quartier : vérifier l'e-mail, puis en choisir un
-        if (utilisateur.quartier.isEmpty) {
-          context.go('/verification');
-        } else {
-          context.go('/attente');
-        }
-      case StatutUtilisateur.refuse:
-        // Demande refusée : il peut choisir un autre quartier
-        context.go('/code-quartier');
-      case StatutUtilisateur.bloque:
-        setState(() {
-          _message = 'Ton compte a été bloqué par l\'administrateur';
-        });
+    final String? chemin = cheminSelonStatut(resultat.donnee!);
+    if (chemin == null) {
+      setState(() {
+        _message = 'Ton compte a été bloqué par l\'administrateur';
+      });
+      return;
     }
+    context.go(chemin);
   }
 
   @override
   Widget build(BuildContext context) {
-    final String? aideDemo = UtilisateurRepository().aideDemoConnexion;
-
     return Scaffold(
       // Barre du haut discrète (couleur du fond) : seulement la flèche retour
       appBar: AppBar(
@@ -187,7 +188,12 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
           const SizedBox(height: 8),
 
           // ----- Bouton principal -----
-          PrimaryButton(texte: 'Se connecter', onPressed: _seConnecter),
+          // null pendant le chargement : bouton désactivé
+          PrimaryButton(
+            texte: 'Se connecter',
+            onPressed: _enChargement ? null : _seConnecter,
+          ),
+          if (_enChargement) const IndicateurChargement(),
           const SizedBox(height: 12),
 
           // ----- Erreur de connexion -----
@@ -222,17 +228,6 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Aide de démo (rien avec une vraie source de données)
-          if (aideDemo != null)
-            Text(
-              'Démo : $aideDemo',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
           const SizedBox(height: 16),
         ],
       ),

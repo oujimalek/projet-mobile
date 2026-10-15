@@ -32,6 +32,7 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
   static const int dureeAttente = 60; // secondes avant de pouvoir renvoyer
 
   String _erreur = '';
+  bool _enChargement = false; // true pendant qu'on interroge Firebase
   int _secondesRestantes = dureeAttente;
   Timer? _minuteur;
 
@@ -88,11 +89,18 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
   }
 
   Future<void> _verifier() async {
+    setState(() {
+      _enChargement = true;
+      _erreur = '';
+    });
     final Resultat<bool> resultat =
         await UtilisateurRepository().emailEstVerifie();
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
+    setState(() {
+      _enChargement = false;
+    });
     if (!resultat.estSucces) {
       setState(() {
         _erreur = resultat.erreur!;
@@ -163,14 +171,21 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
 
                 PrimaryButton(
                   texte: 'J\'ai vérifié mon e-mail',
-                  onPressed: _verifier,
+                  onPressed: _enChargement ? null : _verifier,
                 ),
+                if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 8),
                 Center(
                   child: TextButton(
                     onPressed: () {
-                      // Retour à l'inscription
-                      context.pop();
+                      // Retour à l'inscription. Si l'écran a été ouvert
+                      // avec go (connexion, démarrage), il n'y a pas
+                      // d'écran précédent : on va à la connexion.
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/connexion');
+                      }
                     },
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.primary,
@@ -181,24 +196,6 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                     ),
                   ),
                 ),
-
-                // ----- Raccourci de démo (pas de vraie boîte mail) -----
-                if (UtilisateurRepository().estDemo) ...[
-                  const SizedBox(height: 16),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        await UtilisateurRepository().simulerVerificationEmail();
-                        _verifier();
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary,
-                      ),
-                      icon: const Icon(Icons.play_circle_outline, size: 18),
-                      label: const Text('Démo : simuler le clic sur le lien'),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

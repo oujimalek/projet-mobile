@@ -9,6 +9,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/houmani_logo.dart';
 import '../../widgets/primary_button.dart';
+import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 1, création de compte.
 ///
@@ -34,6 +35,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
 
   bool _conditionsAcceptees = false;
   bool _erreurConditions = false; // true = afficher le message sous la case
+  bool _enChargement = false; // true pendant la création du compte
 
   @override
   void dispose() {
@@ -106,6 +108,9 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
       return;
     }
 
+    setState(() {
+      _enChargement = true;
+    });
     final Resultat<Utilisateur> resultat =
         await UtilisateurRepository().inscription(
       nomComplet: _nomController.text,
@@ -116,6 +121,9 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
+    setState(() {
+      _enChargement = false;
+    });
     // Échec (e-mail déjà utilisé, pas de réseau...) : on affiche le message
     if (!resultat.estSucces) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -202,7 +210,12 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
             _caseConditions(),
             const SizedBox(height: 16),
 
-            PrimaryButton(texte: 'S\'inscrire', onPressed: _sInscrire),
+            // null pendant le chargement : bouton désactivé
+            PrimaryButton(
+              texte: 'S\'inscrire',
+              onPressed: _enChargement ? null : _sInscrire,
+            ),
+            if (_enChargement) const IndicateurChargement(),
             const SizedBox(height: 8),
 
             // ----- Déjà membre -----

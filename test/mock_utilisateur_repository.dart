@@ -1,18 +1,16 @@
-import '../models/quartier.dart';
-import '../models/utilisateur.dart';
-import '../resultat.dart';
-import 'utilisateur_repository.dart';
+import 'package:houmani/data/models/quartier.dart';
+import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/resultat.dart';
+import 'package:houmani/data/services/utilisateur_repository.dart';
 
-/// M1 - Implémentation "fictive" de UtilisateurRepository.
+/// M1 - Implémentation "fictive" de UtilisateurRepository, pour les TESTS.
 ///
-/// Les données sont écrites en dur et gardées en mémoire : rien n'est
-/// enregistré quand on relance l'application. Toute l'app partage la même
-/// instance (UtilisateurRepository.instance), donc un changement fait sur un
-/// écran (ex : un membre validé) est visible sur les autres écrans.
+/// Les données sont écrites en dur et gardées en mémoire. Les tests
+/// l'installent avant chaque test (`UtilisateurRepository.instance = ...`) :
+/// ils marchent sans Internet et sans Firebase.
 ///
 /// Elle suit le même contrat que FirebaseUtilisateurRepository (mêmes
 /// Resultat, mêmes messages d'erreur) : les tests restent valables.
-/// Phase 5 : ce fichier part dans test/ (plus de données fictives dans l'app).
 class MockUtilisateurRepository implements UtilisateurRepository {
   // Compte de démonstration (données fictives, pour tester l'écran de connexion)
   static const String emailDemo = 'demo@houmani.tn';
@@ -166,30 +164,15 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   // =====================================================================
-  // Mode démo
+  // Raccourcis pour les tests (pas dans le contrat : Firebase n'en a pas)
   // =====================================================================
 
-  @override
-  bool get estDemo {
-    return true;
-  }
-
-  @override
-  String? get aideDemoConnexion {
-    return '$emailDemo / $motDePasseDemo';
-  }
-
-  @override
-  String? get aideDemoCodeQuartier {
-    return _quartiers.first.codeInvitation;
-  }
-
-  @override
+  /// Fait comme si l'utilisateur connecté avait cliqué sur le lien de l'e-mail.
   Future<void> simulerVerificationEmail() async {
     _emailsVerifies.add(_connecte.id);
   }
 
-  @override
+  /// Fait comme si l'admin avait validé la demande de l'utilisateur connecté.
   Future<void> simulerValidation() async {
     _remplacer(_connecte.copier(statut: StatutUtilisateur.actif));
   }
@@ -275,8 +258,14 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Utilisateur?> restaurerSession() async {
-    // Démo : pas de session gardée, on passe toujours par la connexion
+    // Pas de session gardée : on passe toujours par la connexion
     return null;
+  }
+
+  @override
+  Future<Resultat<Utilisateur>> rafraichirProfil() async {
+    // Les données sont déjà en mémoire : rien à recharger
+    return Resultat.succes(_connecte);
   }
 
   @override

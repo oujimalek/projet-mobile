@@ -58,25 +58,6 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   }
 
   // =====================================================================
-  // Mode démo : rien avec Firebase
-  // =====================================================================
-
-  @override
-  bool get estDemo => false;
-
-  @override
-  String? get aideDemoConnexion => null;
-
-  @override
-  String? get aideDemoCodeQuartier => null;
-
-  @override
-  Future<void> simulerVerificationEmail() async {}
-
-  @override
-  Future<void> simulerValidation() async {}
-
-  // =====================================================================
   // Connexion et inscription
   // =====================================================================
 
@@ -261,11 +242,43 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
 
     if (_connecte.id.isEmpty) {
-      // ni cache ni réseau : il faudra se reconnecter
-      await deconnexion();
+      // Ni cache ni réseau : on ouvre la connexion, mais sans déconnecter
+      // de Firebase (le compte est valide, il manque juste le réseau)
       return null;
     }
     return _connecte;
+  }
+
+  @override
+  Future<Resultat<Utilisateur>> rafraichirProfil() async {
+    final User? compte = _auth.currentUser;
+    if (compte == null) {
+      return const Resultat.echec('Tu n\'es plus connecté : reconnecte-toi');
+    }
+    try {
+      // Source.server : on veut la réponse de l'admin, pas la copie locale
+      // de Firestore (sans réseau : erreur "serveur injoignable")
+      final DocumentSnapshot<Map<String, dynamic>> document = await _utilisateurs
+          .doc(compte.uid)
+          .get(const GetOptions(source: Source.server));
+      if (!document.exists) {
+        await deconnexion();
+        return const Resultat.echec('Profil introuvable : reconnecte-toi');
+      }
+      final Utilisateur utilisateur =
+          Utilisateur.fromMap(document.id, document.data()!);
+      // Même règle qu'à la connexion : un compte bloqué est déconnecté
+      if (utilisateur.statut == StatutUtilisateur.bloque) {
+        await deconnexion();
+        return const Resultat.echec(
+          'Ton compte a été bloqué par l\'administrateur',
+        );
+      }
+      await _memoriser(utilisateur);
+      return Resultat.succes(utilisateur);
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
   }
 
   @override

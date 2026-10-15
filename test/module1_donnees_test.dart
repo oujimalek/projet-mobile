@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
-import 'package:houmani/data/services/mock_utilisateur_repository.dart';
+import 'mock_utilisateur_repository.dart';
 
 // Tests de la couche données du Module 1 (sans Firebase).
 void main() {

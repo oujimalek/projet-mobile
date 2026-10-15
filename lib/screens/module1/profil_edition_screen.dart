@@ -37,6 +37,8 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
   // Avatar choisi dans la galerie ('' = initiales), enregistré à la fin
   String _avatar = '';
 
+  bool _enChargement = false; // true pendant l'enregistrement
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +86,9 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    setState(() {
+      _enChargement = true;
+    });
     final Resultat<void> resultat = await UtilisateurRepository().modifierProfil(
       nomComplet: _nomController.text,
       telephone: _telephoneController.text,
@@ -94,6 +99,9 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
+    setState(() {
+      _enChargement = false;
+    });
     if (!resultat.estSucces) {
       // On reste sur l'écran pour que l'utilisateur puisse réessayer
       ScaffoldMessenger.of(context).showSnackBar(
@@ -215,7 +223,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
           AppHeader(
             titre: 'Modifier le profil',
             action: TextButton(
-              onPressed: _enregistrer,
+              onPressed: _enChargement ? null : _enregistrer,
               child: const Text(
                 'Enregistrer',
                 style: TextStyle(fontWeight: FontWeight.w600),
@@ -301,8 +309,9 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
 
                 PrimaryButton(
                   texte: 'Enregistrer les modifications',
-                  onPressed: _enregistrer,
+                  onPressed: _enChargement ? null : _enregistrer,
                 ),
+                if (_enChargement) const IndicateurChargement(),
               ],
             ),
           ),

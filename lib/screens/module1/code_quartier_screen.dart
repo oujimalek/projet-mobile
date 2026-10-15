@@ -36,6 +36,8 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   bool _codeInconnu = false; // code complet mais qui ne correspond à rien
   Quartier? _quartierSelectionne; // choisi dans la liste de recherche
   List<Quartier> _quartiersTrouves = []; // résultat de la recherche
+  String _erreurRecherche = ''; // ex : pas de réseau
+  bool _enChargement = false; // true pendant l'envoi de la demande
 
   @override
   void initState() {
@@ -60,7 +62,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     }
     setState(() {
       // En cas d'échec (pas de réseau...), la liste reste vide
+      // et on affiche pourquoi
       _quartiersTrouves = resultat.donnee ?? [];
+      _erreurRecherche = resultat.estSucces ? '' : resultat.erreur!;
     });
   }
 
@@ -101,10 +105,16 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     if (quartier == null) {
       return;
     }
+    setState(() {
+      _enChargement = true;
+    });
     final Resultat<void> resultat = await _repository.rejoindreQuartier(quartier);
     if (!mounted) {
       return;
     }
+    setState(() {
+      _enChargement = false;
+    });
     if (!resultat.estSucces) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(resultat.erreur!)),
@@ -117,7 +127,8 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String? aideDemo = _repository.aideDemoCodeQuartier;
+    // Bouton actif seulement si un quartier est choisi et rien n'est en cours
+    final bool peutRejoindre = _quartierChoisi() != null && !_enChargement;
 
     return Scaffold(
       body: Column(
@@ -167,8 +178,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
                 PrimaryButton(
                   texte: 'Rejoindre la houma',
-                  onPressed: _quartierChoisi() != null ? _rejoindre : null,
+                  onPressed: peutRejoindre ? _rejoindre : null,
                 ),
+                if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 10),
                 const Text(
                   'Ta demande sera validée par l\'administrateur du quartier.',
@@ -176,16 +188,6 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
-                // Aide de démo (rien avec une vraie source de données)
-                if (aideDemo != null)
-                  Text(
-                    'Démo : code $aideDemo',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
               ],
             ),
           ),
@@ -222,7 +224,15 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
         ),
       );
     }
-    if (cartes.isEmpty) {
+    if (_erreurRecherche.isNotEmpty) {
+      cartes.add(
+        Text(
+          _erreurRecherche,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.error),
+        ),
+      );
+    } else if (cartes.isEmpty) {
       cartes.add(
         const Text(
           'Aucun quartier trouvé',
@@ -275,8 +285,11 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 2),
+                    // (Pas de nombre de membres : les règles Firestore
+                    // ne permettent pas de compter les membres d'un
+                    // quartier qu'on n'a pas encore rejoint.)
                     Text(
-                      '${quartier.localisation} · ${quartier.nbMembres} membres',
+                      quartier.localisation,
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
