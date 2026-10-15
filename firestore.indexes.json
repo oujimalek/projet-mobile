@@ -1,0 +1,70 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "utilisateurs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "quartierId", "order": "ASCENDING" },
+        { "fieldPath": "statut", "order": "ASCENDING" },
+        { "fieldPath": "dateDemande", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "demandes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "demandeurId", "order": "ASCENDING" },
+        { "fieldPath": "dateDemande", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "demandes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "auteurServiceId", "order": "ASCENDING" },
+        { "fieldPath": "dateDemande", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "services",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "categorie", "order": "ASCENDING" },
+        { "fieldPath": "datePublication", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "services",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estCommun", "order": "ASCENDING" },
+        { "fieldPath": "datePublication", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "creneaux",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "serviceId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "evaluations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "evalueId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "signalements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "statut", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -5,6 +5,7 @@ import '../models/quartier.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
 import 'cache_local.dart';
+import 'firestore_commun.dart';
 import 'utilisateur_repository.dart';
 
 /// M1 - Implémentation "réelle" de UtilisateurRepository.
@@ -583,17 +584,9 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
-  /// Traduit les codes d'erreur de Firestore en messages pour l'écran.
+  /// Traduit les codes d'erreur de Firestore en messages pour l'écran
+  /// (les mêmes pour les 4 modules : voir firestore_commun.dart).
   String _messageFirestore(String code) {
-    switch (code) {
-      case 'permission-denied':
-        return 'Action non autorisée';
-      case 'unavailable':
-        return 'Serveur injoignable, vérifie ta connexion Internet';
-      case 'not-found':
-        return 'Donnée introuvable';
-      default:
-        return 'Une erreur est survenue ($code)';
-    }
+    return FirestoreCommun.messageErreur(code);
   }
 }

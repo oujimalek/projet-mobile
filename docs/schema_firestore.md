@@ -385,7 +385,8 @@ Si l'index manque, l'erreur affiche un lien qui le crée en un clic.
 | `evaluations` | `evalueId` ↑, `date` ↓ | M2 : avis reçus par un voisin |
 | `signalements` | `statut` ↑, `date` ↓ | M3 : filtre par statut |
 
-Ces index seront écrits dans `firestore.indexes.json` à la phase 6.
+Ces index sont écrits dans `firestore.indexes.json` (à la racine du projet).
+Pour les créer sur Firebase : `firebase deploy --only firestore:indexes`.
 
 ## 8. Démarrage : créer le premier quartier et le premier admin
 
