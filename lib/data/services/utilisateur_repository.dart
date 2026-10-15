@@ -95,6 +95,11 @@ abstract class UtilisateurRepository {
   /// Déconnecte l'utilisateur.
   Future<void> deconnexion();
 
+  /// Au démarrage de l'app : retrouve l'utilisateur resté connecté
+  /// (version à jour du serveur ; sans réseau, le profil du cache local).
+  /// null = personne de connecté, il faut passer par l'écran de connexion.
+  Future<Utilisateur?> restaurerSession();
+
   /// Envoie un lien de réinitialisation du mot de passe à cet e-mail.
   /// Ne dit pas si le compte existe : l'écran affiche toujours le même message.
   Future<Resultat<void>> envoyerLienReinitialisation(String email);

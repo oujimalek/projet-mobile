@@ -248,6 +248,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     );
     _prochainNumero++;
     _motsDePasse[nouveau.id] = motDePasse;
+    // Ajouté tout de suite à la liste : il pourra se reconnecter, et le même
+    // e-mail ne pourra pas être réutilisé (sans quartier, aucun admin ne le voit)
+    _membres.add(nouveau);
     _connecte = nouveau;
     // Pas de vrai e-mail : la vérification se fait avec simulerVerificationEmail
     return Resultat.succes(nouveau);
@@ -268,6 +271,12 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   Future<void> deconnexion() async {
     // On garde le compte de démo "connecté" : le module Signalements lit
     // toujours getUtilisateurConnecte(), même depuis l'écran de démo
+  }
+
+  @override
+  Future<Utilisateur?> restaurerSession() async {
+    // Démo : pas de session gardée, on passe toujours par la connexion
+    return null;
   }
 
   @override

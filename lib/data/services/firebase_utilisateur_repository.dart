@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/quartier.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
+import 'cache_local.dart';
 import 'utilisateur_repository.dart';
 
 /// M1 - Implémentation "réelle" de UtilisateurRepository.
@@ -42,6 +43,19 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   // Le profil chargé à la connexion : getUtilisateurConnecte() le renvoie
   // sans attendre le réseau (synchrone).
   Utilisateur _connecte = _invite;
+
+  // Copie du profil sur le téléphone (Hive) : voir cache_local.dart
+  final CacheLocal _cache;
+
+  /// [cache] : les tests peuvent donner un cache dans un dossier temporaire.
+  FirebaseUtilisateurRepository({CacheLocal? cache})
+      : _cache = cache ?? CacheLocal();
+
+  /// Change l'utilisateur connecté ET le garde dans le cache local.
+  Future<void> _memoriser(Utilisateur utilisateur) async {
+    _connecte = utilisateur;
+    await _cache.enregistrerUtilisateur(utilisateur);
+  }
 
   // =====================================================================
   // Mode démo : rien avec Firebase
@@ -92,7 +106,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
           'Ton compte a été bloqué par l\'administrateur',
         );
       }
-      _connecte = utilisateur;
+      await _memoriser(utilisateur);
       return Resultat.succes(utilisateur);
     } on FirebaseAuthException catch (e) {
       return Resultat.echec(_messageAuth(e.code));
@@ -134,7 +148,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       );
       await _utilisateurs.doc(compte.uid).set(nouveau.toMap());
 
-      _connecte = nouveau;
+      await _memoriser(nouveau);
 
       // 3. L'e-mail de vérification (remplace le code SMS). S'il ne part
       //    pas, le compte est quand même créé : l'écran suivant a un
@@ -193,8 +207,65 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<void> deconnexion() async {
-    await _auth.signOut();
-    _connecte = _invite;
+    try {
+      await _auth.signOut();
+    } finally {
+      // Même si signOut échoue : le téléphone peut être prêté,
+      // on n'y laisse pas le profil
+      _connecte = _invite;
+      await _cache.vider();
+    }
+  }
+
+  @override
+  Future<Utilisateur?> restaurerSession() async {
+    // Firebase Auth se souvient du compte d'une fois sur l'autre ;
+    // authStateChanges().first attend qu'il ait fini de le relire
+    final User? compte = await _auth.authStateChanges().first;
+    if (compte == null) {
+      _connecte = _invite;
+      await _cache.vider();
+      return null;
+    }
+
+    // 1. Tout de suite : le profil gardé sur le téléphone
+    final Utilisateur? enCache = await _cache.lireUtilisateur();
+    if (enCache != null && enCache.id == compte.uid) {
+      _connecte = enCache;
+    } else if (enCache != null) {
+      await _cache.vider(); // profil d'un autre compte : on l'efface
+    }
+
+    // 2. Ensuite : la version à jour du serveur (statut changé par l'admin...)
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> document =
+          await _utilisateurs.doc(compte.uid).get();
+      if (!document.exists) {
+        await deconnexion();
+        return null;
+      }
+      final Utilisateur utilisateur =
+          Utilisateur.fromMap(document.id, document.data()!);
+      if (utilisateur.statut == StatutUtilisateur.bloque) {
+        await deconnexion();
+        return null;
+      }
+      await _memoriser(utilisateur);
+    } on FirebaseException catch (e) {
+      // Pas de réseau ('unavailable') : on garde le profil du cache.
+      // Autre erreur (droits refusés, compte supprimé...) : on déconnecte.
+      if (e.code != 'unavailable' && e.code != 'deadline-exceeded') {
+        await deconnexion();
+        return null;
+      }
+    }
+
+    if (_connecte.id.isEmpty) {
+      // ni cache ni réseau : il faudra se reconnecter
+      await deconnexion();
+      return null;
+    }
+    return _connecte;
   }
 
   @override
@@ -253,7 +324,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'competences': modifie.competences,
         'avatar': modifie.avatar,
       });
-      _connecte = modifie;
+      await _memoriser(modifie);
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -330,7 +401,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'statut': StatutUtilisateur.enAttente.name,
         'dateDemande': FieldValue.serverTimestamp(), // l'heure du serveur
       });
-      _connecte = demande;
+      await _memoriser(demande);
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -347,10 +418,18 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       final DocumentSnapshot<Map<String, dynamic>> document =
           await _quartiers.doc(quartierId).get();
       if (!document.exists) {
+        await _cache.oublierQuartier(); // quartier supprimé sur le serveur
         return const Resultat.succes(null);
       }
-      return Resultat.succes(Quartier.fromMap(document.id, document.data()!));
+      final Quartier quartier = Quartier.fromMap(document.id, document.data()!);
+      await _cache.enregistrerQuartier(quartier);
+      return Resultat.succes(quartier);
     } on FirebaseException catch (e) {
+      // Pas de réseau : la dernière version gardée, si c'est le bon quartier
+      final Quartier? enCache = await _cache.lireQuartier();
+      if (enCache != null && enCache.id == quartierId) {
+        return Resultat.succes(enCache);
+      }
       return Resultat.echec(_messageFirestore(e.code));
     }
   }
