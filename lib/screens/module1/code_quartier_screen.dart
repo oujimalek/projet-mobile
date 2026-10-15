@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/quartier.dart';
+import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
@@ -144,6 +145,11 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                       'administrateur, ou cherche ton quartier.',
                 ),
                 const SizedBox(height: 20),
+                // Demande précédente refusée (ex : au redémarrage de l'app,
+                // l'utilisateur arrive ici directement) : on explique pourquoi
+                if (_repository.getUtilisateurConnecte().statut ==
+                    StatutUtilisateur.refuse)
+                  _bandeauRefus(),
 
                 // ----- Code d'invitation -----
                 const Text(
@@ -153,6 +159,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 const SizedBox(height: 8),
                 SaisieCode(
                   chiffresSeulement: false,
+                  libelle: 'Code d\'invitation',
                   onChanged: _codeModifie,
                 ),
                 if (_codeInconnu)
@@ -189,6 +196,32 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Bandeau rouge clair : la dernière demande a été refusée.
+  Widget _bandeauRefus() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(color: AppColors.error),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.info_outline, color: AppColors.error),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Ta dernière demande a été refusée par l\'administrateur. '
+              'Vérifie le code ou choisis un autre quartier.',
+              style: TextStyle(color: AppColors.error, fontSize: 13),
             ),
           ),
         ],

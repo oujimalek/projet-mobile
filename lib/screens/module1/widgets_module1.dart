@@ -263,15 +263,18 @@ class AvatarUtilisateur extends StatelessWidget {
 /// affichent simplement les caractères déjà tapés.
 /// - chiffresSeulement: true  → seulement des chiffres (code SMS)
 /// - chiffresSeulement: false → lettres et chiffres, en majuscules
+/// - libelle : le nom du champ lu par les lecteurs d'écran
 class SaisieCode extends StatefulWidget {
   final int longueur;
   final bool chiffresSeulement;
+  final String libelle;
   final Function(String code) onChanged; // appelée à chaque caractère tapé
 
   const SaisieCode({
     super.key,
     this.longueur = 6,
     this.chiffresSeulement = true,
+    this.libelle = 'Code',
     required this.onChanged,
   });
 
@@ -361,9 +364,16 @@ class _SaisieCodeState extends State<SaisieCode> {
           Positioned.fill(
             child: Opacity(
               opacity: 0,
+              // Invisible, mais toujours présent pour l'accessibilité
+              // (lecteur d'écran, version web)
+              alwaysIncludeSemantics: true,
               child: TextField(
                 controller: _controller,
                 focusNode: _focus,
+                decoration: InputDecoration(
+                  hintText: widget.libelle,
+                  border: InputBorder.none,
+                ),
                 inputFormatters: regles,
                 keyboardType: widget.chiffresSeulement
                     ? TextInputType.number

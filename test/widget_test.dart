@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -424,6 +425,124 @@ void main() {
     );
     expect(find.text('Sarra Ben Ali'), findsNothing);
   });
+
+  // -------------------------------------------------------------------
+  // Corrections après le test sur Chrome
+  // -------------------------------------------------------------------
+
+  testWidgets('Code du quartier : le champ du code est accessible',
+      (WidgetTester tester) async {
+    final SemanticsHandle semantique = tester.ensureSemantics();
+    appRouter.go('/code-quartier');
+    await lancerApp(tester);
+
+    // Le champ invisible (le 1er de l'écran) reste dans l'arbre
+    // d'accessibilité : c'est bien un champ de texte, avec un nom
+    final Finder champCode = find.byType(EditableText).first;
+    final SemanticsNode noeud = tester.getSemantics(champCode);
+    expect(noeud.getSemanticsData().flagsCollection.isTextField, isTrue);
+    expect(noeud.label, 'Code d\'invitation');
+    semantique.dispose();
+  });
+
+  testWidgets('Splash : un compte refusé voit pourquoi il choisit un quartier',
+      (WidgetTester tester) async {
+    mock.sessionGardee = compteDeTest(StatutUtilisateur.refuse);
+    appRouter.go('/splash');
+    await lancerApp(tester);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+    expect(
+      find.textContaining('Ta dernière demande a été refusée'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Code du quartier : pas de bandeau de refus pour un nouveau compte',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteSansQuartier(), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/code-quartier');
+    await lancerApp(tester);
+
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+    expect(
+      find.textContaining('Ta dernière demande a été refusée'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Splash : e-mail déjà vérifié, sans quartier → choix du quartier',
+      (WidgetTester tester) async {
+    // ajouterCompte : e-mail déjà vérifié
+    mock.ajouterCompte(compteSansQuartier(), 'secret123');
+    mock.sessionGardee = compteSansQuartier();
+    appRouter.go('/splash');
+    await lancerApp(tester);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+  });
+
+  testWidgets('Splash : e-mail pas encore vérifié → écran de vérification',
+      (WidgetTester tester) async {
+    mock.sessionGardee = compteSansQuartier();
+    appRouter.go('/splash');
+    await lancerApp(tester);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(VerificationOtpScreen), findsOneWidget);
+  });
+
+  testWidgets('Membres : refuser demande une confirmation',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Membres du quartier'));
+    expect(find.text('En attente (3)'), findsOneWidget);
+
+    // Annuler : rien ne change
+    await toucher(tester, find.text('Refuser').first);
+    expect(find.text('Refuser la demande ?'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(find.text('Refuser la demande ?'), findsNothing);
+    expect(find.text('En attente (3)'), findsOneWidget);
+
+    // Confirmer : la demande quitte la liste
+    await toucher(tester, find.text('Refuser').first);
+    await tester.tap(find.widgetWithText(TextButton, 'Refuser'));
+    await tester.pumpAndSettle();
+    expect(find.text('En attente (2)'), findsOneWidget);
+  });
+
+  testWidgets('Membres : bloquer demande une confirmation',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Membres du quartier'));
+    await toucher(tester, find.text('Actifs (4)'));
+
+    await toucher(tester, find.text('Bloquer').first);
+    expect(find.text('Bloquer ce membre ?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Bloquer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Actifs (3)'), findsOneWidget);
+    expect(find.text('Bloqués (2)'), findsOneWidget); // 1 au départ + 1
+  });
+}
+
+/// Un compte vérifié ou non, inscrit mais sans quartier.
+Utilisateur compteSansQuartier() {
+  return compteDeTest(StatutUtilisateur.enAttente).copier(
+    quartierId: '',
+    quartier: '',
+    residence: '',
+  );
 }
 
 /// Un compte "test@houmani.tn" du quartier El Yasmine, avec ce statut.

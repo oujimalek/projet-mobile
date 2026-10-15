@@ -320,11 +320,16 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
 
   /// La carte d'un membre : avatar, nom, logement, puis les boutons d'action.
   Widget _carteMembre(Utilisateur membre, int index) {
-    String detail = membre.logement;
+    // Logement et ancienneté de la demande, sans "·" si l'un des deux manque
+    final List<String> morceaux = [];
+    if (membre.logement.isNotEmpty) {
+      morceaux.add(membre.logement);
+    }
     final String depuis = _depuis(membre.dateDemande);
     if (_onglet == StatutUtilisateur.enAttente && depuis.isNotEmpty) {
-      detail = '$detail · $depuis';
+      morceaux.add(depuis);
     }
+    final String detail = morceaux.join(' · ');
 
     return AppCard(
       child: Column(
@@ -386,7 +391,16 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _boutonRouge('Refuser', () {
+              child: _boutonRouge('Refuser', () async {
+                final bool ok = await _confirmer(
+                  'Refuser la demande ?',
+                  '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
+                      'Il pourra faire une nouvelle demande.',
+                  'Refuser',
+                );
+                if (!ok) {
+                  return;
+                }
                 _action('Demande de ${membre.prenom} refusée', () {
                   return _repository.refuserMembre(membre.id);
                 });
@@ -399,7 +413,16 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         if (membre.id == _repository.getUtilisateurConnecte().id) {
           return const SizedBox();
         }
-        return _boutonRouge('Bloquer', () {
+        return _boutonRouge('Bloquer', () async {
+          final bool ok = await _confirmer(
+            'Bloquer ce membre ?',
+            '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
+                'l\'application. Tu pourras le débloquer plus tard.',
+            'Bloquer',
+          );
+          if (!ok) {
+            return;
+          }
           _action('${membre.prenom} est bloqué(e)', () {
             return _repository.bloquerMembre(membre.id);
           });
@@ -416,6 +439,36 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
       case StatutUtilisateur.refuse:
         return const SizedBox(); // pas d'onglet "refusés"
     }
+  }
+
+  /// Demande confirmation avant une action négative (refuser, bloquer).
+  /// true si l'admin a confirmé.
+  Future<bool> _confirmer(String titre, String message, String action) async {
+    final bool? reponse = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(titre),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              child: Text(action),
+            ),
+          ],
+        );
+      },
+    );
+    return reponse ?? false; // fermé sans choisir = annulé
   }
 
   /// Bouton blanc à bordure rouge (action négative : refuser, bloquer).

@@ -40,6 +40,21 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
   void initState() {
     super.initState();
     _demarrerCompteARebours();
+    _dejaVerifie();
+  }
+
+  /// Au redémarrage de l'app, un compte déjà vérifié (mais sans quartier)
+  /// arrive ici : on passe directement au choix du quartier.
+  /// Sans réseau ou pas encore vérifié : on reste sur cet écran.
+  Future<void> _dejaVerifie() async {
+    final Resultat<bool> resultat =
+        await UtilisateurRepository().emailEstVerifie();
+    if (!mounted) {
+      return;
+    }
+    if (resultat.estSucces && resultat.donnee!) {
+      context.go('/code-quartier');
+    }
   }
 
   @override
