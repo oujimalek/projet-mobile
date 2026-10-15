@@ -1,9 +1,19 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+// main est async : on attend que Firebase soit prêt avant d'afficher l'app.
+Future<void> main() async {
+  // Obligatoire avant d'utiliser un plugin (Firebase) avant runApp
+  WidgetsFlutterBinding.ensureInitialized();
+  // Connexion au projet Firebase "houmani-235bb"
+  // (firebase_options.dart est généré par `flutterfire configure`)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const HoumaniApp());
 }
 

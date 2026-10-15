@@ -17,16 +17,62 @@ Prérequis : Flutter (canal stable), Android Studio avec le SDK Android, et Git.
    ```bash
    flutter pub get
    ```
-3. Lancer un émulateur :
+3. Ajouter les 2 fichiers de configuration Firebase (voir
+   [Configuration Firebase](#configuration-firebase) juste en dessous).
+   Sans eux, le projet ne compile pas
+   (`Error when reading 'lib/firebase_options.dart'`).
+4. Lancer un émulateur :
    - dans Android Studio : **Device Manager** → ▶ sur un appareil (ex : Pixel 7) ;
    - ou en ligne de commande : `flutter emulators` puis
      `flutter emulators --launch <id>`.
-4. Lancer l'application :
+5. Lancer l'application :
    - dans Android Studio ou VS Code : bouton **Run** (▶) sur `lib/main.dart` ;
    - ou en ligne de commande : `flutter run`.
 
 > La police Inter est téléchargée au premier lancement : il faut Internet
 > la première fois.
+
+## Configuration Firebase
+
+L'application utilise **Firebase** (projet `houmani-235bb`) : comptes
+(Firebase Auth, e-mail + mot de passe) et base de données (Cloud Firestore).
+Il n'y a pas de serveur à lancer : Firebase est le backend.
+
+Deux fichiers relient l'application à ce projet. Ils **ne sont pas sur GitHub**
+(ils sont dans `.gitignore`, car le dépôt est public) :
+
+| Fichier | Rôle |
+|---|---|
+| `android/app/google-services.json` | Configuration Firebase côté Android |
+| `lib/firebase_options.dart` | Configuration Firebase côté Dart (utilisée dans `main.dart`) |
+
+Pour les obtenir, au choix :
+
+**Option A (la plus simple) : demander les fichiers à Mohamed.**
+Il les envoie en privé (WhatsApp, Drive...). Les copier exactement à ces
+deux emplacements, puis lancer l'application.
+
+**Option B : les générer soi-même** (il faut avoir accès au projet dans la
+console Firebase, et Node.js installé) :
+```bash
+npm install -g firebase-tools
+dart pub global activate flutterfire_cli
+firebase login
+flutterfire configure --project=houmani-235bb --platforms=android --android-package-name=tn.esprit.houmani --yes
+```
+Grâce au fichier `firebase.json` (lui, sur GitHub), la commande réutilise
+l'application Android déjà enregistrée : elle n'en crée pas une deuxième.
+Si `flutterfire` n'est pas reconnu, ajouter
+`%LOCALAPPDATA%\Pub\Cache\bin` au PATH, puis rouvrir le terminal.
+
+Ne jamais ajouter ces deux fichiers dans un commit
+(`git status` ne doit pas les montrer).
+
+> Si la compilation Android échoue avec `AAPT: error: failed to open file`,
+> lancer `flutter clean`, puis relancer.
+
+Les règles de sécurité de la base sont dans `firestore.rules` (brouillon,
+pas encore déployé).
 
 Avant chaque commit, vérifier que tout va bien :
 ```bash

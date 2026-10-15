@@ -1,0 +1,85 @@
+rules_version = '2';
+
+// Règles de sécurité Firestore de Houmani.
+// L'application ne fait pas confiance au téléphone : c'est ICI que Firebase
+// décide qui peut lire ou écrire quoi.
+//
+// BROUILLON (Phase 1) : couvre les utilisateurs et les quartiers.
+// Les collections des modules 2, 3 et 4 seront ajoutées en Phase 2.
+// Tout ce qui n'est pas listé ci-dessous est REFUSÉ.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----- Fonctions utiles -----
+
+    function connecte() {
+      return request.auth != null;
+    }
+
+    // Le document de l'utilisateur connecté (collection "utilisateurs")
+    function moi() {
+      return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data;
+    }
+
+    function aUnProfil() {
+      return connecte()
+        && exists(/databases/$(database)/documents/utilisateurs/$(request.auth.uid));
+    }
+
+    // Compte validé par l'admin (ni "enAttente", ni "bloque")
+    function actif() {
+      return aUnProfil() && moi().statut == 'actif';
+    }
+
+    // Admin actif du quartier q
+    function adminDe(q) {
+      return actif() && moi().role == 'admin' && moi().quartierId == q;
+    }
+
+    // ----- Utilisateurs -----
+    match /utilisateurs/{uid} {
+
+      // Lire : SON propre document (même en attente ou bloqué : l'app doit
+      // pouvoir afficher "en attente" / "bloqué"), ou un membre ACTIF du
+      // même quartier.
+      allow read: if connecte() && (
+        request.auth.uid == uid
+        || (actif() && moi().quartierId == resource.data.quartierId)
+      );
+
+      // Créer : uniquement son propre document, à l'inscription,
+      // toujours "enAttente" et "resident" (on ne peut pas se déclarer admin).
+      allow create: if connecte()
+        && request.auth.uid == uid
+        && request.resource.data.statut == 'enAttente'
+        && request.resource.data.role == 'resident';
+
+      // Modifier son profil : pas si bloqué, et jamais son statut ni son rôle.
+      // Le quartier ne peut changer que tant que le compte est en attente
+      // (écran "rejoindre un quartier").
+      allow update: if connecte()
+        && request.auth.uid == uid
+        && resource.data.statut in ['enAttente', 'actif']
+        && request.resource.data.statut == resource.data.statut
+        && request.resource.data.role == resource.data.role
+        && (request.resource.data.quartierId == resource.data.quartierId
+            || resource.data.statut == 'enAttente');
+
+      // Admin du quartier : change UNIQUEMENT le statut d'un membre
+      // (valider, refuser, bloquer, débloquer).
+      allow update: if adminDe(resource.data.quartierId)
+        && request.auth.uid != uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut'])
+        && request.resource.data.statut in ['actif', 'bloque', 'refuse'];
+    }
+
+    // ----- Quartiers -----
+    // Lecture pour tout compte connecté, même en attente : il faut pouvoir
+    // chercher un quartier AVANT d'être validé. Seul nom/localisation y sont.
+    // Création/modification : à la main dans la console (voir README).
+    match /quartiers/{quartierId} {
+      allow read: if connecte();
+      allow write: if false;
+    }
+  }
+}
