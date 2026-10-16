@@ -4,14 +4,17 @@ import 'package:go_router/go_router.dart';
 import '../screens/accueil_screen.dart';
 import '../screens/demo_screen.dart';
 import '../screens/module1/admin_membres_screen.dart';
+import '../screens/module1/annuaire_voisins_screen.dart';
 import '../screens/module1/attente_validation_screen.dart';
 import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
 import '../screens/module1/inscription_screen.dart';
+import '../screens/module1/mon_quartier_screen.dart';
 import '../screens/module1/mot_de_passe_oublie_screen.dart';
 import '../screens/module1/parametres_screen.dart';
 import '../screens/module1/profil_edition_screen.dart';
 import '../screens/module1/profil_screen.dart';
+import '../screens/module1/tracer_limites_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
 import '../screens/module2/services_list_screen.dart';
 import '../screens/module3/create_signalement_screen.dart';
@@ -85,6 +88,26 @@ final GoRouter appRouter = GoRouter(
               builder: (context, state) {
                 return const AdminMembresScreen(); // M1 (admin)
               },
+            ),
+            GoRoute(
+              path: 'voisins',
+              builder: (context, state) {
+                return const AnnuaireVoisinsScreen(); // M1
+              },
+            ),
+            GoRoute(
+              path: 'quartier',
+              builder: (context, state) {
+                return const MonQuartierScreen(); // M1
+              },
+              routes: [
+                GoRoute(
+                  path: 'limites',
+                  builder: (context, state) {
+                    return const TracerLimitesScreen(); // M1 (admin)
+                  },
+                ),
+              ],
             ),
           ],
         ),

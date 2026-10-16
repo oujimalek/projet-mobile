@@ -33,7 +33,7 @@ document d'une grande collection `services` ?
   le chemin.
 - **Moins d'index** à créer (voir section 7).
 
-Seuls `utilisateurs` et `codesQuartier` restent à la racine. Un compte en attente
+Seuls `utilisateurs`, `codesQuartier` et `telephones` restent à la racine. Un compte en attente
 peut encore changer de quartier, et on cherche un utilisateur par son `uid`.
 
 **Règle n°2 : on identifie les personnes par leur `uid`, pas par leur nom.**
@@ -65,6 +65,7 @@ peut donc confirmer qu'une seule fois.
 ```
 utilisateurs/{uid}                              M1  profil + statut + rôle
 codesQuartier/{code}                            M1  code d'invitation → quartier
+telephones/{numero}                             M1  numéro → e-mail (connexion)
 quartiers/{quartierId}                          M1  nom, localisation
   ├── services/{serviceId}                      M2
   ├── demandes/{demandeId}                      M2
@@ -116,6 +117,7 @@ L'identifiant du document est l'`uid` Firebase Auth. Le mot de passe n'est
 | `competences` | `competences` | array de string | |
 | `avatar` | `avatar` | string | Identifiant d'un des 6 avatars prédéfinis |
 | `dateDemande` | `dateDemande` | timestamp | Date de la demande d'adhésion |
+| `motif` | `motif` | string | Raison donnée par l'admin quand il refuse ou bloque (3 à 200 caractères, montrée au membre) ; `''` sinon |
 | `servicesRendus`, `noteMoyenne`, `nbSignalements` | **non stockés** | | Calculés (voir ci-dessous) |
 
 **Pourquoi les statistiques du profil ne sont pas stockées.** Si
@@ -150,7 +152,8 @@ passe `statut` à `refuse` au lieu de supprimer le document. Pourquoi :
 | Créer | Soi-même, à l'inscription : `statut = enAttente`, `role = resident` (impossible de se déclarer admin) |
 | Modifier son profil | Soi-même si `actif`, sans changer `statut`, `role`, ni `quartierId` |
 | Rejoindre / changer de quartier | Soi-même si `enAttente` ou `refuse`, **e-mail vérifié**, vers un quartier qui existe ; le statut redevient `enAttente` |
-| Valider / refuser / bloquer / débloquer | L'admin **actif** du quartier, **uniquement** le champ `statut`, jamais sur lui-même |
+| Quitter son quartier pour un autre | Un résident `actif` (pas l'admin), vers un **autre** quartier : il perd l'ancien et repasse `enAttente` dans le nouveau |
+| Valider / refuser / bloquer / débloquer | L'admin **actif** du quartier, **uniquement** `statut` et `motif`, jamais sur lui-même. Refuser / bloquer : motif obligatoire (3 à 200 caractères) ; valider / débloquer : motif remis à `''` |
 | Supprimer | Personne depuis l'app |
 
 Cycle de vie du statut :
@@ -160,6 +163,8 @@ inscription ──► enAttente ──(admin valide)──► actif ◄──(ad
                    ▲   │                        │                          ▲
                    │   └──(admin refuse)──► refuse                         │
                    └──(choisit un autre quartier)┘     └──(admin bloque)───┘
+
+actif (résident) ──(change de quartier, écran « Mon quartier »)──► enAttente (nouveau quartier)
 ```
 
 Un compte `bloque` ne peut **plus rien lire** sauf son propre profil :
@@ -174,10 +179,24 @@ l'application affiche « compte bloqué » et le déconnecte.
 | `localisation` | `localisation` | string | ex. « Ennasr 2, Ariana » |
 | `codeInvitation` | **déplacé** dans `codesQuartier` | | Sinon tout compte connecté pourrait le lire |
 | `nbMembres` | **non stocké** | | `count()` sur `utilisateurs` où `quartierId == id` et `statut == actif` |
+| `position` | `position` | geopoint (optionnel) | Le centre du quartier sur la carte |
+| `contour` | `contour` | array de geopoint (optionnel) | Les coins du quartier, dans l'ordre (3 au minimum pour dessiner la zone) |
+| `aUnAdmin` | `aUnAdmin` | bool (optionnel, `false` si absent) | `true` quand le quartier a un admin. Sinon l'app affiche « Pas encore d'administrateur » et empêche de le rejoindre (personne ne validerait la demande). Écrit à la main (section 8), jamais par l'app |
+
+Sans `position` ni `contour`, l'écran « Mon quartier » affiche un message à
+la place de la carte (OpenStreetMap, aucune clé d'API).
 
 - **Lire** : tout compte connecté, même en attente (il faut chercher un
   quartier avant d'être validé). Seuls le nom et la localisation sont visibles.
-- **Écrire** : personne depuis l'app (création à la main, section 8).
+- **Créer / supprimer** : personne depuis l'app (création à la main, section 8).
+- **Modifier** : seulement l'admin du quartier, et seulement `contour`
+  (3 à 100 coins) et `position` (le milieu des coins), depuis l'écran
+  « Tracer les limites ». Le nom et la localisation restent dans la console.
+
+Un quartier = un document. Pour découper une zone (ex. « Charguia 1 » et
+« Charguia 2 »), on crée deux documents, chacun avec son code et son admin,
+qui trace ensuite ses limites. « Me localiser » (écran rejoindre un
+quartier) propose le quartier dont le contour contient la position GPS.
 
 `nbMembres` n'est calculable que par un membre actif. L'écran « rejoindre
 un quartier » affichera donc seulement la localisation (adaptation en phase 5).
@@ -193,11 +212,39 @@ L'identifiant du document **est** le code (ex. `YAS72B`).
 
 - **Lire un code précis** (`get`) : tout compte connecté. On ne peut lire
   que le code que l'on a tapé.
-- **Lister les codes** (`list`) : **interdit**. Personne ne peut obtenir
-  tous les codes.
+- **Lister les codes** (`list`) : seulement l'**admin actif**, et seulement
+  les codes de **son** quartier (la requête filtre `quartierId`). Il voit et
+  copie ainsi son code dans « Mon quartier ». Personne ne peut obtenir tous
+  les codes.
 - **Écrire** : personne depuis l'app (console).
 
 Le code sert de raccourci. La vraie sécurité reste la **validation par l'admin**.
+
+### `telephones/{numero}` (connexion par téléphone)
+
+L'identifiant du document **est** le numéro, en 8 chiffres sans `+216`
+(ex. `22345678`). Firebase Auth ne connaît que l'e-mail : pour « numéro +
+mot de passe », l'app lit cette fiche, trouve l'e-mail, puis se connecte
+avec lui.
+
+| Champ | Type | Remarque |
+|---|---|---|
+| `uid` | string | Le propriétaire du numéro |
+| `email` | string | L'e-mail du compte (recopié, mis à jour s'il change) |
+
+- **Lire une fiche** (`get`) : tout le monde, **même sans être connecté**
+  (on n'est pas encore connecté quand on tape son numéro). Conséquence :
+  qui connaît un numéro peut voir l'e-mail lié. C'est le prix de la
+  connexion par numéro sans serveur.
+- **Lister** (`list`) : personne. On ne peut pas récupérer tous les numéros.
+- **Créer** : seulement pour soi (`uid`, e-mail du jeton) et seulement le
+  numéro écrit dans **son propre profil**. Un numéro déjà pris ne peut pas
+  être repris (la fiche existe déjà).
+- **Modifier** : seulement l'`email` de **sa** fiche. **Supprimer** : sa fiche.
+
+L'app écrit le profil et la fiche **dans le même envoi** (inscription,
+changement de numéro, suppression du compte). Les comptes créés avant
+reçoivent leur fiche à leur prochaine connexion par e-mail.
 
 ## 4. Module 2 · Services
 
@@ -399,19 +446,37 @@ soumise aux règles. À faire une seule fois.
 Console Firebase → *Firestore Database* → *Démarrer une collection* :
 - collection `quartiers`, ID automatique, champs
   `nom` (string) = `Résidence El Yasmine`,
-  `localisation` (string) = `Ennasr 2, Ariana`.
+  `localisation` (string) = `Ennasr 2, Ariana`,
+  `aUnAdmin` (boolean) = `false`.
   Noter l'ID généré.
 - collection `codesQuartier`, ID du document = `YAS72B`, champs
   `quartierId` (string) = l'ID noté, `quartierNom` (string) = `Résidence El Yasmine`.
 
 **Étape 2 : créer son compte dans l'application.**
-S'inscrire, valider l'e-mail, puis entrer le code `YAS72B`. Le compte est
-`enAttente`. (Possible à partir de la phase 5, quand les écrans utilisent Firebase.)
+S'inscrire et valider l'e-mail. Tant que le quartier n'a pas d'admin
+(`aUnAdmin` = `false`), l'app refuse de le rejoindre : pour le futur admin,
+mettre provisoirement `aUnAdmin` = `true`, entrer le code `YAS72B`. Le
+compte est `enAttente`.
 
 **Étape 3 : se nommer admin.**
 Console → `utilisateurs` → le document de son compte → modifier
-`statut` = `actif` et `role` = `admin`. Relancer l'application. Cet admin
-valide ensuite tous les autres voisins depuis l'écran « Membres du quartier ».
+`statut` = `actif` et `role` = `admin`. Vérifier que le quartier a bien
+`aUnAdmin` = `true`. Relancer l'application. Cet admin valide ensuite tous
+les autres voisins depuis l'écran « Membres du quartier ».
+
+Si l'admin perd son rôle (ou supprime son compte), remettre `aUnAdmin` =
+`false` : les voisins voient alors « Pas encore d'administrateur » au lieu
+d'attendre une validation qui ne viendrait jamais.
+
+**Étape 4 (optionnelle) : placer le quartier sur la carte.**
+Le plus simple : l'admin ouvre « Mon quartier » → « Tracer les limites » et
+touche la carte à chaque coin. Ou à la main, console → `quartiers` → le
+document du quartier → *Ajouter un champ* :
+- `position`, type **geopoint** : latitude puis longitude du centre
+  (ex. `36.8625` et `10.17`). Dans Google Maps, un clic droit sur un point
+  affiche ses coordonnées.
+- `contour`, type **array** : ajouter un élément par coin du quartier, chacun
+  de type **geopoint**, en faisant le tour dans l'ordre (3 coins au minimum).
 
 ## 9. Hors ligne
 

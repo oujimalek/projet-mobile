@@ -32,12 +32,13 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
   String _categorieChoisie = 'Tous';
 
   // Couleurs des avatars (fond, texte), utilisées à tour de rôle
-  final List<Color> _fondsAvatar = [
+  // (des `get` : les couleurs suivent le thème clair/sombre)
+  List<Color> get _fondsAvatar => [
     AppColors.secondaryLight,
     AppColors.primaryLight,
     AppColors.backgroundSecondary,
   ];
-  final List<Color> _textesAvatar = [
+  List<Color> get _textesAvatar => [
     AppColors.secondary,
     AppColors.primary,
     AppColors.textSecondary,
@@ -98,7 +99,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
           // ----- La liste des services -----
           Expanded(
             child: services.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Aucun service pour l\'instant',
                       style: TextStyle(color: AppColors.textSecondary),
@@ -133,13 +134,13 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -168,7 +169,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
                 setState(() {});
               }
             },
-            icon: const Icon(Icons.inbox_outlined, color: AppColors.card),
+            icon: Icon(Icons.inbox_outlined, color: AppColors.card),
           ),
           IconButton(
             tooltip: 'Planning des services communs',
@@ -178,7 +179,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
                 setState(() {});
               }
             },
-            icon: const Icon(Icons.calendar_month_outlined, color: AppColors.card),
+            icon: Icon(Icons.calendar_month_outlined, color: AppColors.card),
           ),
         ],
       ),
@@ -369,7 +370,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
                   const SizedBox(height: 4),
                   Text(
                     sousTitre,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
                     ),
@@ -381,7 +382,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
             // Heure de publication à droite
             Text(
               publication,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),

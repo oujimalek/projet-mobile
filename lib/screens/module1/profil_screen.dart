@@ -5,6 +5,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_drawer.dart';
 import 'widgets_module1.dart';
@@ -59,6 +60,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
     }
   }
 
+  Future<void> _seDeconnecter() async {
+    await _repository.deconnexion();
+    if (mounted) {
+      // go : on remplace tout, pas de retour vers le profil
+      context.go('/connexion');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Utilisateur utilisateur = _repository.getUtilisateurConnecte();
@@ -76,11 +85,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 // ----- Statistiques -----
                 Row(
                   children: [
-                    _carteStat('${utilisateur.servicesRendus}', 'Services\nrendus',
+                    _carteStat(
+                        '${utilisateur.servicesRendus}',
+                        tr('Services\nrendus', 'Services\n9adhitha'),
                         AppColors.secondary),
                     const SizedBox(width: 10),
                     _carteStat(utilisateur.noteMoyenne.toStringAsFixed(1),
-                        'Note\nmoyenne', AppColors.primary),
+                        tr('Note\nmoyenne', 'Noqtek\nel moyenne'),
+                        AppColors.primary),
                     const SizedBox(width: 10),
                     _carteStat('${utilisateur.nbSignalements}', 'Signalements\n',
                         AppColors.secondary),
@@ -89,19 +101,36 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(height: 20),
 
                 // ----- Compétences -----
-                const Text(
-                  'Compétences',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                Text(
+                  tr('Compétences', 'Chnowa ta3ref ta3mel'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 _competences(utilisateur),
                 const SizedBox(height: 20),
 
                 // ----- Liens -----
-                // (La déconnexion est dans le menu latéral, carte du bas)
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(children: _liens(context, utilisateur)),
+                ),
+                const SizedBox(height: 12),
+
+                // ----- Déconnexion -----
+                // (aussi dans le menu latéral, mais ici on la trouve tout
+                // de suite, par exemple pour changer de compte de test)
+                Center(
+                  child: TextButton(
+                    onPressed: _seDeconnecter,
+                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                    child: Text(
+                      tr('Se déconnecter', 'O5rej'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -113,10 +142,12 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
   /// En-tête blanc : titre, bouton "Modifier", avatar, nom et résidence.
   Widget _enTete(BuildContext context, Utilisateur utilisateur) {
-    final List<Widget> pastilles = [const Pastille(texte: 'Résident')];
+    final List<Widget> pastilles = [
+      Pastille(texte: tr('Résident', 'Mel houma')),
+    ];
     if (utilisateur.estAdmin) {
       pastilles.add(
-        const Pastille(
+        Pastille(
           texte: 'Admin',
           couleur: AppColors.secondary,
           fond: AppColors.secondaryLight,
@@ -131,7 +162,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
         20,
         24,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -144,18 +175,21 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 onPressed: ouvrirMenu,
                 icon: const Icon(Icons.menu),
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Mon profil',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  tr('Mon profil', 'El profil mte3i'),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               GestureDetector(
                 onTap: () {
                   _ouvrirPuisRafraichir('/modifier-profil');
                 },
-                child: const Pastille(
-                  texte: 'Modifier',
+                child: Pastille(
+                  texte: tr('Modifier', 'Badel'),
                   couleur: AppColors.secondary,
                   fond: AppColors.secondaryLight,
                 ),
@@ -188,7 +222,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     Text(
                       // "Résidence El Yasmine, Bloc B" → "Résidence El Yasmine · Bloc B"
                       utilisateur.residence.replaceAll(', ', ' · '),
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 8),
                     Wrap(spacing: 6, runSpacing: 6, children: pastilles),
@@ -221,7 +255,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
             const SizedBox(height: 4),
             Text(
               libelle,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
               ),
@@ -262,30 +296,62 @@ class _ProfilScreenState extends State<ProfilScreen> {
     if (utilisateur.estAdmin) {
       lignes.add(
         _ligneLien(
-          'Membres du quartier',
-          detail: _enAttente > 0 ? '$_enAttente en attente' : null,
+          tr('Membres du quartier', 'Sokkan el houma'),
+          detail: _enAttente > 0
+              ? tr('$_enAttente en attente', '$_enAttente yestannew')
+              : null,
           onTap: () {
             _ouvrirPuisRafraichir('/profil/membres');
           },
         ),
       );
-      lignes.add(const Divider(height: 1, color: AppColors.border));
+      lignes.add(Divider(height: 1, color: AppColors.border));
     }
 
-    // go : ces liens ouvrent l'onglet du module correspondant
-    lignes.add(_ligneLien('Mes services', onTap: () => context.go('/services')));
-    lignes.add(const Divider(height: 1, color: AppColors.border));
-    lignes.add(
-      _ligneLien('Mes signalements', onTap: () => context.go('/signalements')),
-    );
-    lignes.add(const Divider(height: 1, color: AppColors.border));
-    lignes.add(
-      _ligneLien('Mes événements', onTap: () => context.go('/evenements')),
-    );
-    lignes.add(const Divider(height: 1, color: AppColors.border));
     lignes.add(
       _ligneLien(
-        'Paramètres',
+        tr('Mon quartier', 'Houmti'),
+        onTap: () {
+          _ouvrirPuisRafraichir('/profil/quartier');
+        },
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+    lignes.add(
+      _ligneLien(
+        tr('Annuaire des voisins', 'Jirani'),
+        onTap: () {
+          _ouvrirPuisRafraichir('/profil/voisins');
+        },
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+
+    // go : ces liens ouvrent l'onglet du module correspondant
+    lignes.add(
+      _ligneLien(
+        tr('Mes services', 'Services mte3i'),
+        onTap: () => context.go('/services'),
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+    lignes.add(
+      _ligneLien(
+        tr('Mes signalements', 'Signalements mte3i'),
+        onTap: () => context.go('/signalements'),
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+    lignes.add(
+      _ligneLien(
+        tr('Mes événements', 'Événements mte3i'),
+        onTap: () => context.go('/evenements'),
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+    lignes.add(
+      _ligneLien(
+        tr('Paramètres', 'El paramètres'),
         onTap: () {
           _ouvrirPuisRafraichir('/parametres');
         },
@@ -305,7 +371,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
         ),
       );
     }
-    fin.add(const Icon(Icons.chevron_right, color: AppColors.textSecondary));
+    fin.add(Icon(Icons.chevron_right, color: AppColors.textSecondary));
 
     return InkWell(
       onTap: onTap,

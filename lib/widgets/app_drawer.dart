@@ -107,6 +107,12 @@ class _AppDrawerState extends State<AppDrawer> {
         actif: widget.chemin == '/profil',
         onTap: () => _allerA('/profil'),
       ),
+      _rubrique(
+        icone: Icons.location_city_outlined,
+        titre: 'Mon quartier',
+        actif: widget.chemin.startsWith('/profil/quartier'),
+        onTap: () => _ouvrir('/profil/quartier'),
+      ),
     ];
     if (utilisateur.estAdmin) {
       rubriquesCompte.add(
@@ -134,7 +140,7 @@ class _AppDrawerState extends State<AppDrawer> {
         child: Column(
           children: [
             _enTete(utilisateur),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
 
             // ----- Rubriques (défilent si l'écran est petit) -----
             Expanded(
@@ -186,7 +192,7 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
 
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             _carteUtilisateur(utilisateur),
           ],
         ),
@@ -206,7 +212,7 @@ class _AppDrawerState extends State<AppDrawer> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Houmani',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -216,7 +222,7 @@ class _AppDrawerState extends State<AppDrawer> {
                 ),
                 Text(
                   utilisateur.quartier,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
                   ),
@@ -235,7 +241,7 @@ class _AppDrawerState extends State<AppDrawer> {
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 6),
       child: Text(
         titre,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
@@ -264,7 +270,7 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
         child: Text(
           '$badge',
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.badgeEnAttente,
             fontWeight: FontWeight.w600,
             fontSize: 12,
@@ -344,7 +350,7 @@ class _AppDrawerState extends State<AppDrawer> {
       contentPadding: const EdgeInsets.only(left: 72, right: 16),
       title: Text(
         titre,
-        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+        style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
       ),
       onTap: onTap,
     );
@@ -385,7 +391,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     utilisateur.email,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
                     ),
@@ -396,7 +402,7 @@ class _AppDrawerState extends State<AppDrawer> {
             IconButton(
               tooltip: 'Se déconnecter',
               onPressed: _seDeconnecter,
-              icon: const Icon(Icons.logout, color: AppColors.error),
+              icon: Icon(Icons.logout, color: AppColors.error),
             ),
           ],
         ),

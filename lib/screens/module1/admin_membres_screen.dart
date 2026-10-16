@@ -4,6 +4,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
@@ -33,17 +34,19 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   List<Utilisateur> _enAttente = [];
   List<Utilisateur> _actifs = [];
   List<Utilisateur> _bloques = [];
+  int _nbRefuses = 0; // pas d'onglet : seulement compté (statistiques)
 
   bool _enChargement = true; // true jusqu'au premier chargement
   String _erreur = ''; // ex : pas de réseau
 
   // Couleurs des avatars, choisies à tour de rôle
-  static const List<Color> _couleursAvatar = [
+  // (des `get` : les couleurs suivent le thème clair/sombre)
+  static List<Color> get _couleursAvatar => [
     AppColors.primary,
     AppColors.secondary,
     AppColors.textSecondary,
   ];
-  static const List<Color> _fondsAvatar = [
+  static List<Color> get _fondsAvatar => [
     AppColors.primaryLight,
     AppColors.secondaryLight,
     AppColors.backgroundSecondary,
@@ -66,11 +69,14 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         await _repository.getMembres(StatutUtilisateur.actif);
     final Resultat<List<Utilisateur>> bloques =
         await _repository.getMembres(StatutUtilisateur.bloque);
+    final Resultat<int> refuses =
+        await _repository.compterMembres(StatutUtilisateur.refuse);
     if (!mounted) {
       return;
     }
     setState(() {
       _enChargement = false;
+      _nbRefuses = refuses.donnee ?? 0;
       // En cas d'échec, l'onglet reste vide et on affiche pourquoi
       _enAttente = enAttente.donnee ?? [];
       _actifs = actifs.donnee ?? [];
@@ -123,15 +129,18 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     }
     final Duration ecart = DateTime.now().difference(date);
     if (ecart.inMinutes < 60) {
-      return 'il y a ${ecart.inMinutes} min';
+      return tr(
+        'il y a ${ecart.inMinutes} min',
+        'hedhi ${ecart.inMinutes} d9i9a',
+      );
     }
     if (ecart.inHours < 24) {
-      return 'il y a ${ecart.inHours} h';
+      return tr('il y a ${ecart.inHours} h', 'hedhi ${ecart.inHours} se3a');
     }
     if (ecart.inDays == 1) {
-      return 'hier';
+      return tr('hier', 'il bera7');
     }
-    return 'il y a ${ecart.inDays} jours';
+    return tr('il y a ${ecart.inDays} jours', 'hedhi ${ecart.inDays} ayem');
   }
 
   /// Applique une action sur un membre, recharge les listes
@@ -173,16 +182,16 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           child: Text(
             _erreur,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.error),
+            style: TextStyle(color: AppColors.error),
           ),
         ),
       );
     } else if (cartes.isEmpty) {
       cartes.add(
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(top: 32),
           child: Text(
-            'Aucun membre ici',
+            tr('Aucun membre ici', 'Ma famma 7ad lahne'),
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary),
           ),
@@ -203,11 +212,13 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                 // Même style que les autres champs (thème de l'app)
                 TextField(
                   controller: _rechercheController,
-                  decoration: const InputDecoration(
-                    hintText: 'Rechercher un membre...',
+                  decoration: InputDecoration(
+                    hintText: tr('Rechercher un membre...', 'Lawej 3la sekn...'),
                     prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                   ),
                 ),
+                const SizedBox(height: 14),
+                _statistiques(),
                 const SizedBox(height: 14),
                 _onglets(),
                 const SizedBox(height: 14),
@@ -232,7 +243,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         20,
         20,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -242,14 +253,14 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
             onPressed: () {
               Navigator.of(context).maybePop();
             },
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back, color: AppColors.primary),
           ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Membres',
+                Text(
+                  tr('Membres', 'Sokkan'),
                   style: TextStyle(
                     color: AppColors.primary,
                     fontSize: 26,
@@ -257,14 +268,73 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                   ),
                 ),
                 Text(
-                  '${admin.quartier} · $total membres',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  tr(
+                    '${admin.quartier} · $total membres',
+                    '${admin.quartier} · $total sokkan',
+                  ),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
             ),
           ),
           const Pastille(texte: 'Admin'),
         ],
+      ),
+    );
+  }
+
+  /// Les statistiques du quartier : actifs, en attente, bloqués, refusés.
+  Widget _statistiques() {
+    return Row(
+      children: [
+        _carteStat(
+          '${_actifs.length}',
+          tr('Actifs', 'Mawjoudin'),
+          AppColors.success,
+        ),
+        const SizedBox(width: 8),
+        _carteStat(
+          '${_enAttente.length}',
+          tr('En attente', 'Yestannew'),
+          AppColors.warning,
+        ),
+        const SizedBox(width: 8),
+        _carteStat(
+          '${_bloques.length}',
+          tr('Bloqués', 'Mbloukiyin'),
+          AppColors.error,
+        ),
+        const SizedBox(width: 8),
+        _carteStat(
+          '$_nbRefuses',
+          tr('Refusés', 'Marfoudhin'),
+          AppColors.textSecondary,
+        ),
+      ],
+    );
+  }
+
+  Widget _carteStat(String valeur, String libelle, Color couleur) {
+    return Expanded(
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        child: Column(
+          children: [
+            Text(
+              valeur,
+              style: TextStyle(
+                color: couleur,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              libelle,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -279,9 +349,12 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
       ),
       child: Row(
         children: [
-          _boutonOnglet('En attente', StatutUtilisateur.enAttente),
-          _boutonOnglet('Actifs', StatutUtilisateur.actif),
-          _boutonOnglet('Bloqués', StatutUtilisateur.bloque),
+          _boutonOnglet(
+            tr('En attente', 'Yestannew'),
+            StatutUtilisateur.enAttente,
+          ),
+          _boutonOnglet(tr('Actifs', 'Mawjoudin'), StatutUtilisateur.actif),
+          _boutonOnglet(tr('Bloqués', 'Mbloukiyin'), StatutUtilisateur.bloque),
         ],
       ),
     );
@@ -329,6 +402,10 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     if (_onglet == StatutUtilisateur.enAttente && depuis.isNotEmpty) {
       morceaux.add(depuis);
     }
+    // Onglet Bloqués : on rappelle la raison donnée
+    if (_onglet == StatutUtilisateur.bloque && membre.motif.isNotEmpty) {
+      morceaux.add(tr('Motif : ${membre.motif}', 'Sbab : ${membre.motif}'));
+    }
     final String detail = morceaux.join(' · ');
 
     return AppCard(
@@ -356,7 +433,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                     const SizedBox(height: 2),
                     Text(
                       detail,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
@@ -381,28 +458,42 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           children: [
             Expanded(
               child: PrimaryButton(
-                texte: 'Valider',
+                texte: tr('Valider', 'A9bel'),
                 onPressed: () {
-                  _action('${membre.prenom} a rejoint la houma', () {
-                    return _repository.validerMembre(membre.id);
-                  });
+                  _action(
+                    tr(
+                      '${membre.prenom} a rejoint la houma',
+                      '${membre.prenom} dkhal lel houma',
+                    ),
+                    () {
+                      return _repository.validerMembre(membre.id);
+                    },
+                  );
                 },
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _boutonRouge('Refuser', () async {
-                final bool ok = await _confirmer(
-                  'Refuser la demande ?',
-                  '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
-                      'Il pourra faire une nouvelle demande.',
-                  'Refuser',
+              child: _boutonRouge(tr('Refuser', 'Orfodh'), () async {
+                final String? motif = await _demanderMotif(
+                  tr('Refuser la demande ?', 'Torfodh el demande ?'),
+                  tr(
+                    '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
+                        'Il pourra faire une nouvelle demande.',
+                    '${membre.nomComplet} ma ynajjamch yodkhol lel houma. '
+                        'Ynajjem yab3ath demande jdida.',
+                  ),
+                  tr('Refuser', 'Orfodh'),
                 );
-                if (!ok) {
+                if (motif == null) {
                   return;
                 }
-                _action('Demande de ${membre.prenom} refusée', () {
-                  return _repository.refuserMembre(membre.id);
+                _action(
+                    tr(
+                      'Demande de ${membre.prenom} refusée',
+                      'Demande mta3 ${membre.prenom} tarfdhet',
+                    ), () {
+                  return _repository.refuserMembre(membre.id, motif);
                 });
               }),
             ),
@@ -413,25 +504,37 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         if (membre.id == _repository.getUtilisateurConnecte().id) {
           return const SizedBox();
         }
-        return _boutonRouge('Bloquer', () async {
-          final bool ok = await _confirmer(
-            'Bloquer ce membre ?',
-            '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
-                'l\'application. Tu pourras le débloquer plus tard.',
-            'Bloquer',
+        return _boutonRouge(tr('Bloquer', 'Bloki'), () async {
+          final String? motif = await _demanderMotif(
+            tr('Bloquer ce membre ?', 'Tbloki el sekn hedha ?'),
+            tr(
+              '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
+                  'l\'application. Tu pourras le débloquer plus tard.',
+              '${membre.nomComplet} bech yokhrej w ma ynajjamch yesta3mel '
+                  'l\'appli. Tnajjem tdebloukih ba3d.',
+            ),
+            tr('Bloquer', 'Bloki'),
           );
-          if (!ok) {
+          if (motif == null) {
             return;
           }
-          _action('${membre.prenom} est bloqué(e)', () {
-            return _repository.bloquerMembre(membre.id);
+          _action(
+              tr(
+                '${membre.prenom} est bloqué(e)',
+                '${membre.prenom} tbloka',
+              ), () {
+            return _repository.bloquerMembre(membre.id, motif);
           });
         });
       case StatutUtilisateur.bloque:
         return SecondaryButton(
-          texte: 'Débloquer',
+          texte: tr('Débloquer', 'Debloki'),
           onPressed: () {
-            _action('${membre.prenom} est débloqué(e)', () {
+            _action(
+                tr(
+                  '${membre.prenom} est débloqué(e)',
+                  '${membre.prenom} tdebloka',
+                ), () {
               return _repository.debloquerMembre(membre.id);
             });
           },
@@ -441,34 +544,15 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     }
   }
 
-  /// Demande confirmation avant une action négative (refuser, bloquer).
-  /// true si l'admin a confirmé.
-  Future<bool> _confirmer(String titre, String message, String action) async {
-    final bool? reponse = await showDialog<bool>(
+  /// Avant une action négative (refuser, bloquer) : l'admin confirme et
+  /// donne la raison, montrée au membre. null si l'admin a annulé.
+  Future<String?> _demanderMotif(String titre, String message, String action) {
+    return showDialog<String>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(titre),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(false);
-              },
-              child: const Text('Annuler'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(true);
-              },
-              style: TextButton.styleFrom(foregroundColor: AppColors.error),
-              child: Text(action),
-            ),
-          ],
-        );
+        return _DialogueMotif(titre: titre, message: message, action: action);
       },
     );
-    return reponse ?? false; // fermé sans choisir = annulé
   }
 
   /// Bouton blanc à bordure rouge (action négative : refuser, bloquer).
@@ -479,13 +563,99 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         foregroundColor: AppColors.error,
         backgroundColor: AppColors.card,
         minimumSize: const Size.fromHeight(50),
-        side: const BorderSide(color: AppColors.error, width: 1.5),
+        side: BorderSide(color: AppColors.error, width: 1.5),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
         ),
         textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       child: Text(texte),
+    );
+  }
+}
+
+/// La fenêtre "Refuser / Bloquer" avec le champ du motif.
+/// Un widget à part : il garde son propre TextEditingController,
+/// libéré (dispose) quand la fenêtre se ferme.
+class _DialogueMotif extends StatefulWidget {
+  final String titre;
+  final String message;
+  final String action; // texte du bouton rouge, ex : "Bloquer"
+
+  const _DialogueMotif({
+    required this.titre,
+    required this.message,
+    required this.action,
+  });
+
+  @override
+  State<_DialogueMotif> createState() {
+    return _DialogueMotifState();
+  }
+}
+
+class _DialogueMotifState extends State<_DialogueMotif> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _motifController = TextEditingController();
+
+  @override
+  void dispose() {
+    _motifController.dispose();
+    super.dispose();
+  }
+
+  void _valider() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(_motifController.text.trim());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.titre),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.message),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _motifController,
+              maxLength: 200,
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: tr(
+                  'Motif (vu par le membre)',
+                  'Sbab (yarah el sekn)',
+                ),
+                hintText: tr(
+                  'Ex : logement introuvable dans la résidence',
+                  'Mathalan : el dar mouch mawjouda fel résidence',
+                ),
+              ),
+              validator: (String? valeur) {
+                return UtilisateurRepository.refusMotif(valeur ?? '');
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(); // null = annulé
+          },
+          child: Text(tr('Annuler', 'Batel')),
+        ),
+        TextButton(
+          onPressed: _valider,
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          child: Text(widget.action),
+        ),
+      ],
     );
   }
 }

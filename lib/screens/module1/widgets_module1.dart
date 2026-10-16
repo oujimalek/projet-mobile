@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 
 // Petits widgets utilisés par plusieurs écrans du module 1.
 // (Les composants communs à toute l'app restent dans lib/widgets/.)
@@ -45,9 +46,9 @@ class BoutonDeconnexion extends StatelessWidget {
         await UtilisateurRepository().deconnexion();
         routeur.go('/connexion'); // go : pas de retour possible
       },
-      child: const Text(
-        'Se déconnecter',
-        style: TextStyle(fontWeight: FontWeight.w600),
+      child: Text(
+        tr('Se déconnecter', 'O5rej'),
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -71,25 +72,27 @@ class IndicateurChargement extends StatelessWidget {
 /// Si onSupprimer est donné, une croix permet de la retirer.
 class Pastille extends StatelessWidget {
   final String texte;
-  final Color couleur; // couleur du texte
-  final Color fond; // couleur du fond
+  final Color? couleur; // couleur du texte (par défaut : bleu)
+  final Color? fond; // couleur du fond (par défaut : bleu très clair)
   final Function()? onSupprimer;
 
   const Pastille({
     super.key,
     required this.texte,
-    this.couleur = AppColors.primary,
-    this.fond = AppColors.primaryLight,
+    this.couleur,
+    this.fond,
     this.onSupprimer,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Couleur choisie, sinon celle par défaut (selon le thème clair/sombre)
+    final Color couleurTexte = couleur ?? AppColors.primary;
     final List<Widget> contenu = [
       Text(
         texte,
         style: TextStyle(
-          color: couleur,
+          color: couleurTexte,
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
@@ -100,7 +103,7 @@ class Pastille extends StatelessWidget {
       contenu.add(
         GestureDetector(
           onTap: onSupprimer,
-          child: Icon(Icons.close, size: 14, color: couleur),
+          child: Icon(Icons.close, size: 14, color: couleurTexte),
         ),
       );
     }
@@ -108,7 +111,7 @@ class Pastille extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: fond,
+        color: fond ?? AppColors.primaryLight,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: contenu),
@@ -134,8 +137,8 @@ class BoutonAjouter extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.border),
         ),
-        child: const Text(
-          '+ Ajouter',
+        child: Text(
+          tr('+ Ajouter', '+ Zid'),
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
       ),
@@ -147,15 +150,15 @@ class BoutonAjouter extends StatelessWidget {
 class AvatarInitiales extends StatelessWidget {
   final String initiales;
   final double taille;
-  final Color couleur; // couleur des lettres
-  final Color fond;
+  final Color? couleur; // couleur des lettres (par défaut : bleu)
+  final Color? fond; // (par défaut : bleu très clair)
 
   const AvatarInitiales({
     super.key,
     required this.initiales,
     this.taille = 48,
-    this.couleur = AppColors.primary,
-    this.fond = AppColors.primaryLight,
+    this.couleur,
+    this.fond,
   });
 
   @override
@@ -164,11 +167,14 @@ class AvatarInitiales extends StatelessWidget {
       width: taille,
       height: taille,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: fond, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: fond ?? AppColors.primaryLight,
+        shape: BoxShape.circle,
+      ),
       child: Text(
         initiales,
         style: TextStyle(
-          color: couleur,
+          color: couleur ?? AppColors.primary,
           fontSize: taille * 0.36,
           fontWeight: FontWeight.bold,
         ),
@@ -194,7 +200,8 @@ class AvatarGalerie {
 }
 
 /// Les 6 avatars proposés dans la galerie.
-const List<AvatarGalerie> avatarsGalerie = [
+/// Un `get` (et non une variable) : les couleurs suivent le thème actuel.
+List<AvatarGalerie> get avatarsGalerie => [
   AvatarGalerie(
     id: 'chat',
     icone: Icons.pets,
@@ -249,16 +256,16 @@ class AvatarUtilisateur extends StatelessWidget {
   final String avatar; // Utilisateur.avatar
   final String initiales;
   final double taille;
-  final Color couleur;
-  final Color fond;
+  final Color? couleur; // couleurs des initiales (voir AvatarInitiales)
+  final Color? fond;
 
   const AvatarUtilisateur({
     super.key,
     required this.avatar,
     required this.initiales,
     this.taille = 48,
-    this.couleur = AppColors.primary,
-    this.fond = AppColors.primaryLight,
+    this.couleur,
+    this.fond,
   });
 
   @override
@@ -441,7 +448,7 @@ class TitreEcran extends StatelessWidget {
       children: [
         Text(
           titre,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.primary,
             fontSize: 26,
             fontWeight: FontWeight.bold,
@@ -450,7 +457,7 @@ class TitreEcran extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           sousTitre,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textSecondary,
             fontSize: 15,
             height: 1.4,

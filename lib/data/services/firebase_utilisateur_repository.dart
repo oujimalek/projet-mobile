@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -29,6 +31,9 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       _base.collection('utilisateurs');
   CollectionReference<Map<String, dynamic>> get _quartiers =>
       _base.collection('quartiers');
+  // telephones/{8 chiffres} = {uid, email} : pour se connecter avec son numéro
+  CollectionReference<Map<String, dynamic>> get _telephones =>
+      _base.collection('telephones');
 
   /// Personne de connecté : un utilisateur vide.
   static const Utilisateur _invite = Utilisateur(
@@ -64,36 +69,34 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<Utilisateur>> connexion(
-    String email,
+    String identifiant,
     String motDePasse,
   ) async {
+    final bool parNumero = UtilisateurRepository.estUnNumero(identifiant);
     try {
+      String email = identifiant.trim();
+      if (parNumero) {
+        // Firebase Auth ne connaît que l'e-mail : on le retrouve grâce au numéro
+        final String? numero =
+            UtilisateurRepository.normaliserTelephone(identifiant);
+        final DocumentSnapshot<Map<String, dynamic>>? fiche =
+            numero == null ? null : await _telephones.doc(numero).get();
+        if (fiche == null || !fiche.exists) {
+          return const Resultat.echec('Numéro ou mot de passe incorrect');
+        }
+        email = fiche.data()!['email'] ?? '';
+      }
       final UserCredential credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
+        email: email,
         password: motDePasse,
       );
-      final DocumentSnapshot<Map<String, dynamic>> document =
-          await _utilisateurs.doc(credential.user!.uid).get();
-      if (!document.exists) {
-        await _auth.signOut();
-        return const Resultat.echec('Profil introuvable, contacte l\'administrateur');
-      }
-
-      final Utilisateur utilisateur = await _synchroniserEmail(
-        credential.user!,
-        Utilisateur.fromMap(document.id, document.data()!),
-      );
-      // Compte bloqué : on ne le laisse pas connecté
-      if (utilisateur.statut == StatutUtilisateur.bloque) {
-        await _auth.signOut();
-        return const Resultat.echec(
-          'Ton compte a été bloqué par l\'administrateur',
-        );
-      }
-      await _memoriser(utilisateur);
-      return Resultat.succes(utilisateur);
+      return await _chargerProfil(credential.user!);
     } on FirebaseAuthException catch (e) {
-      return Resultat.echec(_messageAuth(e.code));
+      final String message = _messageAuth(e.code);
+      if (parNumero && message == 'E-mail ou mot de passe incorrect') {
+        return const Resultat.echec('Numéro ou mot de passe incorrect');
+      }
+      return Resultat.echec(message);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
     }
@@ -107,7 +110,16 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     required String motDePasse,
   }) async {
     User? compte;
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
     try {
+      // 0. Le numéro doit être libre (lecture permise sans être connecté)
+      if ((await _telephones.doc(numero).get()).exists) {
+        return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
+      }
+
       // 1. Le compte Firebase Auth (vérifie l'e-mail et le mot de passe)
       final UserCredential credential =
           await _auth.createUserWithEmailAndPassword(
@@ -130,7 +142,14 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         statut: StatutUtilisateur.enAttente,
         role: RoleUtilisateur.resident,
       );
-      await _utilisateurs.doc(compte.uid).set(nouveau.toMap());
+      // WriteBatch : le profil ET la fiche du numéro, tout ou rien
+      final WriteBatch lot = _base.batch();
+      lot.set(_utilisateurs.doc(compte.uid), nouveau.toMap());
+      lot.set(_telephones.doc(numero), {
+        'uid': compte.uid,
+        'email': nouveau.email,
+      });
+      await lot.commit();
 
       await _memoriser(nouveau);
 
@@ -275,8 +294,8 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       // Même règle qu'à la connexion : un compte bloqué est déconnecté
       if (utilisateur.statut == StatutUtilisateur.bloque) {
         await deconnexion();
-        return const Resultat.echec(
-          'Ton compte a été bloqué par l\'administrateur',
+        return Resultat.echec(
+          UtilisateurRepository.messageBloque(utilisateur.motif),
         );
       }
       await _memoriser(utilisateur);
@@ -299,6 +318,140 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       }
       return Resultat.echec(_messageAuth(e.code));
     }
+  }
+
+  // =====================================================================
+  // Code SMS (Firebase Phone Auth)
+  // =====================================================================
+
+  // Le dernier envoi : Firebase donne un identifiant, que l'on combine
+  // ensuite avec les 6 chiffres tapés
+  String? _idVerification;
+  String? _numeroSms; // les 8 chiffres qui ont reçu le code
+  // Android lit parfois le SMS tout seul : la preuve arrive sans code
+  PhoneAuthCredential? _preuveAuto;
+
+  @override
+  Future<Resultat<void>> envoyerCodeSms(String telephone) async {
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
+    _idVerification = null;
+    _preuveAuto = null;
+    _numeroSms = numero;
+    // verifyPhoneNumber répond en appelant une des fonctions ci-dessous ;
+    // le Completer transforme la première réponse en un Future à attendre
+    final Completer<Resultat<void>> reponse = Completer<Resultat<void>>();
+    try {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: '+216$numero',
+        timeout: const Duration(seconds: 60),
+        codeSent: (String idVerification, int? jetonRenvoi) {
+          _idVerification = idVerification;
+          if (!reponse.isCompleted) {
+            reponse.complete(const Resultat.succes(null));
+          }
+        },
+        verificationCompleted: (PhoneAuthCredential preuve) {
+          _preuveAuto = preuve;
+          if (!reponse.isCompleted) {
+            reponse.complete(const Resultat.succes(null));
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          if (!reponse.isCompleted) {
+            reponse.complete(Resultat.echec(_messageAuth(e.code)));
+          }
+        },
+        codeAutoRetrievalTimeout: (String idVerification) {
+          _idVerification = idVerification;
+        },
+      );
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageAuth(e.code));
+    }
+    // Sécurité : si Firebase ne répond jamais, on n'attend pas à l'infini
+    return reponse.future.timeout(
+      const Duration(seconds: 90),
+      onTimeout: () {
+        return const Resultat.echec('Le SMS n\'est pas parti, réessaie');
+      },
+    );
+  }
+
+  @override
+  Future<Resultat<Utilisateur>> connexionParSms(String code) async {
+    final PhoneAuthCredential? preuve = _preuveSms(code);
+    if (preuve == null) {
+      return const Resultat.echec('Demande d\'abord un code');
+    }
+    try {
+      final UserCredential credential = await _auth.signInWithCredential(preuve);
+      // Numéro jamais vérifié : Firebase vient de créer un compte vide.
+      // On l'efface : un compte se crée seulement par l'inscription
+      if (credential.additionalUserInfo?.isNewUser ?? false) {
+        await _supprimerCompteIncomplet(credential.user);
+        await _auth.signOut();
+        return const Resultat.echec(UtilisateurRepository.numeroNonVerifie);
+      }
+      return await _chargerProfil(credential.user!);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageAuth(e.code));
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<void>> verifierTelephone(String code) async {
+    final User? compte = _auth.currentUser;
+    if (compte == null) {
+      return const Resultat.echec('Tu n\'es pas connecté');
+    }
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    if (numero == null || _numeroSms != numero) {
+      return const Resultat.echec(
+        'Le code doit être envoyé au numéro de ton profil',
+      );
+    }
+    final PhoneAuthCredential? preuve = _preuveSms(code);
+    if (preuve == null) {
+      return const Resultat.echec('Demande d\'abord un code');
+    }
+    try {
+      // Un autre numéro est encore lié au compte : on le retire d'abord
+      // (un compte Firebase n'a qu'un seul numéro)
+      if (compte.phoneNumber != null) {
+        await compte.unlink(PhoneAuthProvider.PROVIDER_ID);
+      }
+      await compte.linkWithCredential(preuve);
+      return const Resultat.succes(null);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageAuth(e.code));
+    }
+  }
+
+  @override
+  bool telephoneEstVerifie() {
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    final String? numeroLie = _auth.currentUser?.phoneNumber;
+    return numero != null && numeroLie == '+216$numero';
+  }
+
+  /// La preuve à donner à Firebase : l'envoi + les 6 chiffres tapés.
+  /// null : aucun code n'a été demandé.
+  PhoneAuthCredential? _preuveSms(String code) {
+    final String? idVerification = _idVerification;
+    if (idVerification != null) {
+      return PhoneAuthProvider.credential(
+        verificationId: idVerification,
+        smsCode: code.trim(),
+      );
+    }
+    return _preuveAuto;
   }
 
   // =====================================================================
@@ -332,9 +485,14 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       competences: competences,
       avatar: avatar,
     );
+    final String? ancienNumero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    final String? nouveauNumero =
+        UtilisateurRepository.normaliserTelephone(modifie.telephone);
     try {
+      final WriteBatch lot = _base.batch();
       // update : seulement ces champs (statut, rôle et quartier ne bougent pas)
-      await _utilisateurs.doc(modifie.id).update({
+      lot.update(_utilisateurs.doc(modifie.id), {
         'prenom': modifie.prenom,
         'nom': modifie.nom,
         'telephone': modifie.telephone,
@@ -342,7 +500,30 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'competences': modifie.competences,
         'avatar': modifie.avatar,
       });
+      // Nouveau numéro : la fiche suit (dans le même lot, tout ou rien)
+      if (nouveauNumero != ancienNumero) {
+        if (nouveauNumero != null) {
+          final DocumentSnapshot<Map<String, dynamic>> fiche =
+              await _telephones.doc(nouveauNumero).get();
+          if (fiche.exists && fiche.data()!['uid'] != modifie.id) {
+            return const Resultat.echec(
+              'Ce numéro est déjà utilisé par un autre compte',
+            );
+          }
+          lot.set(_telephones.doc(nouveauNumero), {
+            'uid': modifie.id,
+            'email': emailConnecte(),
+          });
+        }
+        if (ancienNumero != null && await _ficheEstAMoi(ancienNumero)) {
+          lot.delete(_telephones.doc(ancienNumero));
+        }
+      }
+      await lot.commit();
       await _memoriser(modifie);
+      if (nouveauNumero != ancienNumero) {
+        await _oublierNumeroVerifie();
+      }
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -391,9 +572,16 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
     try {
       final User compte = await _reauthentifier(motDePasse);
-      // D'abord le profil (il faut encore être connecté pour les règles),
-      // ensuite le compte Firebase Auth
-      await _utilisateurs.doc(compte.uid).delete();
+      // D'abord le profil et la fiche du numéro (il faut encore être
+      // connecté pour les règles), ensuite le compte Firebase Auth
+      final WriteBatch lot = _base.batch();
+      lot.delete(_utilisateurs.doc(compte.uid));
+      final String? numero =
+          UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+      if (numero != null && await _ficheEstAMoi(numero)) {
+        lot.delete(_telephones.doc(numero));
+      }
+      await lot.commit();
       await compte.delete();
       _connecte = _invite;
       await _cache.vider();
@@ -460,12 +648,18 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<void>> rejoindreQuartier(Quartier quartier) async {
+    final String? refus =
+        UtilisateurRepository.refusChangement(_connecte, quartier);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
     final Utilisateur demande = _connecte.copier(
       quartierId: quartier.id,
       quartier: quartier.nom,
       residence: quartier.nom, // comme le mock : lu par le module 3
       statut: StatutUtilisateur.enAttente,
       dateDemande: DateTime.now(),
+      motif: '', // nouvelle demande : on oublie un ancien refus
     );
     try {
       await _utilisateurs.doc(demande.id).update({
@@ -473,6 +667,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'quartierNom': quartier.nom,
         'residence': quartier.nom,
         'statut': StatutUtilisateur.enAttente.name,
+        'motif': '',
         'dateDemande': FieldValue.serverTimestamp(), // l'heure du serveur
       });
       await _memoriser(demande);
@@ -504,6 +699,52 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       if (enCache != null && enCache.id == quartierId) {
         return Resultat.succes(enCache);
       }
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<String?>> getCodeInvitation() async {
+    if (!_connecte.estAdmin) {
+      return const Resultat.echec('Action non autorisée');
+    }
+    try {
+      // Le filtre sur quartierId est obligatoire : firestore.rules ne laisse
+      // l'admin lister QUE les codes de son quartier
+      final QuerySnapshot<Map<String, dynamic>> resultat = await _base
+          .collection('codesQuartier')
+          .where('quartierId', isEqualTo: _connecte.quartierId)
+          .limit(1)
+          .get();
+      if (resultat.docs.isEmpty) {
+        return const Resultat.succes(null);
+      }
+      return Resultat.succes(resultat.docs.first.id); // l'id EST le code
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<void>> enregistrerContour(List<PointGps> contour) async {
+    final String? refus = UtilisateurRepository.refusContour(_connecte, contour);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final List<GeoPoint> points = [];
+    for (final PointGps point in contour) {
+      points.add(GeoPoint(point.latitude, point.longitude));
+    }
+    final PointGps centre = Quartier.milieu(contour)!;
+    try {
+      // firestore.rules : seulement contour et position, par l'admin
+      await _quartiers.doc(_connecte.quartierId).update({
+        'contour': points,
+        'position': GeoPoint(centre.latitude, centre.longitude),
+      });
+      // Le cache sera rafraîchi au prochain getQuartierConnecte
+      return const Resultat.succes(null);
+    } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
     }
   }
@@ -563,35 +804,44 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<void>> validerMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   @override
-  Future<Resultat<void>> refuserMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.refuse);
+  Future<Resultat<void>> refuserMembre(String id, String motif) {
+    return _changerStatut(id, StatutUtilisateur.refuse, motif);
   }
 
   @override
-  Future<Resultat<void>> bloquerMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.bloque);
+  Future<Resultat<void>> bloquerMembre(String id, String motif) {
+    return _changerStatut(id, StatutUtilisateur.bloque, motif);
   }
 
   @override
   Future<Resultat<void>> debloquerMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   // =====================================================================
   // Outils internes
   // =====================================================================
 
-  /// L'admin ne change QUE le statut (seul champ permis par firestore.rules).
+  /// L'admin ne change QUE le statut et le motif (seuls champs permis par
+  /// firestore.rules). Motif vide pour actif, 3 à 200 caractères sinon.
   Future<Resultat<void>> _changerStatut(
     String id,
     StatutUtilisateur statut,
+    String motif,
   ) async {
+    final String texte = motif.trim();
+    if (statut != StatutUtilisateur.actif) {
+      final String? refus = UtilisateurRepository.refusMotif(texte);
+      if (refus != null) {
+        return Resultat.echec(refus);
+      }
+    }
     try {
-      await _utilisateurs.doc(id).update({'statut': statut.name});
+      await _utilisateurs.doc(id).update({'statut': statut.name, 'motif': texte});
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -624,9 +874,91 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
     try {
       await _utilisateurs.doc(compte.uid).update({'email': email});
-      return utilisateur.copier(email: email);
     } on FirebaseException {
       return utilisateur; // on réessaiera à la prochaine connexion
+    }
+    // La fiche du numéro doit donner la nouvelle adresse (sinon la
+    // connexion par numéro échouerait)
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(utilisateur.telephone);
+    if (numero != null) {
+      try {
+        await _telephones.doc(numero).update({'email': email});
+      } on FirebaseException {
+        // pas de fiche (ou celle d'un autre) : rien à recopier
+      }
+    }
+    return utilisateur.copier(email: email);
+  }
+
+  /// Après la connexion à Firebase Auth (mot de passe ou SMS) : charge le
+  /// profil, refuse un compte bloqué, puis le garde en mémoire.
+  Future<Resultat<Utilisateur>> _chargerProfil(User compte) async {
+    final DocumentSnapshot<Map<String, dynamic>> document =
+        await _utilisateurs.doc(compte.uid).get();
+    if (!document.exists) {
+      await _auth.signOut();
+      return const Resultat.echec('Profil introuvable, contacte l\'administrateur');
+    }
+    final Utilisateur utilisateur = await _synchroniserEmail(
+      compte,
+      Utilisateur.fromMap(document.id, document.data()!),
+    );
+    // Compte bloqué : on ne le laisse pas connecté
+    if (utilisateur.statut == StatutUtilisateur.bloque) {
+      await _auth.signOut();
+      return Resultat.echec(
+        UtilisateurRepository.messageBloque(utilisateur.motif),
+      );
+    }
+    await _memoriser(utilisateur);
+    // Comptes créés avant la connexion par numéro : on crée leur fiche
+    await _ajouterFicheTelephone(utilisateur);
+    return Resultat.succes(utilisateur);
+  }
+
+  /// Le numéro du profil a changé : l'ancien, vérifié par SMS, ne doit plus
+  /// ouvrir le compte. Au mieux : si ça échoue, le prochain
+  /// verifierTelephone le remplacera.
+  Future<void> _oublierNumeroVerifie() async {
+    final User? compte = _auth.currentUser;
+    if (compte == null || compte.phoneNumber == null) {
+      return;
+    }
+    try {
+      await compte.unlink(PhoneAuthProvider.PROVIDER_ID);
+    } on FirebaseAuthException {
+      // rien : voir ci-dessus
+    }
+  }
+
+  /// La fiche telephones/{numero} existe-t-elle, et est-elle à moi ?
+  /// (supprimer une fiche absente ou d'un autre ferait échouer tout le lot)
+  Future<bool> _ficheEstAMoi(String numero) async {
+    final DocumentSnapshot<Map<String, dynamic>> fiche =
+        await _telephones.doc(numero).get();
+    return fiche.exists && fiche.data()!['uid'] == _auth.currentUser?.uid;
+  }
+
+  /// Crée la fiche du numéro si elle manque (comptes créés avant la
+  /// connexion par numéro). Au mieux : en cas d'échec, on réessaiera.
+  Future<void> _ajouterFicheTelephone(Utilisateur utilisateur) async {
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(utilisateur.telephone);
+    if (numero == null) {
+      return;
+    }
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> fiche =
+          await _telephones.doc(numero).get();
+      if (!fiche.exists) {
+        await _telephones.doc(numero).set({
+          'uid': utilisateur.id,
+          'email': utilisateur.email,
+        });
+      }
+    } on FirebaseException {
+      // rien : la connexion par e-mail marche quand même
     }
   }
 
@@ -671,6 +1003,23 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         return 'Trop de tentatives, réessaie dans quelques minutes';
       case 'network-request-failed':
         return 'Pas de connexion Internet';
+      // ----- Code SMS -----
+      case 'invalid-verification-code':
+        return 'Code incorrect';
+      case 'invalid-verification-id':
+      case 'session-expired':
+        return 'Code expiré : demande un nouveau code';
+      case 'invalid-phone-number':
+        return 'Numéro de téléphone invalide (8 chiffres)';
+      case 'quota-exceeded':
+        return 'Trop de SMS envoyés, réessaie plus tard';
+      case 'credential-already-in-use':
+        return 'Ce numéro est déjà vérifié sur un autre compte';
+      case 'operation-not-allowed':
+        return 'Ce mode de connexion n\'est pas activé';
+      case 'app-not-authorized':
+      case 'missing-client-identifier':
+        return 'Connexion par SMS indisponible sur cet appareil';
       default:
         return 'Une erreur est survenue ($code)';
     }

@@ -6,6 +6,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/houmani_logo.dart';
@@ -36,11 +37,11 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
   /// L'heure de la demande, ex : "Aujourd'hui, 15:42".
   String _heureDemande(DateTime? date) {
     if (date == null) {
-      return 'Aujourd\'hui';
+      return tr('Aujourd\'hui', 'Lyoum');
     }
     final String heures = date.hour.toString().padLeft(2, '0');
     final String minutes = date.minute.toString().padLeft(2, '0');
-    return 'Aujourd\'hui, $heures:$minutes';
+    return tr('Aujourd\'hui, $heures:$minutes', 'Lyoum, $heures:$minutes');
   }
 
   void _afficherMessage(String texte) {
@@ -73,7 +74,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
     }
     final Utilisateur utilisateur = resultat.donnee!;
     // Le message reste visible sur l'écran suivant (ScaffoldMessenger commun)
-    _afficherMessage(_messageSelonStatut(utilisateur.statut));
+    _afficherMessage(_messageSelonStatut(utilisateur));
     // Même choix d'écran qu'à la connexion et au démarrage
     final String? chemin = cheminSelonStatut(utilisateur);
     if (chemin != null && chemin != '/attente') {
@@ -81,16 +82,29 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
     }
   }
 
-  String _messageSelonStatut(StatutUtilisateur statut) {
-    switch (statut) {
+  String _messageSelonStatut(Utilisateur utilisateur) {
+    switch (utilisateur.statut) {
       case StatutUtilisateur.actif:
-        return 'Ta demande a été acceptée !';
+        return tr('Ta demande a été acceptée !', 'Demande mte3ek t9eblet !');
       case StatutUtilisateur.refuse:
-        return 'Ta demande a été refusée : choisis un autre quartier';
+        // Le motif donné par l'admin, s'il y en a un
+        if (utilisateur.motif.isNotEmpty) {
+          return tr(
+            'Ta demande a été refusée : ${utilisateur.motif}',
+            'Demande mte3ek tarfdhet : ${utilisateur.motif}',
+          );
+        }
+        return tr(
+          'Ta demande a été refusée : choisis un autre quartier',
+          'Demande mte3ek tarfdhet : a5tar houma o5ra',
+        );
       case StatutUtilisateur.bloque:
-        return 'Ton compte a été bloqué par l\'administrateur';
+        return UtilisateurRepository.messageBloque(utilisateur.motif);
       case StatutUtilisateur.enAttente:
-        return 'Toujours en attente de validation';
+        return tr(
+          'Toujours en attente de validation',
+          'Mazelet testanna fel validation',
+        );
     }
   }
 
@@ -99,10 +113,14 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Contacter l\'administrateur'),
-          content: const Text(
-            'Un message a été envoyé à l\'administrateur de ton quartier. '
-            'Il te répondra par notification.',
+          title: Text(tr('Contacter l\'administrateur', 'Kallem el admin')),
+          content: Text(
+            tr(
+              'Un message a été envoyé à l\'administrateur de ton quartier. '
+                  'Il te répondra par notification.',
+              'Tba3thet risala lel admin mta3 houmtek. '
+                  'Bech yjewbek b notification.',
+            ),
           ),
           actions: [
             TextButton(
@@ -124,9 +142,9 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(
-            titre: 'Validation en cours',
-            action: BoutonDeconnexion(),
+          AppHeader(
+            titre: tr('Validation en cours', 'Testanna el validation'),
+            action: const BoutonDeconnexion(),
           ),
           Expanded(
             child: ListView(
@@ -138,7 +156,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                     width: 104,
                     height: 104,
                     alignment: Alignment.center,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.primaryLight,
                       shape: BoxShape.circle,
                     ),
@@ -146,18 +164,25 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Demande envoyée !',
+                Text(
+                  tr('Demande envoyée !', 'Demande tba3thet !'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'L\'administrateur de ${utilisateur.quartier} doit valider '
-                  'ton inscription. Reviens vérifier ta demande un peu plus '
-                  'tard.',
+                  tr(
+                    'L\'administrateur de ${utilisateur.quartier} doit valider '
+                        'ton inscription. Reviens vérifier ta demande un peu '
+                        'plus tard.',
+                    'El admin mta3 ${utilisateur.quartier} lazem y9abel '
+                        'inscription mte3ek. Arja3 thabbet ba3d chwaya.',
+                  ),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),
@@ -169,9 +194,9 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Suivi de la validation',
-                        style: TextStyle(
+                      Text(
+                        tr('Suivi de la validation', 'Win wsolt el validation'),
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -180,26 +205,29 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                       _etape(
                         icone: Icons.check_circle,
                         couleur: AppColors.secondary,
-                        titre: 'Demande envoyée',
+                        titre: tr('Demande envoyée', 'Demande tba3thet'),
                         detail: _heureDemande(utilisateur.dateDemande),
                       ),
-                      const Divider(color: AppColors.border),
+                      Divider(color: AppColors.border),
                       _etape(
                         icone: Icons.radio_button_checked,
                         couleur: AppColors.warning,
-                        titre: 'Validation par l\'admin',
-                        detail: 'En général sous 24 h',
+                        titre: tr('Validation par l\'admin', 'El admin y9abel'),
+                        detail: tr('En général sous 24 h', 'Ghaleban fi 24 se3a'),
                         // Le badge "En attente" commun à toute l'app
                         badge: const StatusBadge(
                           statut: StatutSignalement.enAttente,
                         ),
                       ),
-                      const Divider(color: AppColors.border),
+                      Divider(color: AppColors.border),
                       _etape(
                         icone: Icons.radio_button_unchecked,
                         couleur: AppColors.border,
-                        titre: 'Accès à ta houma',
-                        detail: 'Services, signalements, événements',
+                        titre: tr('Accès à ta houma', 'Todkhol l houmtek'),
+                        detail: tr(
+                          'Services, signalements, événements',
+                          'Services, signalements w événements',
+                        ),
                         aVenir: true,
                       ),
                     ],
@@ -209,13 +237,13 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
 
                 // null pendant le chargement : bouton désactivé
                 PrimaryButton(
-                  texte: 'Vérifier ma demande',
+                  texte: tr('Vérifier ma demande', 'Thabbet fel demande'),
                   onPressed: _enChargement ? null : _verifierDemande,
                 ),
                 if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 12),
                 SecondaryButton(
-                  texte: 'Modifier mon quartier',
+                  texte: tr('Modifier mon quartier', 'Badel houmti'),
                   onPressed: () {
                     context.go('/code-quartier');
                   },
@@ -226,9 +254,9 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                     onPressed: () {
                       _contacterAdmin(context);
                     },
-                    child: const Text(
-                      'Contacter l\'administrateur',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    child: Text(
+                      tr('Contacter l\'administrateur', 'Kallem el admin'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -266,7 +294,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
             const SizedBox(height: 2),
             Text(
               detail,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
               ),

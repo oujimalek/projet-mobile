@@ -16,6 +16,8 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>houmani</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Houmani utilise ta position pour trouver le quartier où tu habites.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

@@ -108,11 +108,30 @@ void main() {
         id: 'q2',
         nom: 'Cité El Wafa',
         localisation: 'Ennasr 1, Ariana',
+        aUnAdmin: true,
       ));
       final Quartier? q = await cache.lireQuartier();
       expect(q!.id, 'q2');
       expect(q.nom, 'Cité El Wafa');
       expect(q.localisation, 'Ennasr 1, Ariana');
+      expect(q.aUnAdmin, true);
+      expect(q.position, isNull);
+      expect(q.contour, isEmpty);
+    });
+
+    test('quartier : la position et le contour sont gardés', () async {
+      await cache.enregistrerQuartier(const Quartier(
+        id: 'q1',
+        nom: 'El Yasmine',
+        localisation: 'Ariana',
+        position: PointGps(36.8625, 10.17),
+        contour: [PointGps(36.864, 10.168), PointGps(36.861, 10.172)],
+      ));
+      final Quartier? q = await cache.lireQuartier();
+      expect(q!.position!.latitude, 36.8625);
+      expect(q.position!.longitude, 10.17);
+      expect(q.contour.length, 2);
+      expect(q.contour[1].longitude, 10.172);
     });
 
     test('vider efface l\'utilisateur et le quartier', () async {
@@ -134,6 +153,32 @@ void main() {
       await cache.oublierQuartier();
       expect(await cache.lireQuartier(), isNull);
       expect((await cache.lireUtilisateur())?.id, amira.id);
+    });
+
+    test('thème : vide au départ, puis on relit le choix', () async {
+      expect(await cache.lireTheme(), isNull);
+      await cache.enregistrerTheme('sombre');
+      expect(await cache.lireTheme(), 'sombre');
+    });
+
+    test('vider garde le thème (réglage du téléphone)', () async {
+      await cache.enregistrerUtilisateur(amira);
+      await cache.enregistrerTheme('clair');
+      await cache.vider();
+      expect(await cache.lireUtilisateur(), isNull);
+      expect(await cache.lireTheme(), 'clair');
+    });
+
+    test('langue : vide au départ, puis on relit le choix', () async {
+      expect(await cache.lireLangue(), isNull);
+      await cache.enregistrerLangue('derja');
+      expect(await cache.lireLangue(), 'derja');
+    });
+
+    test('vider garde la langue (réglage du téléphone)', () async {
+      await cache.enregistrerLangue('derja');
+      await cache.vider();
+      expect(await cache.lireLangue(), 'derja');
     });
 
     test('les données restent sur le disque après fermer()', () async {

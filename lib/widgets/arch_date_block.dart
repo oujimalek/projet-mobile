@@ -22,7 +22,7 @@ class ArchDateBlock extends StatelessWidget {
       width: 56,
       height: 66,
       padding: const EdgeInsets.only(top: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         // Haut très arrondi = forme d'arc ; bas légèrement arrondi
         borderRadius: BorderRadius.only(

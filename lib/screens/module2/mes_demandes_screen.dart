@@ -95,7 +95,7 @@ class _MesDemandesScreenState extends State<MesDemandesScreen> {
                       _afficherEnvoyees
                           ? 'Tu n\'as envoyé aucune demande'
                           : 'Tu n\'as reçu aucune demande',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                   )
                 : ListView.builder(
@@ -153,7 +153,7 @@ class _MesDemandesScreenState extends State<MesDemandesScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '$phrase · ${depuisQuand(demande.dateDemande)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               color: AppColors.textSecondary,
                             ),
@@ -190,7 +190,7 @@ class _MesDemandesScreenState extends State<MesDemandesScreen> {
         '$auteur : ${dernier.texte}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
       ),
     );
   }
@@ -215,7 +215,7 @@ class _MesDemandesScreenState extends State<MesDemandesScreen> {
               width: 22,
               height: 22,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.error,
                 shape: BoxShape.circle,
               ),
@@ -297,7 +297,7 @@ class _MesDemandesScreenState extends State<MesDemandesScreen> {
         boutons.add(const SizedBox(height: 12));
         if (demande.evaluee) {
           boutons.add(
-            const Text(
+            Text(
               'Service évalué, merci !',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
+import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module1/widgets_module1.dart';
 import 'mock_utilisateur_repository.dart';
 
@@ -161,6 +162,192 @@ void main() {
       expect(q.localisation, '');
       expect(q.codeInvitation, '');
       expect(q.nbMembres, 0);
+      expect(q.position, isNull);
+      expect(q.contour, isEmpty);
+      expect(q.aUnePosition, false);
+    });
+
+    test('fromMap lit la position et le contour (GeoPoint)', () {
+      final Quartier q = Quartier.fromMap('q1', {
+        'nom': 'El Yasmine',
+        'position': const GeoPoint(36.86, 10.17),
+        'contour': [const GeoPoint(36.1, 10.1), const GeoPoint(36.2, 10.2)],
+      });
+      expect(q.position!.latitude, 36.86);
+      expect(q.position!.longitude, 10.17);
+      expect(q.contour.length, 2);
+      expect(q.contour[1].latitude, 36.2);
+      expect(q.aUnePosition, true);
+    });
+
+    test('fromMap accepte des points {lat, lng} et ignore le reste', () {
+      final Quartier q = Quartier.fromMap('q1', {
+        'position': {'lat': 36, 'lng': 10.5},
+        'contour': [
+          {'lat': 36.1, 'lng': 10.1},
+          'pas un point',
+        ],
+      });
+      expect(q.position!.latitude, 36.0);
+      expect(q.position!.longitude, 10.5);
+      expect(q.contour.length, 1);
+    });
+
+    // Un carré : latitude 36.0 à 36.2, longitude 10.0 à 10.2
+    const Quartier carre = Quartier(
+      id: 'c1',
+      nom: 'Charguia 1',
+      localisation: 'Ariana',
+      contour: [
+        PointGps(36.0, 10.0),
+        PointGps(36.2, 10.0),
+        PointGps(36.2, 10.2),
+        PointGps(36.0, 10.2),
+      ],
+    );
+
+    test('contient : un point au milieu est dedans', () {
+      expect(carre.contient(const PointGps(36.1, 10.1)), true);
+    });
+
+    test('contient : des points à côté sont dehors', () {
+      expect(carre.contient(const PointGps(36.3, 10.1)), false); // au nord
+      expect(carre.contient(const PointGps(36.1, 10.3)), false); // à l'est
+      expect(carre.contient(const PointGps(35.9, 9.9)), false);
+    });
+
+    test('contient : forme en L (pas seulement des carrés)', () {
+      const Quartier enL = Quartier(
+        id: 'l',
+        nom: 'L',
+        localisation: '',
+        contour: [
+          PointGps(0, 0),
+          PointGps(2, 0),
+          PointGps(2, 1),
+          PointGps(1, 1),
+          PointGps(1, 2),
+          PointGps(0, 2),
+        ],
+      );
+      expect(enL.contient(const PointGps(0.5, 0.5)), true);
+      expect(enL.contient(const PointGps(1.5, 0.5)), true);
+      expect(enL.contient(const PointGps(1.5, 1.5)), false); // le "creux"
+    });
+
+    test('contient : faux sans contour (moins de 3 points)', () {
+      const Quartier sans = Quartier(id: 'x', nom: '', localisation: '');
+      expect(sans.contient(const PointGps(0, 0)), false);
+    });
+
+    test('centre : la position, sinon le milieu du contour', () {
+      expect(carre.centre!.latitude, closeTo(36.1, 1e-9));
+      expect(carre.centre!.longitude, closeTo(10.1, 1e-9));
+      const Quartier avecPosition = Quartier(
+        id: 'p',
+        nom: '',
+        localisation: '',
+        position: PointGps(1, 2),
+      );
+      expect(avecPosition.centre!.latitude, 1);
+      const Quartier rien = Quartier(id: 'r', nom: '', localisation: '');
+      expect(rien.centre, isNull);
+    });
+
+    test('un contour seul suffit pour être sur la carte', () {
+      const Quartier q = Quartier(
+        id: 'q1',
+        nom: 'A',
+        localisation: 'B',
+        contour: [PointGps(36.1, 10.1)],
+      );
+      expect(q.aUnePosition, true);
+    });
+
+    test('toMap ajoute position et contour en GeoPoint quand ils existent', () {
+      const Quartier q = Quartier(
+        id: 'q1',
+        nom: 'A',
+        localisation: 'B',
+        position: PointGps(36.86, 10.17),
+        contour: [PointGps(36.1, 10.1)],
+      );
+      final Map<String, dynamic> map = q.toMap();
+      expect(map['position'], const GeoPoint(36.86, 10.17));
+      expect(map['contour'], [const GeoPoint(36.1, 10.1)]);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  group('Changement de quartier (refusChangement)', () {
+    const Quartier q1 =
+        Quartier(id: 'q1', nom: 'El Yasmine', localisation: 'A', aUnAdmin: true);
+    const Quartier q2 =
+        Quartier(id: 'q2', nom: 'El Wafa', localisation: 'B', aUnAdmin: true);
+    const Utilisateur resident = Utilisateur(
+      id: 'r1',
+      prenom: 'Rim',
+      nom: 'Saidi',
+      email: '',
+      telephone: '',
+      quartierId: 'q1',
+      quartier: 'El Yasmine',
+      residence: 'El Yasmine',
+    );
+
+    test('un résident actif peut changer de quartier', () {
+      expect(UtilisateurRepository.refusChangement(resident, q2), isNull);
+    });
+
+    test('pas de demande vers un quartier sans administrateur', () {
+      const Quartier sansAdmin =
+          Quartier(id: 'q3', nom: 'Les Jasmins', localisation: 'C');
+      expect(
+        UtilisateurRepository.refusChangement(resident, sansAdmin),
+        'Ce quartier n\'a pas encore d\'administrateur',
+      );
+    });
+
+    test('un résident actif ne peut pas redemander son quartier', () {
+      expect(
+        UtilisateurRepository.refusChangement(resident, q1),
+        'Tu fais déjà partie de ce quartier',
+      );
+    });
+
+    test('un admin ne peut pas quitter son quartier', () {
+      const Utilisateur admin = Utilisateur(
+        id: 'a1',
+        prenom: 'Amira',
+        nom: 'Ben Salah',
+        email: '',
+        telephone: '',
+        quartierId: 'q1',
+        quartier: 'El Yasmine',
+        residence: 'El Yasmine',
+        role: RoleUtilisateur.admin,
+      );
+      expect(
+        UtilisateurRepository.refusChangement(admin, q2),
+        'Un administrateur ne peut pas quitter son quartier',
+      );
+    });
+
+    test('pas de restriction pour un compte en attente ou refusé', () {
+      expect(
+        UtilisateurRepository.refusChangement(
+          resident.copier(statut: StatutUtilisateur.refuse),
+          q1,
+        ),
+        isNull,
+      );
+      expect(
+        UtilisateurRepository.refusChangement(
+          resident.copier(statut: StatutUtilisateur.enAttente),
+          q1,
+        ),
+        isNull,
+      );
     });
   });
 
@@ -210,13 +397,211 @@ void main() {
       });
 
       test('échoue pour un compte bloqué', () async {
-        await repo.bloquerMembre('u1');
+        await repo.bloquerMembre('u1', 'Comportement');
         final Resultat<dynamic> r = await repo.connexion(
           MockUtilisateurRepository.emailDemo,
           MockUtilisateurRepository.motDePasseDemo,
         );
         expect(r.estSucces, false);
-        expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
+        // Le membre voit la raison donnée par l'admin
+        expect(
+          r.erreur,
+          'Ton compte a été bloqué par l\'administrateur : Comportement',
+        );
+      });
+    });
+
+    group('connexion par téléphone', () {
+      test('réussit avec le numéro seul (8 chiffres)', () async {
+        final Resultat<dynamic> r = await repo.connexion(
+          '22345678',
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect(r.estSucces, true);
+        expect(r.donnee.id, 'u1');
+      });
+
+      test('réussit avec +216 et des espaces', () async {
+        final Resultat<dynamic> r = await repo.connexion(
+          '+216 22 345 678',
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect(r.estSucces, true);
+      });
+
+      test('échoue pour un numéro inconnu', () async {
+        final Resultat<dynamic> r = await repo.connexion(
+          '29999999',
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Numéro ou mot de passe incorrect');
+      });
+
+      test('échoue avec un mauvais mot de passe', () async {
+        final Resultat<dynamic> r = await repo.connexion('22345678', 'faux');
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Numéro ou mot de passe incorrect');
+      });
+
+      test('l\'inscription refuse un numéro déjà pris', () async {
+        final Resultat<dynamic> r = await repo.inscription(
+          nomComplet: 'Autre Personne',
+          telephone: '22 345 678',
+          email: 'autre@houmani.tn',
+          motDePasse: 'abc12345',
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Ce numéro est déjà utilisé par un autre compte');
+      });
+
+      test('l\'inscription refuse un numéro invalide', () async {
+        final Resultat<dynamic> r = await repo.inscription(
+          nomComplet: 'Autre Personne',
+          telephone: '1234',
+          email: 'autre@houmani.tn',
+          motDePasse: 'abc12345',
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Numéro de téléphone invalide (8 chiffres)');
+      });
+
+      test('modifierProfil refuse le numéro d\'un autre membre', () async {
+        await repo.connexion(
+          MockUtilisateurRepository.emailDemo,
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        final Resultat<void> r = await repo.modifierProfil(
+          nomComplet: 'Amira Ben Salah',
+          telephone: '+216 98 765 432',
+          logement: 'Bloc B - Appt 12',
+          competences: const [],
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Ce numéro est déjà utilisé par un autre compte');
+      });
+
+      test('modifierProfil garde son propre numéro sans erreur', () async {
+        await repo.connexion(
+          MockUtilisateurRepository.emailDemo,
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        final Resultat<void> r = await repo.modifierProfil(
+          nomComplet: 'Amira Ben Salah',
+          telephone: '22 345 678',
+          logement: 'Bloc B - Appt 12',
+          competences: const [],
+        );
+        expect(r.estSucces, true);
+      });
+    });
+
+    group('normaliserTelephone', () {
+      test('accepte 8 chiffres, +216 et 00216', () {
+        expect(UtilisateurRepository.normaliserTelephone('22 345 678'),
+            '22345678');
+        expect(UtilisateurRepository.normaliserTelephone('+216 22345678'),
+            '22345678');
+        expect(UtilisateurRepository.normaliserTelephone('0021622345678'),
+            '22345678');
+      });
+
+      test('refuse les autres longueurs', () {
+        expect(UtilisateurRepository.normaliserTelephone('1234'), null);
+        expect(UtilisateurRepository.normaliserTelephone('223456789'), null);
+        expect(UtilisateurRepository.normaliserTelephone(''), null);
+      });
+    });
+
+    group('code SMS', () {
+      test('connexion par SMS avec un numéro vérifié et le bon code', () async {
+        expect((await repo.envoyerCodeSms('+216 22 345 678')).estSucces, true);
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.estSucces, true);
+        expect(r.donnee!.id, 'u1');
+      });
+
+      test('mauvais code : refusé', () async {
+        await repo.envoyerCodeSms('22345678');
+        final Resultat<Utilisateur> r = await repo.connexionParSms('000000');
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Code incorrect');
+      });
+
+      test('sans avoir demandé de code : refusé', () async {
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, 'Demande d\'abord un code');
+      });
+
+      test('numéro invalide : le SMS ne part pas', () async {
+        final Resultat<void> r = await repo.envoyerCodeSms('1234');
+        expect(r.erreur, 'Numéro de téléphone invalide (8 chiffres)');
+      });
+
+      test('numéro jamais vérifié (ou inconnu) : "pas encore vérifié"',
+          () async {
+        await repo.envoyerCodeSms('98 765 432'); // Sarra : pas vérifié
+        Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, UtilisateurRepository.numeroNonVerifie);
+
+        await repo.envoyerCodeSms('29 999 999'); // personne
+        r = await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, UtilisateurRepository.numeroNonVerifie);
+      });
+
+      test('vérifier son numéro, puis se connecter par SMS', () async {
+        await creerCompte(); // Nour, +216 20 000 000
+        expect(repo.telephoneEstVerifie(), false);
+
+        await repo.envoyerCodeSms('+216 20 000 000');
+        final Resultat<void> v =
+            await repo.verifierTelephone(MockUtilisateurRepository.codeSmsDemo);
+        expect(v.estSucces, true);
+        expect(repo.telephoneEstVerifie(), true);
+
+        await repo.envoyerCodeSms('20000000');
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.donnee!.prenom, 'Nour');
+      });
+
+      test('vérifier : le code doit aller au numéro du profil', () async {
+        await creerCompte();
+        await repo.envoyerCodeSms('22 345 678'); // pas son numéro
+        final Resultat<void> r =
+            await repo.verifierTelephone(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, 'Le code doit être envoyé au numéro de ton profil');
+        expect(repo.telephoneEstVerifie(), false);
+      });
+
+      test('changer de numéro : il n\'est plus vérifié', () async {
+        expect(repo.telephoneEstVerifie(), true); // démo : déjà vérifié
+        await repo.modifierProfil(
+          nomComplet: 'Amira Ben Salah',
+          telephone: '+216 21 000 111',
+          logement: 'Bloc B - Appt 12',
+          competences: const [],
+        );
+        expect(repo.telephoneEstVerifie(), false);
+
+        await repo.envoyerCodeSms('21000111');
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, UtilisateurRepository.numeroNonVerifie);
+      });
+
+      test('compte bloqué : pas de connexion par SMS', () async {
+        await repo.bloquerMembre('u1', 'Comportement');
+        await repo.envoyerCodeSms('22345678');
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(
+          r.erreur,
+          'Ton compte a été bloqué par l\'administrateur : Comportement',
+        );
       });
     });
 
@@ -294,7 +679,12 @@ void main() {
       test('rejoindreQuartier est refusé avant la vérification', () async {
         await creerCompte();
         final Resultat<void> r = await repo.rejoindreQuartier(
-          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
         );
         expect(r.estSucces, false);
         expect(r.erreur, 'Action non autorisée');
@@ -305,7 +695,12 @@ void main() {
         await creerCompte();
         await repo.simulerVerificationEmail();
         final Resultat<void> r = await repo.rejoindreQuartier(
-          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
         );
         expect(r.estSucces, true);
 
@@ -314,6 +709,112 @@ void main() {
         expect(u.quartier, 'Cité El Wafa');
         expect(u.residence, 'Cité El Wafa');
         expect(u.statut, StatutUtilisateur.enAttente);
+      });
+
+      test('l\'admin de démo ne peut pas changer de quartier', () async {
+        final Resultat<void> r = await repo.rejoindreQuartier(
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Un administrateur ne peut pas quitter son quartier');
+        expect(repo.getUtilisateurConnecte().quartierId, 'q1');
+      });
+
+      test('un résident actif change de quartier et repasse en attente',
+          () async {
+        // Un résident actif de q1 (e-mail vérifié par ajouterCompte)
+        repo.ajouterCompte(
+          const Utilisateur(
+            id: 'r1',
+            prenom: 'Rim',
+            nom: 'Saidi',
+            email: 'rim@houmani.tn',
+            telephone: '',
+            quartierId: 'q1',
+            quartier: 'Résidence El Yasmine',
+            residence: 'Résidence El Yasmine',
+          ),
+          'secret123',
+        );
+        await repo.connexion('rim@houmani.tn', 'secret123');
+        expect(repo.getUtilisateurConnecte().statut, StatutUtilisateur.actif);
+
+        // Redemander q1 : refusé
+        final Resultat<void> meme = await repo.rejoindreQuartier(
+          const Quartier(
+            id: 'q1',
+            nom: 'Résidence El Yasmine',
+            localisation: 'A',
+            aUnAdmin: true,
+          ),
+        );
+        expect(meme.erreur, 'Tu fais déjà partie de ce quartier');
+
+        final Resultat<void> r = await repo.rejoindreQuartier(
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
+        );
+        expect(r.estSucces, true);
+        expect(repo.getUtilisateurConnecte().quartierId, 'q2');
+        expect(repo.getUtilisateurConnecte().statut, StatutUtilisateur.enAttente);
+      });
+
+      test('getCodeInvitation renvoie le code du quartier de l\'admin',
+          () async {
+        final Resultat<String?> r = await repo.getCodeInvitation();
+        expect(r.donnee, 'YAS72B');
+      });
+
+      test('getCodeInvitation est refusé à un résident', () async {
+        await creerCompte();
+        final Resultat<String?> r = await repo.getCodeInvitation();
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Action non autorisée');
+      });
+
+      const List<PointGps> triangle = [
+        PointGps(36.0, 10.0),
+        PointGps(36.3, 10.0),
+        PointGps(36.0, 10.3),
+      ];
+
+      test('enregistrerContour : l\'admin change les limites et le centre',
+          () async {
+        final Resultat<void> r = await repo.enregistrerContour(triangle);
+        expect(r.estSucces, true);
+        final Quartier q = (await repo.getQuartierConnecte()).donnee!;
+        expect(q.contour.length, 3);
+        expect(q.position!.latitude, closeTo(36.1, 1e-9));
+        expect(q.position!.longitude, closeTo(10.1, 1e-9));
+      });
+
+      test('enregistrerContour : au moins 3 points', () async {
+        final Resultat<void> r =
+            await repo.enregistrerContour(triangle.sublist(0, 2));
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Place au moins 3 points sur la carte');
+      });
+
+      test('enregistrerContour est refusé à un résident', () async {
+        await creerCompte();
+        final Resultat<void> r = await repo.enregistrerContour(triangle);
+        expect(r.erreur, 'Action non autorisée');
+      });
+
+      test('getQuartierConnecte donne la position du quartier de démo',
+          () async {
+        final Resultat<Quartier?> r = await repo.getQuartierConnecte();
+        expect(r.donnee!.aUnePosition, true);
+        expect(r.donnee!.contour.length, 4);
       });
 
       test('trouverParCode accepte un code en minuscules', () async {
@@ -343,15 +844,30 @@ void main() {
         expect(r.donnee, 2);
       });
 
-      test('refuserMembre met le statut refuse', () async {
-        await repo.refuserMembre('u4');
+      test('refuserMembre met le statut refuse et garde le motif', () async {
+        await repo.refuserMembre('u4', '  Logement introuvable  ');
         final Resultat<List<Utilisateur>> refuses =
             await repo.getMembres(StatutUtilisateur.refuse);
         expect(refuses.donnee!.map((m) => m.id), ['u4']);
+        // Espaces autour enlevés
+        expect(refuses.donnee!.first.motif, 'Logement introuvable');
+      });
+
+      test('refuser ou bloquer sans motif valable : refusé', () async {
+        final Resultat<void> vide = await repo.refuserMembre('u4', '  ');
+        expect(vide.estSucces, false);
+        expect(vide.erreur, UtilisateurRepository.refusMotif(''));
+        final Resultat<void> long =
+            await repo.bloquerMembre('u2', 'x' * 201);
+        expect(long.estSucces, false);
+        // Rien n'a changé
+        final Resultat<int> enAttente =
+            await repo.compterMembres(StatutUtilisateur.enAttente);
+        expect(enAttente.donnee, 3);
       });
 
       test('bloquerMembre puis debloquerMembre change le statut', () async {
-        await repo.bloquerMembre('u2');
+        await repo.bloquerMembre('u2', 'Insultes');
         final Resultat<int> bloques =
             await repo.compterMembres(StatutUtilisateur.bloque);
         expect(bloques.donnee, 2);
@@ -360,6 +876,10 @@ void main() {
         final Resultat<int> bloquesApres =
             await repo.compterMembres(StatutUtilisateur.bloque);
         expect(bloquesApres.donnee, 1);
+        // Débloqué : l'ancien motif est effacé
+        final Resultat<List<Utilisateur>> actifs =
+            await repo.getMembres(StatutUtilisateur.actif);
+        expect(actifs.donnee!.firstWhere((m) => m.id == 'u2').motif, '');
       });
 
       test('validerMembre échoue pour un id inconnu', () async {
@@ -423,6 +943,58 @@ void main() {
         expect(r.estSucces, false);
         expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
         expect(repo.getUtilisateurConnecte().id, isEmpty);
+      });
+    });
+
+    group('motif de refus / blocage', () {
+      test('refusMotif : 3 à 200 caractères', () {
+        expect(UtilisateurRepository.refusMotif('ok'), isNotNull);
+        expect(UtilisateurRepository.refusMotif('   abc   '), isNull);
+        expect(UtilisateurRepository.refusMotif('x' * 200), isNull);
+        expect(UtilisateurRepository.refusMotif('x' * 201), isNotNull);
+      });
+
+      test('messageBloque ajoute le motif s\'il y en a un', () {
+        expect(
+          UtilisateurRepository.messageBloque(''),
+          'Ton compte a été bloqué par l\'administrateur',
+        );
+        expect(
+          UtilisateurRepository.messageBloque('Spam'),
+          'Ton compte a été bloqué par l\'administrateur : Spam',
+        );
+      });
+
+      test('Utilisateur : le motif passe par toMap / fromMap', () {
+        const Utilisateur u = Utilisateur(
+          id: 'm1',
+          prenom: 'A',
+          nom: 'B',
+          email: '',
+          telephone: '',
+          quartier: '',
+          residence: '',
+          motif: 'Spam',
+        );
+        expect(Utilisateur.fromMap('m1', u.toMap()).motif, 'Spam');
+        // Ancien document sans motif : vide
+        expect(Utilisateur.fromMap('m1', {}).motif, '');
+      });
+
+      test('Quartier.fromMap : aUnAdmin seulement si true', () {
+        expect(Quartier.fromMap('q', {'aUnAdmin': true}).aUnAdmin, true);
+        expect(Quartier.fromMap('q', {}).aUnAdmin, false);
+      });
+
+      test('on ne rejoint pas un quartier sans administrateur', () async {
+        await creerCompte();
+        await repo.simulerVerificationEmail();
+        final Resultat<List<Quartier>> trouves =
+            await repo.rechercherQuartiers('Jasmins');
+        final Quartier sansAdmin = trouves.donnee!.single;
+        expect(sansAdmin.aUnAdmin, false);
+        final Resultat<void> r = await repo.rejoindreQuartier(sansAdmin);
+        expect(r.erreur, 'Ce quartier n\'a pas encore d\'administrateur');
       });
     });
 

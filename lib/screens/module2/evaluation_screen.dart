@@ -91,7 +91,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
           const AppHeader(titre: 'Évaluer le service'),
           Expanded(
             child: demande == null
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Cette demande n\'existe plus',
                       style: TextStyle(color: AppColors.textSecondary),
@@ -127,7 +127,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
               Text(
                 titreService,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 20),
               _etoiles(),
@@ -160,7 +160,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.card,
             border: Border(top: BorderSide(color: AppColors.border)),
           ),

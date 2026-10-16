@@ -5,6 +5,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/houmani_logo.dart';
@@ -47,33 +48,26 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     super.dispose();
   }
 
-  /// Compte le nombre de chiffres dans un texte (pour le téléphone).
-  int _compterChiffres(String texte) {
-    int nombre = 0;
-    for (int i = 0; i < texte.length; i++) {
-      if ('0123456789'.contains(texte[i])) {
-        nombre++;
-      }
-    }
-    return nombre;
-  }
-
   String? _validerNom(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton nom complet';
+      return tr('Saisis ton nom complet', 'Ekteb esmek kemel');
     }
     if (!valeur.trim().contains(' ')) {
-      return 'Saisis ton prénom et ton nom';
+      return tr('Saisis ton prénom et ton nom', 'Ekteb esmek w la9bek');
     }
     return null;
   }
 
   String? _validerTelephone(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton numéro de téléphone';
+      return tr('Saisis ton numéro de téléphone', 'Ekteb nouméro téléphonek');
     }
-    if (_compterChiffres(valeur) < 8) {
-      return 'Numéro de téléphone invalide (8 chiffres)';
+    // 8 chiffres, avec ou sans +216 : le numéro sert aussi à se connecter
+    if (UtilisateurRepository.normaliserTelephone(valeur) == null) {
+      return tr(
+        'Numéro de téléphone invalide (8 chiffres)',
+        'Nouméro mouch s7i7 (8 ar9am)',
+      );
     }
     return null;
   }
@@ -81,20 +75,20 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
   String? _validerEmail(String? valeur) {
     // Obligatoire : c'est l'identifiant de connexion
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton adresse e-mail';
+      return tr('Saisis ton adresse e-mail', 'Ekteb el e-mail mte3ek');
     }
     if (!valeur.contains('@') || !valeur.contains('.')) {
-      return 'Adresse e-mail invalide';
+      return tr('Adresse e-mail invalide', 'E-mail mouch s7i7');
     }
     return null;
   }
 
   String? _validerMotDePasse(String? valeur) {
     if (valeur == null || valeur.isEmpty) {
-      return 'Choisis un mot de passe';
+      return tr('Choisis un mot de passe', 'A5tar kelmet ser');
     }
     if (valeur.length < 8) {
-      return '8 caractères minimum';
+      return tr('8 caractères minimum', 'Mouch a9al men 8 7rouf');
     }
     return null;
   }
@@ -145,7 +139,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // ----- En-tête : logo + titre -----
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,12 +147,15 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                   HoumaniLogo(taille: 44),
                   SizedBox(height: 16),
                   Text(
-                    'Créer un compte',
+                    tr('Créer un compte', 'A3mel compte'),
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'Rejoins ta houma et entraide-toi avec tes voisins.',
+                    tr(
+                      'Rejoins ta houma et entraide-toi avec tes voisins.',
+                      'Od5ol l houmtek w t3awen m3a jiranek.',
+                    ),
                     style: TextStyle(color: AppColors.textSecondary, height: 1.4),
                   ),
                 ],
@@ -173,14 +170,14 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                 child: Column(
                   children: [
                     AppTextField(
-                      label: 'Nom complet',
+                      label: tr('Nom complet', 'Esmek kemel'),
                       hint: 'Ex : Mohamed Zahi',
                       controller: _nomController,
                       validator: _validerNom,
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
-                      label: 'Numéro de téléphone',
+                      label: tr('Numéro de téléphone', 'Nouméro el téléphone'),
                       hint: '+216 XX XXX XXX',
                       controller: _telephoneController,
                       clavier: TextInputType.phone,
@@ -188,7 +185,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
-                      label: 'Adresse e-mail',
+                      label: tr('Adresse e-mail', 'E-mail'),
                       hint: 'exemple@mail.com',
                       controller: _emailController,
                       clavier: TextInputType.emailAddress,
@@ -196,8 +193,8 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
-                      label: 'Mot de passe',
-                      hint: '8 caractères minimum',
+                      label: tr('Mot de passe', 'Kelmet esser'),
+                      hint: tr('8 caractères minimum', '8 7rouf 3al a9al'),
                       controller: _motDePasseController,
                       motDePasse: true,
                       validator: _validerMotDePasse,
@@ -214,7 +211,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
 
             // null pendant le chargement : bouton désactivé
             PrimaryButton(
-              texte: 'S\'inscrire',
+              texte: tr('S\'inscrire', 'A3mel compte'),
               onPressed: _enChargement ? null : _sInscrire,
             ),
             if (_enChargement) const IndicateurChargement(),
@@ -225,17 +222,17 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Text(
-                  'Déjà membre ?',
+                Text(
+                  tr('Déjà membre ?', '3andek compte ?'),
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
                 TextButton(
                   onPressed: () {
                     context.go('/connexion');
                   },
-                  child: const Text(
-                    'Se connecter',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  child: Text(
+                    tr('Se connecter', 'Od5ol'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -281,7 +278,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                 Checkbox(
                   value: _conditionsAcceptees,
                   activeColor: AppColors.secondary,
-                  side: const BorderSide(color: AppColors.secondary, width: 1.5),
+                  side: BorderSide(color: AppColors.secondary, width: 1.5),
                   onChanged: (valeur) {
                     setState(() {
                       _conditionsAcceptees = valeur ?? false;
@@ -293,15 +290,15 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                   child: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
-                        'J\'accepte les ',
+                      Text(
+                        tr('J\'accepte les ', 'Na9bel '),
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
                       // Le lien ouvre les conditions à lire
                       GestureDetector(
                         onTap: _lireConditions,
-                        child: const Text(
-                          'conditions d\'utilisation',
+                        child: Text(
+                          tr('conditions d\'utilisation', 'chourout el isti3mel'),
                           style: TextStyle(
                             color: AppColors.secondary,
                             fontWeight: FontWeight.w600,
@@ -318,10 +315,13 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
           ),
         ),
         if (_erreurConditions)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 12, top: 6),
             child: Text(
-              'Tu dois accepter les conditions d\'utilisation',
+              tr(
+                'Tu dois accepter les conditions d\'utilisation',
+                'Lazem t9bel chourout el isti3mel',
+              ),
               style: TextStyle(color: AppColors.error, fontSize: 12),
             ),
           ),

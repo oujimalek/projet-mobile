@@ -34,13 +34,23 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   );
 
   // Les quartiers que l'on peut rejoindre
-  static const List<Quartier> _quartiers = [
+  // Pas const : l'admin peut changer le contour (enregistrerContour)
+  final List<Quartier> _quartiers = [
     Quartier(
       id: 'q1',
       nom: 'Résidence El Yasmine',
       localisation: 'Ennasr 2, Ariana',
       codeInvitation: 'YAS72B',
       nbMembres: 42,
+      // Seul quartier placé sur la carte (les autres : pas de coordonnées)
+      position: PointGps(36.8625, 10.1700),
+      contour: [
+        PointGps(36.8640, 10.1680),
+        PointGps(36.8640, 10.1720),
+        PointGps(36.8610, 10.1720),
+        PointGps(36.8610, 10.1680),
+      ],
+      aUnAdmin: true,
     ),
     Quartier(
       id: 'q2',
@@ -48,7 +58,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       localisation: 'Ennasr 1, Ariana',
       codeInvitation: 'WAF18C',
       nbMembres: 18,
+      aUnAdmin: true,
     ),
+    // Pas encore d'administrateur : on ne peut pas le rejoindre
     Quartier(
       id: 'q3',
       nom: 'Résidence Les Jasmins',
@@ -204,19 +216,31 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<Utilisateur>> connexion(
-    String email,
+    String identifiant,
     String motDePasse,
   ) async {
-    final String texte = email.trim().toLowerCase();
+    // Comme Firebase : un numéro est d'abord traduit en e-mail
+    // (ici : le membre qui a ce numéro)
+    if (UtilisateurRepository.estUnNumero(identifiant)) {
+      final Utilisateur? titulaire = _titulaireDuNumero(identifiant);
+      if (titulaire == null || titulaire.email.isEmpty) {
+        return const Resultat.echec('Numéro ou mot de passe incorrect');
+      }
+      final Resultat<Utilisateur> resultat =
+          await connexion(titulaire.email, motDePasse);
+      if (resultat.erreur == 'E-mail ou mot de passe incorrect') {
+        return const Resultat.echec('Numéro ou mot de passe incorrect');
+      }
+      return resultat;
+    }
+    final String texte = identifiant.trim().toLowerCase();
     for (final Utilisateur membre in _membres) {
       if (membre.email.isNotEmpty &&
           membre.email.toLowerCase() == texte &&
           _motsDePasse[membre.id] == motDePasse) {
         // Même règle que Firebase : un compte bloqué reste déconnecté
         if (membre.statut == StatutUtilisateur.bloque) {
-          return const Resultat.echec(
-            'Ton compte a été bloqué par l\'administrateur',
-          );
+          return Resultat.echec(UtilisateurRepository.messageBloque(membre.motif));
         }
         _connecte = membre;
         return Resultat.succes(membre);
@@ -237,6 +261,12 @@ class MockUtilisateurRepository implements UtilisateurRepository {
           membre.email.toLowerCase() == email.trim().toLowerCase()) {
         return const Resultat.echec('Un compte existe déjà avec cet e-mail');
       }
+    }
+    if (UtilisateurRepository.normaliserTelephone(telephone) == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
+    if (_titulaireDuNumero(telephone) != null) {
+      return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
     }
     // Le nom complet est découpé : premier mot = prénom, le reste = nom
     final List<String> mots = nomComplet.trim().split(' ');
@@ -294,6 +324,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     // Les données sont déjà en mémoire : rien à recharger.
     // Comme Firebase : un compte bloqué est déconnecté.
     if (_connecte.statut == StatutUtilisateur.bloque) {
+      final String message = UtilisateurRepository.messageBloque(_connecte.motif);
       _connecte = const Utilisateur(
         id: '',
         prenom: '',
@@ -303,9 +334,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         quartier: '',
         residence: '',
       );
-      return const Resultat.echec(
-        'Ton compte a été bloqué par l\'administrateur',
-      );
+      return Resultat.echec(message);
     }
     return Resultat.succes(_connecte);
   }
@@ -314,6 +343,73 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   Future<Resultat<void>> envoyerLienReinitialisation(String email) async {
     // Pas de vrai e-mail : rien à envoyer
     return const Resultat.succes(null);
+  }
+
+  // =====================================================================
+  // Code SMS
+  // =====================================================================
+
+  /// Le code que "reçoit" chaque numéro (pas de vrai SMS).
+  static const String codeSmsDemo = '123456';
+
+  // Les comptes dont le numéro a été vérifié par SMS (clé = id)
+  final Set<String> _telephonesVerifies = {'u1'};
+
+  // Les 8 chiffres qui ont reçu le dernier code (null : aucun envoi)
+  String? _numeroSms;
+
+  @override
+  Future<Resultat<void>> envoyerCodeSms(String telephone) async {
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
+    _numeroSms = numero;
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<Utilisateur>> connexionParSms(String code) async {
+    final String? numero = _numeroSms;
+    if (numero == null) {
+      return const Resultat.echec('Demande d\'abord un code');
+    }
+    if (code.trim() != codeSmsDemo) {
+      return const Resultat.echec('Code incorrect');
+    }
+    final Utilisateur? titulaire = _titulaireDuNumero(numero);
+    if (titulaire == null || !_telephonesVerifies.contains(titulaire.id)) {
+      return const Resultat.echec(UtilisateurRepository.numeroNonVerifie);
+    }
+    if (titulaire.statut == StatutUtilisateur.bloque) {
+      return Resultat.echec(UtilisateurRepository.messageBloque(titulaire.motif));
+    }
+    _connecte = titulaire;
+    return Resultat.succes(titulaire);
+  }
+
+  @override
+  Future<Resultat<void>> verifierTelephone(String code) async {
+    if (_connecte.id.isEmpty) {
+      return const Resultat.echec('Tu n\'es pas connecté');
+    }
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    if (numero == null || _numeroSms != numero) {
+      return const Resultat.echec(
+        'Le code doit être envoyé au numéro de ton profil',
+      );
+    }
+    if (code.trim() != codeSmsDemo) {
+      return const Resultat.echec('Code incorrect');
+    }
+    _telephonesVerifies.add(_connecte.id);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  bool telephoneEstVerifie() {
+    return _telephonesVerifies.contains(_connecte.id);
   }
 
   // =====================================================================
@@ -338,6 +434,15 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     required List<String> competences,
     String avatar = '',
   }) async {
+    final Utilisateur? titulaire = _titulaireDuNumero(telephone);
+    if (titulaire != null && titulaire.id != _connecte.id) {
+      return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
+    }
+    // Comme Firebase : un nouveau numéro doit être vérifié à nouveau
+    if (UtilisateurRepository.normaliserTelephone(telephone) !=
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone)) {
+      _telephonesVerifies.remove(_connecte.id);
+    }
     final List<String> mots = nomComplet.trim().split(' ');
     _remplacer(
       _connecte.copier(
@@ -402,6 +507,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     _membres.removeWhere((Utilisateur membre) => membre.id == id);
     _motsDePasse.remove(id);
     _emailsVerifies.remove(id);
+    _telephonesVerifies.remove(id);
     _connecte = const Utilisateur(
       id: '',
       prenom: '',
@@ -447,12 +553,18 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     if (!_emailsVerifies.contains(_connecte.id)) {
       return const Resultat.echec('Action non autorisée');
     }
+    final String? refus =
+        UtilisateurRepository.refusChangement(_connecte, quartier);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
     final Utilisateur demande = _connecte.copier(
       quartierId: quartier.id,
       quartier: quartier.nom,
       residence: quartier.nom,
       statut: StatutUtilisateur.enAttente,
       dateDemande: DateTime.now(),
+      motif: '', // nouvelle demande : on oublie un ancien refus
     );
 
     // On l'ajoute à la liste des membres (s'il n'y est pas déjà)
@@ -477,6 +589,44 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       }
     }
     return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<String?>> getCodeInvitation() async {
+    if (!_connecte.estAdmin) {
+      return const Resultat.echec('Action non autorisée');
+    }
+    for (final Quartier quartier in _quartiers) {
+      if (quartier.nom == _connecte.quartier) {
+        return Resultat.succes(quartier.codeInvitation);
+      }
+    }
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> enregistrerContour(List<PointGps> contour) async {
+    final String? refus = UtilisateurRepository.refusContour(_connecte, contour);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    for (int i = 0; i < _quartiers.length; i++) {
+      final Quartier ancien = _quartiers[i];
+      if (ancien.nom == _connecte.quartier) {
+        _quartiers[i] = Quartier(
+          id: ancien.id,
+          nom: ancien.nom,
+          localisation: ancien.localisation,
+          codeInvitation: ancien.codeInvitation,
+          nbMembres: ancien.nbMembres,
+          position: Quartier.milieu(contour),
+          contour: List.of(contour),
+          aUnAdmin: ancien.aUnAdmin,
+        );
+        return const Resultat.succes(null);
+      }
+    }
+    return const Resultat.echec('Quartier introuvable');
   }
 
   // =====================================================================
@@ -519,23 +669,23 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<void>> validerMembre(String id) async {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   @override
-  Future<Resultat<void>> refuserMembre(String id) async {
+  Future<Resultat<void>> refuserMembre(String id, String motif) async {
     // Comme Firebase : le membre passe "refuse" (il n'est plus dans les onglets)
-    return _changerStatut(id, StatutUtilisateur.refuse);
+    return _changerStatut(id, StatutUtilisateur.refuse, motif);
   }
 
   @override
-  Future<Resultat<void>> bloquerMembre(String id) async {
-    return _changerStatut(id, StatutUtilisateur.bloque);
+  Future<Resultat<void>> bloquerMembre(String id, String motif) async {
+    return _changerStatut(id, StatutUtilisateur.bloque, motif);
   }
 
   @override
   Future<Resultat<void>> debloquerMembre(String id) async {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   // =====================================================================
@@ -545,6 +695,22 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   /// Le mot de passe redemandé est-il celui du compte connecté ?
   bool _bonMotDePasse(String motDePasse) {
     return _motsDePasse[_connecte.id] == motDePasse;
+  }
+
+  /// Le membre qui a ce numéro (null : numéro libre ou invalide).
+  /// Joue le rôle de la collection telephones/{numero} de Firebase.
+  Utilisateur? _titulaireDuNumero(String telephone) {
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return null;
+    }
+    for (final Utilisateur membre in _membres) {
+      if (UtilisateurRepository.normaliserTelephone(membre.telephone) ==
+          numero) {
+        return membre;
+      }
+    }
+    return null;
   }
 
   /// Les mots après le premier, recollés : ["Amira", "Ben", "Salah"] → "Ben Salah".
@@ -571,10 +737,22 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
-  Resultat<void> _changerStatut(String id, StatutUtilisateur statut) {
+  /// Même vérification du motif que Firebase (vide pour actif).
+  Resultat<void> _changerStatut(
+    String id,
+    StatutUtilisateur statut,
+    String motif,
+  ) {
+    final String texte = motif.trim();
+    if (statut != StatutUtilisateur.actif) {
+      final String? refus = UtilisateurRepository.refusMotif(texte);
+      if (refus != null) {
+        return Resultat.echec(refus);
+      }
+    }
     for (final Utilisateur membre in _membres) {
       if (membre.id == id) {
-        _remplacer(membre.copier(statut: statut));
+        _remplacer(membre.copier(statut: statut, motif: texte));
         return const Resultat.succes(null);
       }
     }

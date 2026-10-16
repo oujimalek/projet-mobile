@@ -44,18 +44,112 @@ abstract class UtilisateurRepository {
     return instance;
   }
 
+  /// Pourquoi [utilisateur] ne peut pas demander [quartier] (null : il peut).
+  /// Partagé par les deux implémentations ; firestore.rules vérifie la
+  /// même chose côté serveur.
+  static String? refusChangement(Utilisateur utilisateur, Quartier quartier) {
+    // Personne pour valider la demande : elle resterait en attente
+    if (!quartier.aUnAdmin) {
+      return 'Ce quartier n\'a pas encore d\'administrateur';
+    }
+    if (utilisateur.statut != StatutUtilisateur.actif) {
+      return null; // en attente ou refusé : il choisit librement
+    }
+    if (utilisateur.estAdmin) {
+      return 'Un administrateur ne peut pas quitter son quartier';
+    }
+    if (utilisateur.quartierId == quartier.id) {
+      return 'Tu fais déjà partie de ce quartier';
+    }
+    return null;
+  }
+
+  /// Pourquoi [utilisateur] ne peut pas enregistrer ce [contour] (null : il
+  /// peut). Mêmes conditions que firestore.rules.
+  static String? refusContour(Utilisateur utilisateur, List<PointGps> contour) {
+    if (!utilisateur.estAdmin || utilisateur.statut != StatutUtilisateur.actif) {
+      return 'Action non autorisée';
+    }
+    if (contour.length < 3) {
+      return 'Place au moins 3 points sur la carte';
+    }
+    if (contour.length > 100) {
+      return '100 points au maximum';
+    }
+    return null;
+  }
+
+  /// Pourquoi ce motif de refus ou de blocage n'est pas valable (null : il
+  /// l'est). De 3 à 200 caractères, comme dans firestore.rules.
+  static String? refusMotif(String motif) {
+    final int longueur = motif.trim().length;
+    if (longueur < 3) {
+      return 'Explique la raison en quelques mots (3 caractères minimum)';
+    }
+    if (longueur > 200) {
+      return '200 caractères au maximum';
+    }
+    return null;
+  }
+
+  /// Le message montré à un membre bloqué, avec la raison si l'admin
+  /// en a donné une.
+  static String messageBloque(String motif) {
+    if (motif.isEmpty) {
+      return 'Ton compte a été bloqué par l\'administrateur';
+    }
+    return 'Ton compte a été bloqué par l\'administrateur : $motif';
+  }
+
+  /// Le numéro tunisien réduit à ses 8 chiffres : "+216 22 345 678",
+  /// "0021622345678" et "22345678" donnent tous "22345678".
+  /// null : ce n'est pas un numéro à 8 chiffres.
+  /// C'est l'identifiant du document telephones/{numero}.
+  static String? normaliserTelephone(String texte) {
+    String chiffres = '';
+    for (int i = 0; i < texte.length; i++) {
+      if ('0123456789'.contains(texte[i])) {
+        chiffres = chiffres + texte[i];
+      }
+    }
+    if (chiffres.length == 13 && chiffres.startsWith('00216')) {
+      chiffres = chiffres.substring(5);
+    } else if (chiffres.length == 11 && chiffres.startsWith('216')) {
+      chiffres = chiffres.substring(3);
+    }
+    if (chiffres.length != 8) {
+      return null;
+    }
+    return chiffres;
+  }
+
+  /// Connexion par SMS avec un numéro qu'aucun compte n'a vérifié.
+  static const String numeroNonVerifie =
+      'Ce numéro n\'est pas encore vérifié : connecte-toi avec ton e-mail, '
+      'puis vérifie-le dans Paramètres';
+
+  /// Le texte tapé pour se connecter est-il un numéro (et pas un e-mail) ?
+  static bool estUnNumero(String identifiant) {
+    return !identifiant.contains('@');
+  }
+
   // =====================================================================
   // Connexion et inscription (Firebase Auth : e-mail + mot de passe)
   // =====================================================================
 
-  /// Vérifie l'e-mail et le mot de passe, puis charge le profil.
+  /// Vérifie l'identifiant et le mot de passe, puis charge le profil.
+  /// [identifiant] : l'e-mail OU le numéro de téléphone du compte (le
+  /// numéro est traduit en e-mail grâce à telephones/{numero}).
   /// Succès : l'utilisateur (l'écran regarde ensuite son statut).
   /// Échec : mauvais identifiants, pas de réseau, compte bloqué...
-  Future<Resultat<Utilisateur>> connexion(String email, String motDePasse);
+  Future<Resultat<Utilisateur>> connexion(
+    String identifiant,
+    String motDePasse,
+  );
 
   /// Crée le compte (statut "en attente", sans quartier), le connecte,
   /// et envoie l'e-mail de vérification.
-  /// Le téléphone est seulement un champ du profil.
+  /// Le numéro doit être libre : il sert aussi à se connecter.
   Future<Resultat<Utilisateur>> inscription({
     required String nomComplet,
     required String telephone,
@@ -87,6 +181,28 @@ abstract class UtilisateurRepository {
   Future<Resultat<void>> envoyerLienReinitialisation(String email);
 
   // =====================================================================
+  // Code SMS (Firebase Phone Auth)
+  // =====================================================================
+  // Deux temps : envoyerCodeSms, puis connexionParSms OU verifierTelephone
+  // avec les 6 chiffres reçus. Un numéro sert à se connecter par SMS
+  // seulement après avoir été vérifié dans Paramètres.
+
+  /// Envoie un code à 6 chiffres par SMS à ce numéro (8 chiffres, +216
+  /// accepté).
+  Future<Resultat<void>> envoyerCodeSms(String telephone);
+
+  /// Se connecte avec le code reçu. Refusé si le numéro n'a jamais été
+  /// vérifié dans Paramètres (aucun compte ne lui est lié).
+  Future<Resultat<Utilisateur>> connexionParSms(String code);
+
+  /// L'utilisateur connecté prouve que le numéro de son profil est à lui :
+  /// il pourra ensuite se connecter par SMS.
+  Future<Resultat<void>> verifierTelephone(String code);
+
+  /// Le numéro du profil a-t-il été vérifié par SMS ? (synchrone)
+  bool telephoneEstVerifie();
+
+  // =====================================================================
   // Utilisateur connecté et profil
   // =====================================================================
 
@@ -101,6 +217,8 @@ abstract class UtilisateurRepository {
 
   /// Enregistre les modifications du profil de l'utilisateur connecté.
   /// avatar : identifiant d'un avatar de la galerie, vide = initiales.
+  /// Nouveau numéro : il doit être libre (il sert à se connecter), et il
+  /// faudra le vérifier à nouveau par SMS.
   Future<Resultat<void>> modifierProfil({
     required String nomComplet,
     required String telephone,
@@ -141,10 +259,22 @@ abstract class UtilisateurRepository {
   /// Envoie la demande pour rejoindre un quartier :
   /// l'utilisateur connecté passe "en attente" de validation.
   /// (Firebase exige un e-mail vérifié.)
+  /// Sert aussi à CHANGER de quartier (écran Mon quartier) : un résident
+  /// actif quitte le sien et attend la validation du nouveau. Refusé pour
+  /// un administrateur (son quartier resterait sans admin) et pour le
+  /// quartier où l'on est déjà.
   Future<Resultat<void>> rejoindreQuartier(Quartier quartier);
 
   /// Le quartier de l'utilisateur connecté (`donnee == null` s'il n'en a pas).
   Future<Resultat<Quartier?>> getQuartierConnecte();
+
+  /// Le code d'invitation du quartier, pour que l'admin le partage.
+  /// Réservé à l'admin (`donnee == null` : aucun code trouvé).
+  Future<Resultat<String?>> getCodeInvitation();
+
+  /// L'admin enregistre les limites de son quartier (au moins 3 coins,
+  /// au plus 100). Le centre est recalculé à partir des coins.
+  Future<Resultat<void>> enregistrerContour(List<PointGps> contour);
 
   // =====================================================================
   // Administration des membres
@@ -167,12 +297,14 @@ abstract class UtilisateurRepository {
   Future<Resultat<void>> validerMembre(String id);
 
   /// L'admin refuse une demande : le membre passe "refuse"
-  /// (il pourra choisir un autre quartier).
-  Future<Resultat<void>> refuserMembre(String id);
+  /// (il pourra choisir un autre quartier). Le [motif] (3 à 200
+  /// caractères, voir refusMotif) est montré au membre.
+  Future<Resultat<void>> refuserMembre(String id, String motif);
 
-  /// L'admin bloque un membre actif.
-  Future<Resultat<void>> bloquerMembre(String id);
+  /// L'admin bloque un membre actif, avec un [motif] montré au membre.
+  Future<Resultat<void>> bloquerMembre(String id, String motif);
 
-  /// L'admin débloque un membre : il redevient actif.
+  /// L'admin débloque un membre : il redevient actif (motif effacé).
+  /// Valider efface aussi le motif.
   Future<Resultat<void>> debloquerMembre(String id);
 }

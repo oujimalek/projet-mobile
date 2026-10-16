@@ -19,6 +19,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  GeoPoint,
   getDocs,
   query,
   serverTimestamp,
@@ -26,6 +27,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 let env;
@@ -155,6 +157,22 @@ describe('inscription (create)', () => {
     );
   });
 
+  test('motif vide : autorisé, motif rempli : refusé', async () => {
+    const db = base('nouveau', false);
+    await assertFails(
+      setDoc(doc(db, 'utilisateurs/nouveau'), {
+        ...nouveauProfil('nouveau@houmani.tn'),
+        motif: 'Je me bloque moi-même',
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'utilisateurs/nouveau'), {
+        ...nouveauProfil('nouveau@houmani.tn'),
+        motif: '',
+      }),
+    );
+  });
+
   test('champ inconnu : refusé', async () => {
     const db = base('nouveau', false);
     await assertFails(
@@ -207,8 +225,16 @@ describe('rejoindre un quartier', () => {
       residence: 'El Wafa',
       statut: 'enAttente',
       dateDemande: serverTimestamp(),
+      motif: '', // l'ancien motif de refus est effacé
     };
   }
+
+  test('pas de motif rempli en refaisant une demande', async () => {
+    const db = base('refuse1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/refuse1'), { ...demande('q2'), motif: 'Moi' }),
+    );
+  });
 
   test('compte refusé, e-mail vérifié : il redemande un quartier', async () => {
     const db = base('refuse1');
@@ -249,19 +275,80 @@ describe('rejoindre un quartier', () => {
     const db = base('bloque1');
     await assertFails(updateDoc(doc(db, 'utilisateurs/bloque1'), demande('q2')));
   });
+
+  // Écran Mon quartier : un résident actif quitte son quartier
+  test('résident actif : il quitte son quartier pour un autre', async () => {
+    const db = base('actif1');
+    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/actif1'), demande('q2')));
+  });
+
+  test('résident actif : redemander SON quartier (redevenir en attente) : refusé', async () => {
+    const db = base('actif1');
+    await assertFails(updateDoc(doc(db, 'utilisateurs/actif1'), demande('q1')));
+  });
+
+  test('admin actif : il ne peut pas quitter son quartier', async () => {
+    const db = base('admin1');
+    await assertFails(updateDoc(doc(db, 'utilisateurs/admin1'), demande('q2')));
+  });
+
+  test('résident actif : pas de rôle admin en changeant de quartier', async () => {
+    const db = base('actif1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/actif1'), { ...demande('q2'), role: 'admin' }),
+    );
+  });
+
+  test('résident actif : il doit repasser en attente', async () => {
+    const db = base('actif1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/actif1'), { ...demande('q2'), statut: 'actif' }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------
 describe('administration des membres', () => {
   test('l\'admin valide une demande de SON quartier', async () => {
     const db = base('admin1');
-    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/attente1'), { statut: 'actif' }));
+    await assertSucceeds(
+      updateDoc(doc(db, 'utilisateurs/attente1'), { statut: 'actif', motif: '' }),
+    );
   });
 
-  test('l\'admin bloque puis débloque un membre', async () => {
+  test('l\'admin bloque (avec motif) puis débloque un membre', async () => {
     const db = base('admin1');
-    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/actif1'), { statut: 'bloque' }));
-    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/actif1'), { statut: 'actif' }));
+    const profil = doc(db, 'utilisateurs/actif1');
+    await assertSucceeds(updateDoc(profil, { statut: 'bloque', motif: 'Insultes' }));
+    // Débloquer : le motif doit être effacé
+    await assertFails(updateDoc(profil, { statut: 'actif' }));
+    await assertSucceeds(updateDoc(profil, { statut: 'actif', motif: '' }));
+  });
+
+  test('l\'admin refuse une demande avec un motif', async () => {
+    const db = base('admin1');
+    await assertSucceeds(
+      updateDoc(doc(db, 'utilisateurs/attente1'), {
+        statut: 'refuse',
+        motif: 'Logement introuvable',
+      }),
+    );
+  });
+
+  test('refuser ou bloquer sans motif valable : refusé', async () => {
+    const db = base('admin1');
+    const profil = doc(db, 'utilisateurs/attente1');
+    await assertFails(updateDoc(profil, { statut: 'refuse' }));
+    await assertFails(updateDoc(profil, { statut: 'refuse', motif: 'no' }));
+    await assertFails(updateDoc(profil, { statut: 'bloque', motif: 'x'.repeat(201) }));
+    await assertFails(updateDoc(profil, { statut: 'bloque', motif: 42 }));
+  });
+
+  test('valider avec un motif rempli : refusé', async () => {
+    const db = base('admin1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/attente1'), { statut: 'actif', motif: 'Bienvenue' }),
+    );
   });
 
   test('l\'admin ne change que le statut', async () => {
@@ -412,9 +499,185 @@ describe('quartiers et codes d\'invitation', () => {
     await assertFails(getDocs(collection(db, 'codesQuartier')));
   });
 
+  // Écran Mon quartier : l'admin affiche le code de son quartier
+  function codesDe(db, quartierId) {
+    return getDocs(
+      query(collection(db, 'codesQuartier'), where('quartierId', '==', quartierId)),
+    );
+  }
+
+  test('l\'admin liste les codes de SON quartier', async () => {
+    await assertSucceeds(codesDe(base('admin1'), 'q1'));
+  });
+
+  test('l\'admin ne liste pas les codes d\'un autre quartier, ni tous les codes', async () => {
+    await assertFails(codesDe(base('admin2'), 'q1'));
+    await assertFails(getDocs(collection(base('admin1'), 'codesQuartier')));
+  });
+
+  test('un résident ne liste pas les codes, même de son quartier', async () => {
+    await assertFails(codesDe(base('actif1'), 'q1'));
+  });
+
+  test('l\'admin ne crée pas de code', async () => {
+    await assertFails(
+      setDoc(doc(base('admin1'), 'codesQuartier/NOUV01'), {
+        quartierId: 'q1',
+        quartierNom: 'El Yasmine',
+      }),
+    );
+  });
+
   test('sans être connecté : rien', async () => {
     const db = env.unauthenticatedContext().firestore();
     await assertFails(getDocs(collection(db, 'quartiers')));
     await assertFails(getDoc(doc(db, 'codesQuartier/YAS72B')));
+  });
+});
+
+describe('limites du quartier (contour)', () => {
+  // Un triangle autour de la Charguia
+  const limites = {
+    contour: [
+      new GeoPoint(36.84, 10.2),
+      new GeoPoint(36.85, 10.21),
+      new GeoPoint(36.84, 10.22),
+    ],
+    position: new GeoPoint(36.843, 10.21),
+  };
+
+  test('l\'admin trace les limites de SON quartier', async () => {
+    await assertSucceeds(updateDoc(doc(base('admin1'), 'quartiers/q1'), limites));
+  });
+
+  test('l\'admin ne trace pas les limites d\'un autre quartier', async () => {
+    await assertFails(updateDoc(doc(base('admin2'), 'quartiers/q1'), limites));
+  });
+
+  test('un résident ne trace pas les limites', async () => {
+    await assertFails(updateDoc(doc(base('actif1'), 'quartiers/q1'), limites));
+  });
+
+  test('l\'admin ne change pas le nom du quartier', async () => {
+    await assertFails(
+      updateDoc(doc(base('admin1'), 'quartiers/q1'), { ...limites, nom: 'Autre' }),
+    );
+  });
+
+  test('il faut au moins 3 coins', async () => {
+    await assertFails(
+      updateDoc(doc(base('admin1'), 'quartiers/q1'), {
+        contour: limites.contour.slice(0, 2),
+        position: limites.position,
+      }),
+    );
+  });
+
+  test('l\'admin ne supprime pas son quartier', async () => {
+    await assertFails(deleteDoc(doc(base('admin1'), 'quartiers/q1')));
+  });
+});
+
+describe('connexion par téléphone (fiches telephones)', () => {
+  // actif1 a le numéro 22 345 678 ; la fiche de admin1 existe déjà
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (contexte) => {
+      const db = contexte.firestore();
+      await updateDoc(doc(db, 'utilisateurs/actif1'), { telephone: '+216 22 345 678' });
+      await updateDoc(doc(db, 'utilisateurs/admin1'), { telephone: '98 765 432' });
+      await setDoc(doc(db, 'telephones/98765432'), {
+        uid: 'admin1',
+        email: 'admin1@houmani.tn',
+      });
+    });
+  });
+
+  test('sans être connecté, on lit LA fiche d\'un numéro (pour se connecter)', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    await assertSucceeds(getDoc(doc(db, 'telephones/98765432')));
+  });
+
+  test('personne ne liste les numéros', async () => {
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'telephones')));
+    await assertFails(getDocs(collection(base('admin1'), 'telephones')));
+  });
+
+  test('on crée la fiche de SON numéro', async () => {
+    await assertSucceeds(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('inscription : profil + fiche dans le même envoi', async () => {
+    const db = base('nouveau', false);
+    const lot = writeBatch(db);
+    lot.set(doc(db, 'utilisateurs/nouveau'), nouveauProfil('nouveau@houmani.tn'));
+    lot.set(doc(db, 'telephones/20000000'), { uid: 'nouveau', email: 'nouveau@houmani.tn' });
+    await assertSucceeds(lot.commit());
+  });
+
+  test('pas une fiche au nom de quelqu\'un d\'autre', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'admin1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('pas un autre e-mail que celui du compte', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'actif1',
+        email: 'pirate@houmani.tn',
+      }),
+    );
+  });
+
+  test('pas un numéro qui n\'est pas dans son profil', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/29999999'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('pas de champ en plus', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+        role: 'admin',
+      }),
+    );
+  });
+
+  test('on ne prend pas la fiche d\'un autre', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/98765432'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('on met à jour l\'e-mail de SA fiche, pas l\'uid', async () => {
+    const db = base('admin1');
+    await assertSucceeds(
+      updateDoc(doc(db, 'telephones/98765432'), { email: 'admin1@houmani.tn' }),
+    );
+    await assertFails(updateDoc(doc(db, 'telephones/98765432'), { uid: 'actif1' }));
+    await assertFails(
+      updateDoc(doc(base('actif1'), 'telephones/98765432'), { email: 'actif1@houmani.tn' }),
+    );
+  });
+
+  test('on supprime SA fiche, pas celle d\'un autre', async () => {
+    await assertFails(deleteDoc(doc(base('actif1'), 'telephones/98765432')));
+    await assertSucceeds(deleteDoc(doc(base('admin1'), 'telephones/98765432')));
   });
 });

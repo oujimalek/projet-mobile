@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 
 /// Texte du copyright, affiché sous les conditions et sur la connexion.
 const String copyrightHoumani = '© 2026 Houmani. Tous droits réservés.';
@@ -86,9 +87,13 @@ Future<bool> afficherConditions(
   bool avecAcceptation = true,
 }) async {
   // Le contenu : chaque article = un titre en gras + son paragraphe
+  // (le texte juridique reste en français, c'est la version officielle)
   final List<Widget> contenu = [
-    const Text(
-      'Dernière mise à jour : 16 octobre 2026',
+    Text(
+      tr(
+        'Dernière mise à jour : 16 octobre 2026',
+        'E5er tabdil : 16 octobre 2026',
+      ),
       style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
     ),
     const SizedBox(height: 12),
@@ -104,14 +109,14 @@ Future<bool> afficherConditions(
     contenu.add(
       Text(
         article[1],
-        style: const TextStyle(height: 1.45, color: AppColors.textPrimary),
+        style: TextStyle(height: 1.45, color: AppColors.textPrimary),
       ),
     );
     contenu.add(const SizedBox(height: 14));
   }
-  contenu.add(const Divider(color: AppColors.border));
+  contenu.add(Divider(color: AppColors.border));
   contenu.add(
-    const Center(
+    Center(
       child: Text(
         copyrightHoumani,
         style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
@@ -125,7 +130,7 @@ Future<bool> afficherConditions(
       onPressed: () {
         Navigator.of(context).pop(false);
       },
-      child: const Text('Fermer'),
+      child: Text(tr('Fermer', 'Sakker')),
     ),
   ];
   if (avecAcceptation) {
@@ -135,7 +140,7 @@ Future<bool> afficherConditions(
         onPressed: () {
           Navigator.of(context).pop(true);
         },
-        child: const Text('J\'accepte'),
+        child: Text(tr('J\'accepte', 'Na9bel')),
       ),
     );
   }
@@ -145,9 +150,9 @@ Future<bool> afficherConditions(
     builder: (context) {
       return AlertDialog(
         backgroundColor: AppColors.background,
-        title: const Text(
-          'Conditions d\'utilisation',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        title: Text(
+          tr('Conditions d\'utilisation', 'Chourout el isti3mel'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         // Hauteur limitée à 60 % de l'écran : le texte défile à l'intérieur
         content: SizedBox(

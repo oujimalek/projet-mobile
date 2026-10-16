@@ -20,6 +20,8 @@ class CacheLocal {
   static const String _nomBoite = 'houmani_cache';
   static const String _cleUtilisateur = 'utilisateur';
   static const String _cleQuartier = 'quartier';
+  static const String _cleTheme = 'theme';
+  static const String _cleLangue = 'langue';
 
   /// Dossier des fichiers Hive. null = dossier de l'application (cas normal).
   /// Les tests donnent un dossier temporaire.
@@ -91,8 +93,23 @@ class CacheLocal {
 
   Future<void> enregistrerQuartier(Quartier quartier) async {
     try {
-      final Map<String, dynamic> map = quartier.toMap();
-      map['id'] = quartier.id;
+      // Pas toMap() : Hive ne sait pas garder un GeoPoint (Firestore).
+      // Les points deviennent de simples {lat, lng}, relus par fromMap.
+      final List<Map<String, double>> contour = [];
+      for (final PointGps point in quartier.contour) {
+        contour.add({'lat': point.latitude, 'lng': point.longitude});
+      }
+      final PointGps? position = quartier.position;
+      final Map<String, dynamic> map = {
+        'id': quartier.id,
+        'nom': quartier.nom,
+        'localisation': quartier.localisation,
+        'position': position == null
+            ? null
+            : {'lat': position.latitude, 'lng': position.longitude},
+        'contour': contour,
+        'aUnAdmin': quartier.aUnAdmin,
+      };
       final Box<dynamic> boite = await _ouvrir();
       await boite.put(_cleQuartier, map);
     } catch (e) {
@@ -126,14 +143,68 @@ class CacheLocal {
   }
 
   // =====================================================================
+  // Apparence (thème clair / sombre / système)
+  // =====================================================================
+
+  /// Enregistre le thème choisi dans Paramètres (ex : "sombre").
+  Future<void> enregistrerTheme(String mode) async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      await boite.put(_cleTheme, mode);
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+    }
+  }
+
+  /// Le thème enregistré, ou null s'il n'y en a pas.
+  Future<String?> lireTheme() async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      final dynamic brut = boite.get(_cleTheme);
+      return brut is String ? brut : null;
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+      return null;
+    }
+  }
+
+  // =====================================================================
+  // Langue (français / derja)
+  // =====================================================================
+
+  /// Enregistre la langue choisie dans Paramètres (ex : "derja").
+  Future<void> enregistrerLangue(String langue) async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      await boite.put(_cleLangue, langue);
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+    }
+  }
+
+  /// La langue enregistrée, ou null s'il n'y en a pas.
+  Future<String?> lireLangue() async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      final dynamic brut = boite.get(_cleLangue);
+      return brut is String ? brut : null;
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+      return null;
+    }
+  }
+
+  // =====================================================================
   // Nettoyage
   // =====================================================================
 
-  /// Efface tout (à la déconnexion : le téléphone peut être partagé).
+  /// Efface le profil et le quartier (à la déconnexion : le téléphone peut
+  /// être partagé). Le thème et la langue sont gardés : ce sont des
+  /// réglages du téléphone.
   Future<void> vider() async {
     try {
       final Box<dynamic> boite = await _ouvrir();
-      await boite.clear();
+      await boite.deleteAll([_cleUtilisateur, _cleQuartier]);
     } catch (e) {
       debugPrint('CacheLocal : $e');
     }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
@@ -44,11 +45,11 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
   /// (Firebase envoie le lien par e-mail : pas de téléphone ici.)
   String? _validerEmail(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton e-mail';
+      return tr('Saisis ton e-mail', 'Ekteb el e-mail mte3ek');
     }
     final String texte = valeur.trim();
     if (!texte.contains('@') || !texte.contains('.')) {
-      return 'Adresse e-mail invalide';
+      return tr('Adresse e-mail invalide', 'E-mail mouch s7i7');
     }
     return null;
   }
@@ -88,7 +89,7 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Mot de passe oublié'),
+          AppHeader(titre: tr('Mot de passe oublié', 'Nsit kelmet esser')),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),
@@ -103,16 +104,20 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
   /// Avant l'envoi : le champ et le bouton.
   List<Widget> _formulaire() {
     return [
-      const TitreEcran(
-        titre: 'Réinitialiser le mot de passe',
-        sousTitre: 'Saisis l\'e-mail de ton compte : on t\'envoie un lien '
-            'pour choisir un nouveau mot de passe.',
+      TitreEcran(
+        titre: tr('Réinitialiser le mot de passe', 'Badel kelmet esser'),
+        sousTitre: tr(
+          'Saisis l\'e-mail de ton compte : on t\'envoie un lien '
+              'pour choisir un nouveau mot de passe.',
+          'Ekteb el e-mail mta3 el compte : nab3thoulek lien '
+              'bech ta5tar kelmet ser jdida.',
+        ),
       ),
       const SizedBox(height: 24),
       Form(
         key: _formKey,
         child: AppTextField(
-          label: 'E-mail',
+          label: tr('E-mail', 'E-mail'),
           hint: 'exemple@mail.com',
           controller: _identifiantController,
           clavier: TextInputType.emailAddress,
@@ -121,7 +126,7 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
       ),
       const SizedBox(height: 24),
       PrimaryButton(
-        texte: 'Envoyer le lien',
+        texte: tr('Envoyer le lien', 'Ab3ath el lien'),
         onPressed: _enChargement ? null : _envoyerLien,
       ),
       if (_enChargement) const IndicateurChargement(),
@@ -136,11 +141,11 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
         child: Container(
           width: 88,
           height: 88,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.primaryLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.mark_email_read_outlined,
             color: AppColors.primary,
             size: 44,
@@ -148,22 +153,28 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
         ),
       ),
       const SizedBox(height: 20),
-      const AppCard(
+      AppCard(
         child: Text(
-          'Si ce compte existe, un lien a été envoyé.',
+          tr(
+            'Si ce compte existe, un lien a été envoyé.',
+            'Ken el compte mawjoud, tba3ath lien.',
+          ),
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
       const SizedBox(height: 8),
-      const Text(
-        'Pense à vérifier tes courriers indésirables (spam).',
+      Text(
+        tr(
+          'Pense à vérifier tes courriers indésirables (spam).',
+          'Ma tansech tchouf fel spam.',
+        ),
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
       ),
       const SizedBox(height: 32),
       PrimaryButton(
-        texte: 'Retour à la connexion',
+        texte: tr('Retour à la connexion', 'Arja3 lel connexion'),
         onPressed: () {
           if (context.canPop()) {
             context.pop();

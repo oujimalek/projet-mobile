@@ -54,7 +54,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           const AppHeader(titre: 'Détail du service'),
           Expanded(
             child: service == null
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Ce service n\'existe plus',
                       style: TextStyle(color: AppColors.textSecondary),
@@ -84,7 +84,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               const SizedBox(height: 8),
               Text(
                 service.description,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   height: 1.4,
                   color: AppColors.textSecondary,
@@ -110,19 +110,19 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         fond: AppColors.backgroundSecondary,
       ),
       service.estOffre
-          ? const PastilleTexte(
+          ? PastilleTexte(
               texte: 'Offre',
               couleur: AppColors.badgeResolu,
               fond: AppColors.badgeResoluFond,
             )
-          : const PastilleTexte(
+          : PastilleTexte(
               texte: 'Demande',
               couleur: AppColors.badgeEnCours,
               fond: AppColors.badgeEnCoursFond,
             ),
     ];
     if (service.estCommun) {
-      badges.add(const PastilleTexte(
+      badges.add(PastilleTexte(
         texte: 'Service commun',
         couleur: AppColors.primary,
         fond: AppColors.primaryLight,
@@ -167,7 +167,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         children: [
           Icon(icone, size: 20, color: AppColors.primary),
           const SizedBox(width: 12),
-          Text(titre, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(titre, style: TextStyle(color: AppColors.textSecondary)),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -210,7 +210,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 if (service.bloc.isNotEmpty)
                   Text(
                     service.bloc,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
                     ),
@@ -218,12 +218,12 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.star, size: 16, color: AppColors.secondary),
+                    Icon(Icons.star, size: 16, color: AppColors.secondary),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         '$texteNote · $texteRendus',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
@@ -245,7 +245,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     final List<Widget> contenu = [];
 
     if (estMonService) {
-      contenu.add(const Text(
+      contenu.add(Text(
         'Votre publication',
         textAlign: TextAlign.center,
         style: TextStyle(
@@ -285,7 +285,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       contenu.add(Text(
         '${service.auteur} recevra la demande et pourra l\'accepter',
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
       ));
     }
 
@@ -295,7 +295,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),

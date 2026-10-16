@@ -1,29 +1,43 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/resultat.dart';
+import 'package:houmani/data/services/cache_local.dart';
+import 'package:houmani/data/services/localisation.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
 import 'package:houmani/screens/accueil_screen.dart';
 import 'package:houmani/screens/demo_screen.dart';
 import 'package:houmani/screens/module1/admin_membres_screen.dart';
+import 'package:houmani/screens/module1/annuaire_voisins_screen.dart';
 import 'package:houmani/screens/module1/attente_validation_screen.dart';
 import 'package:houmani/screens/module1/code_quartier_screen.dart';
 import 'package:houmani/screens/module1/connexion_screen.dart';
 import 'package:houmani/screens/module1/inscription_screen.dart';
+import 'package:houmani/screens/module1/mon_quartier_screen.dart';
 import 'package:houmani/screens/module1/mot_de_passe_oublie_screen.dart';
 import 'package:houmani/screens/module1/parametres_screen.dart';
 import 'package:houmani/screens/module1/profil_edition_screen.dart';
 import 'package:houmani/screens/module1/profil_screen.dart';
+import 'package:houmani/screens/module1/tracer_limites_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
 import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
+import 'package:houmani/theme/app_theme.dart';
+import 'package:houmani/theme/preference_langue.dart';
+import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
+import 'package:houmani/widgets/primary_button.dart';
 
 import 'mock_utilisateur_repository.dart';
 
@@ -163,6 +177,70 @@ void main() {
     await toucher(tester, find.text('Se connecter'));
     expect(find.byType(AccueilScreen), findsOneWidget);
     expect(find.byType(BottomNavigationBar), findsOneWidget);
+  });
+
+  testWidgets('Connexion avec le numéro de téléphone : ouvre l\'accueil',
+      (WidgetTester tester) async {
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    // Numéro trop court : refusé par le formulaire
+    await tester.enterText(find.byType(TextFormField).at(0), '1234');
+    await tester.enterText(
+      find.byType(TextFormField).at(1),
+      MockUtilisateurRepository.motDePasseDemo,
+    );
+    await toucher(tester, find.text('Se connecter'));
+    expect(
+      find.text('Numéro de téléphone invalide (8 chiffres)'),
+      findsOneWidget,
+    );
+
+    // Bon numéro (avec +216 et espaces) : accueil
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      '+216 22 345 678',
+    );
+    await toucher(tester, find.text('Se connecter'));
+    expect(find.byType(AccueilScreen), findsOneWidget);
+  });
+
+  testWidgets('Connexion par SMS : numéro, code à 6 chiffres, accueil',
+      (WidgetTester tester) async {
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Se connecter par SMS'));
+    expect(find.text('Connexion par SMS'), findsOneWidget);
+
+    // Étape 1 : le numéro du compte de démo
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextFormField),
+      ),
+      '22 345 678',
+    );
+    await tester.tap(find.text('Recevoir le code'));
+    await tester.pumpAndSettle();
+    expect(find.text('Renvoyer le code dans 30 s'), findsOneWidget);
+
+    // Étape 2 : mauvais code, puis le bon
+    final Finder champCode = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(champCode, '000000');
+    await tester.pump();
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Code incorrect'), findsOneWidget);
+
+    await tester.enterText(champCode, MockUtilisateurRepository.codeSmsDemo);
+    await tester.pump();
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(AccueilScreen), findsOneWidget);
   });
 
   testWidgets('Profil : l\'admin valide une demande dans la liste des membres',
@@ -375,6 +453,15 @@ void main() {
     await toucher(tester, find.text('Se connecter'));
     expect(find.byType(AccueilScreen), findsOneWidget);
     expect(find.text('Ahla Nour !'), findsOneWidget);
+  });
+
+  testWidgets('Profil : bouton Se déconnecter en bas de l\'écran',
+      (WidgetTester tester) async {
+    appRouter.go('/profil');
+    await lancerApp(tester);
+    expect(find.byType(ProfilScreen), findsOneWidget);
+    await toucher(tester, find.text('Se déconnecter'));
+    expect(find.byType(ConnexionScreen), findsOneWidget);
   });
 
   testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
@@ -683,11 +770,42 @@ void main() {
     expect(find.text('Refuser la demande ?'), findsNothing);
     expect(find.text('En attente (3)'), findsOneWidget);
 
-    // Confirmer : la demande quitte la liste
+    // Confirmer sans motif : la fenêtre reste ouverte avec l'erreur
     await toucher(tester, find.text('Refuser').first);
     await tester.tap(find.widgetWithText(TextButton, 'Refuser'));
     await tester.pumpAndSettle();
+    expect(find.text('Refuser la demande ?'), findsOneWidget);
+    expect(
+      find.text('Explique la raison en quelques mots (3 caractères minimum)'),
+      findsOneWidget,
+    );
+
+    // Avec un motif : la demande quitte la liste, le motif est gardé
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Motif (vu par le membre)'),
+      'Logement introuvable',
+    );
+    await tester.tap(find.widgetWithText(TextButton, 'Refuser'));
+    await tester.pumpAndSettle();
     expect(find.text('En attente (2)'), findsOneWidget);
+    final List<Utilisateur> refuses =
+        (await mock.getMembres(StatutUtilisateur.refuse)).donnee!;
+    expect(refuses.single.motif, 'Logement introuvable');
+  });
+
+  testWidgets('Membres : statistiques du quartier',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Membres du quartier'));
+
+    expect(find.text('Refusés'), findsOneWidget);
+    expect(find.text('Actifs'), findsOneWidget);
+    // 4 actifs, 3 en attente, 1 bloqué, 0 refusé (données de démo)
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('0'), findsOneWidget);
   });
 
   testWidgets('Membres : bloquer demande une confirmation',
@@ -699,10 +817,35 @@ void main() {
 
     await toucher(tester, find.text('Bloquer').first);
     expect(find.text('Bloquer ce membre ?'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Motif (vu par le membre)'),
+      'Insultes',
+    );
     await tester.tap(find.widgetWithText(TextButton, 'Bloquer'));
     await tester.pumpAndSettle();
     expect(find.text('Actifs (3)'), findsOneWidget);
     expect(find.text('Bloqués (2)'), findsOneWidget); // 1 au départ + 1
+
+    // Onglet Bloqués : le motif est rappelé
+    await toucher(tester, find.text('Bloqués (2)'));
+    expect(find.textContaining('Motif : Insultes'), findsOneWidget);
+  });
+
+  testWidgets('Code du quartier : un quartier sans admin ne peut pas être rejoint',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteSansQuartier(), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/code-quartier');
+    await lancerApp(tester);
+
+    await tester.enterText(find.byType(EditableText).first, 'JAS33A');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('n\'a pas encore d\'administrateur'),
+        findsWidgets);
+    // Bouton désactivé : toucher ne fait rien
+    await toucher(tester, find.text('Rejoindre la houma'));
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+    expect(mock.getUtilisateurConnecte().quartierId ?? '', isEmpty);
   });
 
   // -------------------------------------------------------------------
@@ -716,6 +859,17 @@ void main() {
     await toucher(tester, find.text('Paramètres'));
     expect(find.byType(ParametresScreen), findsOneWidget);
     expect(find.text(MockUtilisateurRepository.emailDemo), findsOneWidget);
+    // La version est tout en bas (sous la section Langue) : on défile
+    await tester.scrollUntilVisible(
+      find.text(versionHoumani),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text(versionHoumani), findsOneWidget);
   });
 
@@ -757,6 +911,95 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('Mot de passe modifié'), findsOneWidget);
+  });
+
+  testWidgets('Profil : annuaire des voisins, recherche et numéro copié',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Annuaire des voisins'));
+    expect(find.byType(AnnuaireVoisinsScreen), findsOneWidget);
+
+    // Les membres actifs, sans soi-même ni les bloqués / en attente
+    expect(find.text('Youssef Trabelsi'), findsOneWidget);
+    expect(find.text('Salma Gharbi'), findsOneWidget);
+    expect(find.text('Karim Mansour'), findsOneWidget);
+    expect(find.text('Amira Ben Salah'), findsNothing);
+    expect(find.text('Walid Ferchichi'), findsNothing);
+    expect(find.text('Sarra Ben Ali'), findsNothing);
+
+    // Recherche par compétence
+    await tester.enterText(find.byType(TextField), 'cuisine');
+    await tester.pumpAndSettle();
+    expect(find.text('Salma Gharbi'), findsOneWidget);
+    expect(find.text('Youssef Trabelsi'), findsNothing);
+
+    // Rien ne correspond
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('Aucun voisin trouvé'), findsOneWidget);
+
+    // Recherche par nom, puis le numéro copié
+    await tester.enterText(find.byType(TextField), 'youssef');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Youssef Trabelsi'));
+    await tester.pumpAndSettle();
+    expect(find.text('+216 22 111 111'), findsOneWidget);
+
+    // Pas de vrai presse-papiers en test : on note ce qui y est copié
+    String? copie;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall appel) async {
+        if (appel.method == 'Clipboard.setData') {
+          copie = (appel.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.tap(find.text('Copier le numéro'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('Numéro copié'), findsOneWidget);
+    expect(copie, '+216 22 111 111');
+  });
+
+  testWidgets('Paramètres : vérifier son numéro par SMS',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(
+      compteDeTest(StatutUtilisateur.actif).copier(telephone: '+216 20 000 000'),
+      'secret123',
+    );
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/parametres');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Vérifier mon numéro'));
+    expect(find.textContaining('+216 20 000 000'), findsWidgets);
+
+    await tester.tap(find.text('Recevoir le code'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      MockUtilisateurRepository.codeSmsDemo,
+    );
+    await tester.pump();
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      find.text('Numéro vérifié : tu peux te connecter par SMS'),
+      findsOneWidget,
+    );
+    expect(find.text('Numéro vérifié'), findsOneWidget);
   });
 
   testWidgets('Paramètres : supprimer son compte → retour à la connexion',
@@ -827,6 +1070,341 @@ void main() {
     await tester.tap(find.text('Se déconnecter'));
     await tester.pumpAndSettle();
     expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------
+  // Apparence : mode sombre
+  // -------------------------------------------------------------------
+
+  group('Mode sombre', () {
+    late Directory dossier;
+
+    setUp(() {
+      // Le choix est enregistré dans un dossier temporaire
+      dossier = Directory.systemTemp.createTempSync('houmani_theme_');
+      PreferenceTheme.cache = CacheLocal(dossier: dossier.path);
+    });
+
+    // Les réglages sont globaux : on remet le thème clair pour les autres tests
+    tearDown(() {
+      PreferenceTheme.mode.value = ModeTheme.systeme;
+      AppColors.sombre = false;
+      PreferenceTheme.cache = CacheLocal();
+    });
+
+    test('Système suit le téléphone, Clair et Sombre l\'ignorent', () {
+      expect(PreferenceTheme.estSombre(ModeTheme.systeme, true), isTrue);
+      expect(PreferenceTheme.estSombre(ModeTheme.systeme, false), isFalse);
+      expect(PreferenceTheme.estSombre(ModeTheme.clair, true), isFalse);
+      expect(PreferenceTheme.estSombre(ModeTheme.sombre, false), isTrue);
+    });
+
+    test('les couleurs changent avec AppColors.sombre', () {
+      AppColors.sombre = false;
+      final Color fondClair = AppColors.background;
+      AppColors.sombre = true;
+      expect(AppColors.background, isNot(fondClair));
+      expect(AppTheme.actuel.brightness, Brightness.dark);
+    });
+
+    testWidgets('Paramètres : choisir Sombre puis Clair change tout l\'écran',
+        (WidgetTester tester) async {
+      appRouter.go('/parametres');
+      await lancerApp(tester);
+      final Color fondClair = AppColors.background;
+
+      await toucher(tester, find.text('Sombre'));
+      expect(PreferenceTheme.mode.value, ModeTheme.sombre);
+      expect(AppColors.sombre, isTrue);
+      // L'écran ouvert (const) est bien redessiné avec les couleurs sombres :
+      // le fond (thème) et les séparateurs (lus dans AppColors)
+      final BuildContext ecran = tester.element(find.byType(ParametresScreen));
+      expect(Theme.of(ecran).scaffoldBackgroundColor, AppColors.background);
+      expect(AppColors.background, isNot(fondClair));
+      expect(tester.widget<Divider>(find.byType(Divider).first).color,
+          AppColors.border);
+      // Deux coches : "Sombre" (thème) et "Français" (langue)
+      expect(find.byIcon(Icons.check), findsNWidgets(2));
+
+      await toucher(tester, find.text('Clair'));
+      expect(AppColors.sombre, isFalse);
+      expect(AppColors.background, fondClair);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Langue : français / derja
+  // -------------------------------------------------------------------
+
+  group('Langue', () {
+    late Directory dossier;
+
+    setUp(() {
+      dossier = Directory.systemTemp.createTempSync('houmani_langue_');
+      PreferenceLangue.cache = CacheLocal(dossier: dossier.path);
+    });
+
+    // Réglage global : on remet le français pour les autres tests
+    tearDown(() {
+      PreferenceLangue.langue.value = Langue.francais;
+      PreferenceLangue.cache = CacheLocal();
+    });
+
+    test('tr donne le texte de la langue choisie', () {
+      expect(tr('Bonjour', 'Aslema'), 'Bonjour');
+      PreferenceLangue.langue.value = Langue.derja;
+      expect(tr('Bonjour', 'Aslema'), 'Aslema');
+    });
+
+    testWidgets('Paramètres : choisir Derja traduit l\'écran ouvert',
+        (WidgetTester tester) async {
+      appRouter.go('/parametres');
+      await lancerApp(tester);
+      expect(find.text('Paramètres'), findsOneWidget); // titre en haut
+
+      await toucher(tester, find.text('Derja (tounsi)'));
+      expect(PreferenceLangue.langue.value, Langue.derja);
+      // La liste a défilé jusqu'à la section Langue : on regarde le titre
+      // (toujours visible) et les sections proches
+      expect(find.text('El paramètres'), findsOneWidget);
+      expect(find.text('LOUGHA'), findsOneWidget);
+      expect(find.text('Mdhallem'), findsOneWidget);
+      expect(find.text('LANGUE'), findsNothing);
+
+      await toucher(tester, find.text('Français'));
+      expect(find.text('LANGUE'), findsOneWidget);
+      expect(find.text('Paramètres'), findsOneWidget);
+    });
+
+    testWidgets('Profil : les liens sont en derja', (WidgetTester tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      appRouter.go('/profil');
+      await lancerApp(tester);
+      expect(find.text('El profil mte3i'), findsOneWidget);
+      expect(find.text('Houmti'), findsOneWidget);
+      expect(find.text('Jirani'), findsOneWidget);
+    });
+
+    testWidgets('Connexion : textes et erreurs en derja',
+        (WidgetTester tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      appRouter.go('/connexion');
+      await lancerApp(tester);
+      expect(find.text('Od5ol l houmtek'), findsOneWidget);
+
+      // Champs vides : les messages du formulaire sont en derja
+      await toucher(tester, find.text('Od5ol'));
+      expect(
+        find.text('Ekteb el e-mail wala el nouméro mte3ek'),
+        findsOneWidget,
+      );
+      expect(find.text('Ekteb el mot de passe mte3ek'), findsOneWidget);
+    });
+
+    testWidgets('Mot de passe oublié : écran en derja',
+        (WidgetTester tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      appRouter.go('/mot-de-passe-oublie');
+      await lancerApp(tester);
+      expect(find.text('Nsit kelmet esser'), findsOneWidget);
+      expect(find.text('Ab3ath el lien'), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Mon quartier et changement de quartier
+  // -------------------------------------------------------------------
+
+  group('Mon quartier', () {
+    // Le vrai GPS, remis après chaque test qui le remplace
+    final positionParDefaut = Localisation.positionActuelle;
+
+    // Pas de vraie carte : elle téléchargerait des images sur Internet
+    setUp(() {
+      MonQuartierScreen.afficherCarte = false;
+    });
+
+    tearDown(() {
+      MonQuartierScreen.afficherCarte = true;
+      Localisation.positionActuelle = positionParDefaut;
+    });
+
+    // Connecte un résident actif du quartier El Yasmine
+    Future<void> connecterResident() async {
+      mock.ajouterCompte(compteDeTest(StatutUtilisateur.actif), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+    }
+
+    testWidgets('Admin : infos, carte et code d\'invitation, pas de changement',
+        (WidgetTester tester) async {
+      await lancerApp(tester);
+      await toucherOnglet(tester, 'Profil');
+      await toucher(tester, find.text('Mon quartier'));
+
+      expect(find.byType(MonQuartierScreen), findsOneWidget);
+      expect(find.text('Résidence El Yasmine'), findsOneWidget);
+      expect(find.text('Ennasr 2, Ariana'), findsOneWidget);
+      expect(find.text('YAS72B'), findsOneWidget);
+      expect(find.byKey(const Key('carteQuartier')), findsOneWidget);
+      expect(find.text('Changer de quartier'), findsNothing);
+    });
+
+    testWidgets('Menu → Mon quartier ouvre l\'écran',
+        (WidgetTester tester) async {
+      await lancerApp(tester);
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      await toucherDansMenu(tester, find.text('Mon quartier'));
+      expect(find.byType(MonQuartierScreen), findsOneWidget);
+    });
+
+    testWidgets('Résident : nombre de membres, pas de code',
+        (WidgetTester tester) async {
+      await connecterResident();
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      expect(find.textContaining('membres'), findsOneWidget);
+      expect(find.text('YAS72B'), findsNothing);
+      expect(find.text('Changer de quartier'), findsOneWidget);
+      // Seul l'admin trace les limites
+      expect(find.text('Modifier les limites'), findsNothing);
+      expect(find.text('Tracer les limites'), findsNothing);
+    });
+
+    testWidgets('Admin : modifier les limites (annuler un coin, enregistrer)',
+        (WidgetTester tester) async {
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Modifier les limites'));
+      expect(find.byType(TracerLimitesScreen), findsOneWidget);
+      // On repart du contour actuel (4 coins)
+      expect(find.text('4 coins placés.'), findsOneWidget);
+
+      await toucher(tester, find.text('Annuler le dernier'));
+      expect(find.text('3 coins placés.'), findsOneWidget);
+
+      await toucher(tester, find.text('Enregistrer'));
+      expect(find.byType(MonQuartierScreen), findsOneWidget);
+      expect(find.text('Limites enregistrées'), findsOneWidget);
+      final quartier = (await mock.getQuartierConnecte()).donnee!;
+      expect(quartier.contour.length, 3);
+    });
+
+    testWidgets('Tracer les limites : impossible d\'enregistrer sous 3 coins',
+        (WidgetTester tester) async {
+      appRouter.go('/profil/quartier/limites');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Tout effacer'));
+      expect(find.textContaining('0/3 minimum'), findsOneWidget);
+      final PrimaryButton enregistrer =
+          tester.widget<PrimaryButton>(find.byType(PrimaryButton));
+      expect(enregistrer.onPressed, isNull);
+    });
+
+    testWidgets('Me localiser : sélectionne le quartier qui contient ma position',
+        (WidgetTester tester) async {
+      // Un point à l'intérieur du contour d'El Yasmine
+      Localisation.positionActuelle = () async {
+        return const Resultat.succes(PointGps(36.8625, 10.1700));
+      };
+      mock.ajouterCompte(compteSansQuartier(), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/code-quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Me localiser'));
+      expect(find.text('Tu es dans Résidence El Yasmine'), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+      final PrimaryButton rejoindre =
+          tester.widget<PrimaryButton>(find.byType(PrimaryButton));
+      expect(rejoindre.onPressed, isNotNull);
+    });
+
+    testWidgets('Me localiser : aucun quartier à cette position',
+        (WidgetTester tester) async {
+      Localisation.positionActuelle = () async {
+        return const Resultat.succes(PointGps(48.85, 2.35)); // Paris
+      };
+      mock.ajouterCompte(compteSansQuartier(), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/code-quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Me localiser'));
+      expect(find.textContaining('Aucun quartier trouvé à ta position'),
+          findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_checked), findsNothing);
+    });
+
+    testWidgets('Me localiser : GPS refusé → message',
+        (WidgetTester tester) async {
+      Localisation.positionActuelle = () async {
+        return const Resultat.echec('Autorise Houmani à utiliser ta position');
+      };
+      mock.ajouterCompte(compteSansQuartier(), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/code-quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Me localiser'));
+      expect(find.text('Autorise Houmani à utiliser ta position'), findsOneWidget);
+    });
+
+    testWidgets('Quartier sans coordonnées : message à la place de la carte',
+        (WidgetTester tester) async {
+      mock.ajouterCompte(
+        compteDeTest(StatutUtilisateur.actif)
+            .copier(quartierId: 'q2', quartier: 'Cité El Wafa'),
+        'secret123',
+      );
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      expect(find.byKey(const Key('carteQuartier')), findsNothing);
+      expect(
+        find.text('La carte du quartier n\'est pas encore disponible.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Résident : changer de quartier demande une confirmation',
+        (WidgetTester tester) async {
+      await connecterResident();
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Changer de quartier'));
+      expect(find.byType(CodeQuartierScreen), findsOneWidget);
+      // Mode changement : flèche retour, pas de déconnexion,
+      // et le quartier actuel n'est pas proposé
+      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+      expect(find.text('Se déconnecter'), findsNothing);
+      expect(find.text('Résidence El Yasmine'), findsNothing);
+
+      await toucher(tester, find.text('Cité El Wafa'));
+      await toucher(tester, find.text('Rejoindre la houma'));
+      expect(find.text('Changer de quartier ?'), findsOneWidget);
+
+      // Annuler : rien ne change
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CodeQuartierScreen), findsOneWidget);
+      expect(mock.getUtilisateurConnecte().quartierId, 'q1');
+
+      await toucher(tester, find.text('Rejoindre la houma'));
+      await tester.tap(find.text('Changer'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AttenteValidationScreen), findsOneWidget);
+      expect(mock.getUtilisateurConnecte().quartierId, 'q2');
+      expect(
+        mock.getUtilisateurConnecte().statut,
+        StatutUtilisateur.enAttente,
+      );
+    });
   });
 }
 

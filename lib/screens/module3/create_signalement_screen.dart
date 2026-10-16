@@ -101,7 +101,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       _erreurCategorie ? 'Choisis une catégorie' : '',
-                      style: const TextStyle(color: AppColors.error),
+                      style: TextStyle(color: AppColors.error),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -144,7 +144,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                 Text(
                   _message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.success,
                     fontWeight: FontWeight.w600,
                   ),
@@ -155,7 +155,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                   onPressed: _publier,
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'Tous les membres de la houma seront notifiés.',
                   style: TextStyle(
                     fontSize: 12,
