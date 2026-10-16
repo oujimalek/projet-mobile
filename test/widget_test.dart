@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -16,6 +17,7 @@ import 'package:houmani/router/app_router.dart';
 import 'package:houmani/screens/accueil_screen.dart';
 import 'package:houmani/screens/demo_screen.dart';
 import 'package:houmani/screens/module1/admin_membres_screen.dart';
+import 'package:houmani/screens/module1/annuaire_voisins_screen.dart';
 import 'package:houmani/screens/module1/attente_validation_screen.dart';
 import 'package:houmani/screens/module1/code_quartier_screen.dart';
 import 'package:houmani/screens/module1/connexion_screen.dart';
@@ -832,6 +834,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('Mot de passe modifié'), findsOneWidget);
+  });
+
+  testWidgets('Profil : annuaire des voisins, recherche et numéro copié',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Annuaire des voisins'));
+    expect(find.byType(AnnuaireVoisinsScreen), findsOneWidget);
+
+    // Les membres actifs, sans soi-même ni les bloqués / en attente
+    expect(find.text('Youssef Trabelsi'), findsOneWidget);
+    expect(find.text('Salma Gharbi'), findsOneWidget);
+    expect(find.text('Karim Mansour'), findsOneWidget);
+    expect(find.text('Amira Ben Salah'), findsNothing);
+    expect(find.text('Walid Ferchichi'), findsNothing);
+    expect(find.text('Sarra Ben Ali'), findsNothing);
+
+    // Recherche par compétence
+    await tester.enterText(find.byType(TextField), 'cuisine');
+    await tester.pumpAndSettle();
+    expect(find.text('Salma Gharbi'), findsOneWidget);
+    expect(find.text('Youssef Trabelsi'), findsNothing);
+
+    // Rien ne correspond
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('Aucun voisin trouvé'), findsOneWidget);
+
+    // Recherche par nom, puis le numéro copié
+    await tester.enterText(find.byType(TextField), 'youssef');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Youssef Trabelsi'));
+    await tester.pumpAndSettle();
+    expect(find.text('+216 22 111 111'), findsOneWidget);
+
+    // Pas de vrai presse-papiers en test : on note ce qui y est copié
+    String? copie;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall appel) async {
+        if (appel.method == 'Clipboard.setData') {
+          copie = (appel.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.tap(find.text('Copier le numéro'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('Numéro copié'), findsOneWidget);
+    expect(copie, '+216 22 111 111');
   });
 
   testWidgets('Paramètres : vérifier son numéro par SMS',

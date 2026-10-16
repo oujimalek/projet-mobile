@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/accueil_screen.dart';
 import '../screens/demo_screen.dart';
 import '../screens/module1/admin_membres_screen.dart';
+import '../screens/module1/annuaire_voisins_screen.dart';
 import '../screens/module1/attente_validation_screen.dart';
 import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
@@ -86,6 +87,12 @@ final GoRouter appRouter = GoRouter(
               path: 'membres',
               builder: (context, state) {
                 return const AdminMembresScreen(); // M1 (admin)
+              },
+            ),
+            GoRoute(
+              path: 'voisins',
+              builder: (context, state) {
+                return const AnnuaireVoisinsScreen(); // M1
               },
             ),
             GoRoute(
