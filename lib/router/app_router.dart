@@ -17,6 +17,7 @@ import '../screens/module3/create_signalement_screen.dart';
 import '../screens/module4/sondage_screen.dart';
 import '../screens/splash_screen.dart';
 import '../widgets/app_bottom_nav.dart';
+import '../widgets/app_drawer.dart';
 
 /// Les chemins (adresses) des 5 onglets, dans l'ordre de la barre du bas.
 /// L'index dans cette liste = l'index de l'onglet dans AppBottomNav.
@@ -168,6 +169,8 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: cleCoquille, // permet d'ouvrir le menu depuis chaque onglet
+      drawer: AppDrawer(chemin: chemin), // menu latéral (glisser depuis la gauche)
       body: child,
       bottomNavigationBar: AppBottomNav(
         indexActif: _indexActif(),

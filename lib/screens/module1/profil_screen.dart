@@ -6,6 +6,7 @@ import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_drawer.dart';
 import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 6, profil de l'utilisateur connecté.
@@ -58,14 +59,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
     }
   }
 
-  Future<void> _seDeconnecter() async {
-    await _repository.deconnexion();
-    if (mounted) {
-      // go : on remplace tout, pas de retour vers le profil
-      context.go('/connexion');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final Utilisateur utilisateur = _repository.getUtilisateurConnecte();
@@ -105,20 +98,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(height: 20),
 
                 // ----- Liens -----
+                // (La déconnexion est dans le menu latéral, carte du bas)
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(children: _liens(context, utilisateur)),
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton(
-                    onPressed: _seDeconnecter,
-                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                    child: const Text(
-                      'Se déconnecter',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -156,6 +139,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
         children: [
           Row(
             children: [
+              IconButton(
+                tooltip: 'Menu',
+                onPressed: ouvrirMenu,
+                icon: const Icon(Icons.menu),
+              ),
               const Expanded(
                 child: Text(
                   'Mon profil',

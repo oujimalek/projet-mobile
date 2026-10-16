@@ -22,6 +22,7 @@ import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
+import 'package:houmani/widgets/app_drawer.dart';
 
 import 'mock_utilisateur_repository.dart';
 
@@ -59,6 +60,19 @@ Future<void> toucher(WidgetTester tester, Finder finder) async {
   }
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+/// Fait défiler le menu latéral jusqu'au widget, puis le touche.
+Future<void> toucherDansMenu(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    100,
+    scrollable: find
+        .descendant(of: find.byType(Drawer), matching: find.byType(Scrollable))
+        .first,
+  );
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
@@ -304,12 +318,52 @@ void main() {
     expect(UtilisateurRepository().getUtilisateurConnecte().avatar, 'chat');
   });
 
-  testWidgets('Accueil ouvre la démo, qui ouvre le module 1',
+  testWidgets('Accueil : salutation, raccourcis et demandes en attente',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    expect(find.text('Ahla Amira !'), findsOneWidget);
+    expect(find.text('3 demandes d\'adhésion en attente'), findsOneWidget);
+
+    // Un raccourci ouvre l'onglet du module
+    await toucher(tester, find.text('Signaler'));
+    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+  });
+
+  testWidgets('Menu latéral : modules, sous-rubriques et déconnexion',
       (WidgetTester tester) async {
     await lancerApp(tester);
 
-    await tester.tap(find.text('Voir la démo des modules'));
+    await tester.tap(find.byTooltip('Menu'));
     await tester.pumpAndSettle();
+    expect(find.byType(Drawer), findsOneWidget);
+    expect(find.text('Amira Ben Salah'), findsOneWidget);
+
+    // Un module se déplie et montre ses sous-rubriques
+    // (dans le menu, pas l'onglet "Services" de la barre du bas)
+    await tester.tap(
+      find.descendant(of: find.byType(Drawer), matching: find.text('Services')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Offres et demandes'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ServicesListScreen), findsOneWidget);
+    expect(find.byType(Drawer), findsNothing);
+
+    // Déconnexion depuis la carte du bas
+    cleCoquille.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
+  testWidgets('Le menu ouvre la démo, qui ouvre le module 1',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await toucherDansMenu(tester, find.text('Démo des modules'));
     expect(find.byType(DemoScreen), findsOneWidget);
     expect(find.text('Ahla bik !'), findsOneWidget);
 
