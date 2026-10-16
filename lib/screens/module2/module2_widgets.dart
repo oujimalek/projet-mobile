@@ -199,3 +199,75 @@ class PastilleChoix extends StatelessWidget {
     );
   }
 }
+
+/// Un message centré, avec une icône : état vide, erreur ou "pas connecté".
+class MessageEtat extends StatelessWidget {
+  final String texte;
+  final IconData icone;
+
+  const MessageEtat({
+    super.key,
+    required this.texte,
+    this.icone = Icons.info_outline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icone, size: 36, color: AppColors.textSecondary),
+            const SizedBox(height: 12),
+            Text(
+              texte,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Affiche un Stream de Firestore avec les 3 états : chargement, erreur
+/// lisible (connexion, droits, pas connecté...) et données.
+///
+/// Le Stream doit être créé UNE seule fois (dans initState ou un champ
+/// `late final`), pas dans build : sinon l'écran se réabonne à chaque
+/// redessin.
+class FluxM2<T> extends StatelessWidget {
+  final Stream<T> flux;
+  final Widget Function(BuildContext context, T donnees) construire;
+
+  const FluxM2({super.key, required this.flux, required this.construire});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<T>(
+      stream: flux,
+      builder: (context, instantane) {
+        if (instantane.hasError) {
+          return MessageEtat(
+            texte: instantane.error is String
+                ? instantane.error as String
+                : 'Une erreur est survenue',
+            icone: Icons.cloud_off_outlined,
+          );
+        }
+        if (instantane.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return construire(context, instantane.data as T);
+      },
+    );
+  }
+}
+
+/// Affiche un message en bas de l'écran (SnackBar) pour le résultat d'une écriture.
+void afficherMessage(BuildContext context, String texte) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texte)));
+}

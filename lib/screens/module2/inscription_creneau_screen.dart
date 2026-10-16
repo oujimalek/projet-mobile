@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/creneau_commun.dart';
+import '../../data/resultat.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -28,30 +29,29 @@ class InscriptionCreneauScreen extends StatefulWidget {
 class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   final ServiceRepository _repository = ServiceRepository();
 
-  String? _creneauChoisi; // id du créneau sélectionné, null = aucun
-  bool _rappelVeille = false;
+  // Flux créés UNE fois (voir FluxM2) : le créneau touché dans le planning,
+  // puis (quand on connaît son service) tous les créneaux de ce service
+  late final Stream<CreneauCommun?> _fluxDepart = _repository.ecouterCreneau(
+    widget.creneauId,
+  );
+  Stream<List<CreneauCommun>>? _fluxService;
 
-  @override
-  void initState() {
-    super.initState();
-    // Le créneau touché dans le planning est sélectionné au départ
-    final CreneauCommun? depart = _repository.getCreneauParId(widget.creneauId);
-    if (depart != null && _peutEtreChoisi(depart)) {
-      _creneauChoisi = depart.id;
-    }
-  }
+  String? _creneauChoisi; // id du créneau sélectionné, null = aucun
+  bool _choixInitial = false; // le créneau touché est sélectionné une seule fois
+  bool _rappelVeille = false;
+  bool _enCours = false; // true pendant une écriture : boutons désactivés
 
   /// On peut choisir un créneau libre ou le sien (pour se désister).
   bool _peutEtreChoisi(CreneauCommun creneau) {
-    return creneau.estLibre || creneau.inscrit == _repository.getMonNom();
+    return creneau.estLibre || creneau.inscritId == _repository.getMonId();
   }
 
   /// Les créneaux du service à partir d'aujourd'hui.
-  List<CreneauCommun> _prochainsCreneaux(String serviceId) {
+  List<CreneauCommun> _prochainsCreneaux(List<CreneauCommun> tous) {
     final DateTime maintenant = DateTime.now();
     final DateTime aujourdhui = DateTime(maintenant.year, maintenant.month, maintenant.day);
     final List<CreneauCommun> resultat = [];
-    for (final creneau in _repository.getCreneauxParService(serviceId)) {
+    for (final creneau in tous) {
       if (!creneau.date.isBefore(aujourdhui)) {
         resultat.add(creneau);
       }
@@ -77,14 +77,25 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   }
 
   /// "Je m'inscris".
-  void _inscrire() {
-    final bool ok = _repository.inscrire(_creneauChoisi!, rappelVeille: _rappelVeille);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? 'Inscription confirmée' : 'Ce créneau est déjà pris'),
-      ),
+  Future<void> _inscrire() async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.inscrire(
+      _creneauChoisi!,
+      rappelVeille: _rappelVeille,
     );
-    if (ok) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Inscription confirmée' : resultat.erreur!,
+    );
+    if (resultat.estSucces) {
       Navigator.of(context).pop(true);
     } else {
       setState(() {
@@ -94,44 +105,64 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   }
 
   /// "Se désister d'un créneau".
-  void _desister() {
-    final bool ok = _repository.desinscrire(_creneauChoisi!);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? 'Désinscription enregistrée' : 'Désinscription impossible'),
-      ),
+  Future<void> _desister() async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.desinscrire(_creneauChoisi!);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Désinscription enregistrée' : resultat.erreur!,
     );
-    if (ok) {
+    if (resultat.estSucces) {
       Navigator.of(context).pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final CreneauCommun? depart = _repository.getCreneauParId(widget.creneauId);
-
     return Scaffold(
       body: Column(
         children: [
           const AppHeader(titre: 'Inscription à un créneau'),
           Expanded(
-            child: depart == null
-                ? Center(
-                    child: Text(
-                      'Ce créneau n\'existe plus',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                : _contenu(depart),
+            child: FluxM2<CreneauCommun?>(
+              flux: _fluxDepart,
+              construire: (context, depart) {
+                if (depart == null) {
+                  return const MessageEtat(texte: 'Ce créneau n\'existe plus');
+                }
+                // Le créneau touché dans le planning est sélectionné au départ
+                if (!_choixInitial) {
+                  _choixInitial = true;
+                  if (_peutEtreChoisi(depart)) {
+                    _creneauChoisi = depart.id;
+                  }
+                }
+                final Stream<List<CreneauCommun>> flux = _fluxService ??=
+                    _repository.ecouterCreneauxParService(depart.serviceId);
+                return FluxM2<List<CreneauCommun>>(
+                  flux: flux,
+                  construire: (context, tous) {
+                    return _contenu(depart, _prochainsCreneaux(tous));
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _contenu(CreneauCommun depart) {
-    final List<CreneauCommun> creneaux = _prochainsCreneaux(depart.serviceId);
-    final String moi = _repository.getMonNom();
+  Widget _contenu(CreneauCommun depart, List<CreneauCommun> creneaux) {
+    final String moi = _repository.getMonId();
 
     // Le créneau sélectionné : libre (on s'inscrit) ou à moi (on se désiste)
     CreneauCommun? choisi;
@@ -140,12 +171,12 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
       if (creneau.id == _creneauChoisi) {
         choisi = creneau;
       }
-      if (creneau.inscrit == moi) {
+      if (creneau.inscritId == moi) {
         jeSuisInscrit = true;
       }
     }
     final bool choisiLibre = choisi != null && choisi.estLibre;
-    final bool choisiEstMoi = choisi != null && choisi.inscrit == moi;
+    final bool choisiEstMoi = choisi != null && choisi.inscritId == moi;
 
     final List<Widget> lignes = [];
     for (final creneau in creneaux) {
@@ -230,13 +261,13 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
                 // null = bouton désactivé (aucun créneau libre sélectionné)
                 PrimaryButton(
                   texte: 'Je m\'inscris',
-                  onPressed: choisiLibre ? _inscrire : null,
+                  onPressed: (choisiLibre && !_enCours) ? _inscrire : null,
                 ),
                 if (jeSuisInscrit) ...[
                   const SizedBox(height: 10),
                   SecondaryButton(
                     texte: 'Se désister d\'un créneau',
-                    onPressed: choisiEstMoi ? _desister : null,
+                    onPressed: (choisiEstMoi && !_enCours) ? _desister : null,
                   ),
                   if (!choisiEstMoi)
                     Padding(
@@ -278,8 +309,8 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
 
   /// Une ligne de la liste : rond de sélection, date et heure, état.
   Widget _ligneCreneau(CreneauCommun creneau) {
-    final String moi = _repository.getMonNom();
-    final bool estMoi = creneau.inscrit == moi;
+    final String moi = _repository.getMonId();
+    final bool estMoi = creneau.inscritId == moi;
     final bool choisi = creneau.id == _creneauChoisi;
     final bool selectionnable = _peutEtreChoisi(creneau);
 

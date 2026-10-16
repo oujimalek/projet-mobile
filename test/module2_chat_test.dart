@@ -5,7 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:houmani/data/models/demande_service.dart';
 import 'package:houmani/data/models/message_chat.dart';
+import 'package:houmani/data/models/service.dart';
 import 'package:houmani/data/models/statut_demande.dart';
+import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/chat_repository.dart';
 import 'package:houmani/data/services/service_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
@@ -13,6 +16,8 @@ import 'package:houmani/screens/module2/chat_screen.dart';
 import 'package:houmani/screens/module2/mes_demandes_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
 
+import 'mock_chat_repository.dart';
+import 'mock_service_repository.dart';
 import 'mock_utilisateur_repository.dart';
 
 /// Affiche un écran dans une MaterialApp avec le thème Houmani.
@@ -26,274 +31,276 @@ Future<void> afficher(WidgetTester tester, Widget ecran) async {
 }
 
 void main() {
-  final ServiceRepository serviceRepository = ServiceRepository();
-  final ChatRepository chat = ChatRepository();
+  late MockUtilisateurRepository utilisateurs;
+  late MockServiceRepository depot;
+  late MockChatRepository chat;
+  late Utilisateur amira;
+
+  final Utilisateur nizar = Utilisateur(
+    id: 'u30',
+    prenom: 'Nizar',
+    nom: 'Hamdi',
+    email: 'nizar@houmani.tn',
+    telephone: '',
+    quartierId: 'q1',
+    quartier: 'Résidence El Yasmine',
+    residence: 'Résidence El Yasmine, Bloc B',
+  );
+  final Utilisateur sarra = Utilisateur(
+    id: 'u31',
+    prenom: 'Sarra',
+    nom: 'Ayari',
+    email: 'sarra@houmani.tn',
+    telephone: '',
+    quartierId: 'q1',
+    quartier: 'Résidence El Yasmine',
+    residence: 'Résidence El Yasmine, Bloc A',
+  );
+
+  late Service serviceDeNizar;
+  late DemandeService acceptee; // ma demande (Amira) chez Nizar
 
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
-  // Les listes sont static : on remet tout à zéro, sans réponse automatique
-  // Utilisateur connecté de démo (Amira B.) : sans ce mock, l'app
-  // utiliserait Firebase
+  // Dépôts VIDES avant chaque test : aucune donnée de démo, aucune réponse
+  // automatique. Utilisateur connecté : Amira B. (mock du module 1).
   setUp(() {
-    UtilisateurRepository.instance = MockUtilisateurRepository();
-    ChatRepository.reponseAutomatiqueActive = false;
-    serviceRepository.reinitialiser();
-    chat.reinitialiser();
+    utilisateurs = MockUtilisateurRepository();
+    UtilisateurRepository.instance = utilisateurs;
+    depot = MockServiceRepository();
+    ServiceRepository.instance = depot;
+    chat = MockChatRepository();
+    ChatRepository.instance = chat;
+    amira = utilisateurs.getUtilisateurConnecte();
+    utilisateurs.ajouterCompte(nizar, 'pw');
+    utilisateurs.ajouterCompte(sarra, 'pw');
+    serviceDeNizar = depot.ajouterServiceDe(nizar, titre: 'Perceuse à prêter');
+    acceptee = depot.ajouterDemandeDe(amira, serviceDeNizar, statut: StatutDemande.acceptee);
   });
 
-  tearDown(() {
-    ChatRepository.reponseAutomatiqueActive = true;
-    chat.reinitialiser();
-  });
-
-  /// Copie d'une demande de départ avec un autre statut.
-  DemandeService avecStatut(String id, StatutDemande statut) {
-    return serviceRepository.getDemandeParId(id)!.copyWith(statut: statut);
+  Future<void> devenir(Utilisateur utilisateur) async {
+    await utilisateurs.connexion(utilisateur.email, 'pw');
   }
 
-  group('Chat : peutDiscuter', () {
-    test('faux en attente et refusée', () {
+  DemandeService avecStatut(StatutDemande statut) {
+    return acceptee.copyWith(statut: statut);
+  }
+
+  group('Chat : règles sans réseau', () {
+    test('peutDiscuter : faux en attente et refusée, vrai acceptée et réalisée', () {
+      expect(ChatRepository.peutDiscuter(avecStatut(StatutDemande.enAttente), amira.id), isFalse);
+      expect(ChatRepository.peutDiscuter(avecStatut(StatutDemande.refusee), amira.id), isFalse);
+      expect(ChatRepository.peutDiscuter(avecStatut(StatutDemande.acceptee), amira.id), isTrue);
+      expect(ChatRepository.peutDiscuter(avecStatut(StatutDemande.realisee), amira.id), isTrue);
+    });
+
+    test('peutDiscuter : faux pour quelqu\'un qui n\'est pas dans la demande', () {
+      expect(ChatRepository.peutDiscuter(acceptee, nizar.id), isTrue); // l'auteur
+      expect(ChatRepository.peutDiscuter(acceptee, sarra.id), isFalse); // un tiers
+    });
+
+    test('interlocuteur : l\'autre personne', () {
+      expect(ChatRepository.interlocuteur(acceptee, amira.id), 'Nizar H.');
+      expect(ChatRepository.interlocuteur(acceptee, nizar.id), 'Amira B.');
+    });
+
+    test('refusMessage : vide, trop long, chat fermé', () {
+      expect(ChatRepository.refusMessage(acceptee, '   ', amira.id), isNotNull);
       expect(
-        chat.peutDiscuter(avecStatut('d2', StatutDemande.enAttente)),
-        isFalse,
+        ChatRepository.refusMessage(acceptee, 'a' * (ChatRepository.longueurMax + 1), amira.id),
+        isNotNull,
       );
       expect(
-        chat.peutDiscuter(avecStatut('d2', StatutDemande.refusee)),
-        isFalse,
+        ChatRepository.refusMessage(avecStatut(StatutDemande.enAttente), 'Salam', amira.id),
+        isNotNull,
+      );
+      expect(ChatRepository.refusMessage(acceptee, 'Salam', amira.id), isNull);
+      expect(
+        ChatRepository.refusMessage(acceptee, 'a' * ChatRepository.longueurMax, amira.id),
+        isNull,
       );
     });
 
-    test('vrai acceptée et réalisée', () {
-      expect(
-        chat.peutDiscuter(avecStatut('d2', StatutDemande.acceptee)),
-        isTrue,
-      );
-      expect(
-        chat.peutDiscuter(avecStatut('d2', StatutDemande.realisee)),
-        isTrue,
-      );
-      // Côté auteur du service (demande reçue)
-      expect(
-        chat.peutDiscuter(serviceRepository.getDemandeParId('d5')!),
-        isTrue,
-      );
+    test('compterNonLus : seulement les messages de l\'autre, pas encore lus', () {
+      final DateTime maintenant = DateTime.now();
+      final List<MessageChat> messages = [
+        MessageChat(id: '1', demandeId: 'd', auteurId: nizar.id, auteurNom: 'Nizar H.', texte: 'a', date: maintenant),
+        MessageChat(id: '2', demandeId: 'd', auteurId: nizar.id, auteurNom: 'Nizar H.', texte: 'b', date: maintenant, lu: true),
+        MessageChat(id: '3', demandeId: 'd', auteurId: amira.id, auteurNom: 'Amira B.', texte: 'c', date: maintenant),
+      ];
+      expect(ChatRepository.compterNonLus(messages, amira.id), 1);
+      expect(ChatRepository.compterNonLus(messages, nizar.id), 1);
     });
 
-    test('faux pour une personne étrangère à la demande', () {
-      // h1 : Salma G. et Karim M., réalisée, mais je n'y suis pour rien
-      expect(
-        chat.peutDiscuter(serviceRepository.getDemandeParId('h1')!),
-        isFalse,
+    test('MessageChat : toMap puis fromMap', () {
+      final MessageChat message = MessageChat(
+        id: 'm1',
+        demandeId: 'd1',
+        auteurId: 'u1',
+        auteurNom: 'Amira B.',
+        texte: 'Salam',
+        date: DateTime(2026, 10, 1),
       );
-    });
-
-    test('getInterlocuteur donne l\'autre personne', () {
-      expect(
-        chat.getInterlocuteur(serviceRepository.getDemandeParId('d2')!),
-        'Nizar H.',
-      );
-      expect(
-        chat.getInterlocuteur(serviceRepository.getDemandeParId('d5')!),
-        'Sarra A.',
-      );
+      final Map<String, dynamic> map = message.toMap();
+      expect(map['auteurId'], 'u1');
+      expect(map['lu'], false);
+      expect(map.containsKey('demandeId'), isFalse); // dans le chemin
+      final MessageChat vide = MessageChat.fromMap('m2', 'd1', {});
+      expect(vide.texte, '');
+      expect(vide.demandeId, 'd1');
+      expect(vide.lu, isFalse);
     });
   });
 
-  group('Chat : messages', () {
-    test(
-      'données de départ : 4 messages, triés du plus ancien au plus récent',
-      () {
-        expect(chat.getMessages('d2').length, 3);
-        expect(chat.getMessages('d5').length, 1);
-
-        final List<MessageChat> messages = chat.getMessages('d2');
-        expect(messages.first.id, 'm1');
-        expect(messages.last.id, 'm3');
-        expect(chat.dernierMessage('d2')!.id, 'm3');
-        expect(chat.dernierMessage('d1'), isNull);
-      },
-    );
-
-    test('envoyerMessage : refusé si vide, espaces seulement ou trop long', () {
-      expect(chat.envoyerMessage('d2', ''), isFalse);
-      expect(chat.envoyerMessage('d2', '    '), isFalse);
-      expect(chat.envoyerMessage('d2', 'a' * 501), isFalse);
-      expect(chat.getMessages('d2').length, 3);
+  group('Chat : repository (mock)', () {
+    test('au départ, aucun message et aucune réponse automatique', () async {
+      expect(await chat.ecouterMessages(acceptee.id).first, isEmpty);
+      final Resultat<void> resultat = await chat.envoyerMessage(acceptee, 'Salam Nizar');
+      expect(resultat.estSucces, isTrue);
+      await Future<void>.delayed(const Duration(seconds: 3));
+      expect(chat.messages.length, 1); // personne ne répond tout seul
     });
 
-    test('envoyerMessage : refusé si la demande n\'est pas acceptée', () {
-      expect(chat.envoyerMessage('d1', 'Salam'), isFalse); // en attente
-      expect(chat.envoyerMessage('h1', 'Salam'), isFalse); // étrangère
-      expect(chat.envoyerMessage('inconnue', 'Salam'), isFalse);
+    test('envoyerMessage : l\'auteur est l\'utilisateur connecté (uid + nom)', () async {
+      await chat.envoyerMessage(acceptee, '  Salam Nizar  ');
+      final MessageChat message = chat.messages.single;
+      expect(message.auteurId, amira.id);
+      expect(message.auteurNom, 'Amira B.');
+      expect(message.texte, 'Salam Nizar');
+      expect(message.lu, isFalse);
+      expect(message.demandeId, acceptee.id);
     });
 
-    test('envoyerMessage : accepté (500 caractères au maximum)', () {
-      expect(chat.envoyerMessage('d2', '  Merci Nizar !  '), isTrue);
-      expect(chat.envoyerMessage('d2', 'a' * 500), isTrue);
-
-      final List<MessageChat> messages = chat.getMessages('d2');
-      expect(messages.length, 5);
-      expect(messages[3].texte, 'Merci Nizar !'); // espaces retirés
-      expect(messages[3].auteur, serviceRepository.getMonNom());
+    test('envoyerMessage : refusé si le chat est fermé, vide ou trop long', () async {
+      expect((await chat.envoyerMessage(avecStatut(StatutDemande.enAttente), 'Salam')).estSucces, isFalse);
+      expect((await chat.envoyerMessage(acceptee, '   ')).estSucces, isFalse);
+      expect(
+        (await chat.envoyerMessage(acceptee, 'a' * (ChatRepository.longueurMax + 1))).estSucces,
+        isFalse,
+      );
+      expect(chat.messages, isEmpty);
     });
 
-    test('nombreNonLus et marquerCommeLus', () {
-      expect(chat.nombreNonLus('d2'), 1);
-      expect(chat.nombreNonLus('d5'), 1);
-
-      chat.marquerCommeLus('d2');
-      expect(chat.nombreNonLus('d2'), 0);
-      expect(chat.nombreNonLus('d5'), 1); // l'autre conversation ne change pas
+    test('les messages arrivent en direct, du plus ancien au plus récent', () async {
+      final Future<List<List<MessageChat>>> listes = chat.ecouterMessages(acceptee.id).take(3).toList();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      chat.ajouterMessageDe(nizar, acceptee.id, 'Premier');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      chat.ajouterMessageDe(amira, acceptee.id, 'Deuxième');
+      final List<List<MessageChat>> recues = await listes;
+      expect(recues[0], isEmpty);
+      expect(recues[1].length, 1);
+      expect(recues[2].map((m) => m.texte).toList(), ['Premier', 'Deuxième']);
     });
 
-    test('mes propres messages ne comptent pas comme non lus', () {
-      chat.envoyerMessage('d2', 'Salam');
-      expect(chat.nombreNonLus('d2'), 1);
+    test('marquerCommeLus : seulement les messages de l\'autre', () async {
+      chat.ajouterMessageDe(nizar, acceptee.id, 'Salut');
+      chat.ajouterMessageDe(amira, acceptee.id, 'Salam');
+      await chat.marquerCommeLus(acceptee.id);
+      final List<MessageChat> messages = chat.messages;
+      expect(messages[0].lu, isTrue); // reçu : lu
+      expect(messages[1].lu, isFalse); // le mien : au destinataire de le lire
+    });
+
+    test('erreur de connexion : dans le Stream et dans le Resultat', () async {
+      chat.erreur = 'Serveur injoignable, vérifie ta connexion Internet';
+      await expectLater(chat.ecouterMessages(acceptee.id), emitsError(chat.erreur));
+      expect((await chat.envoyerMessage(acceptee, 'Salam')).erreur, chat.erreur);
+    });
+
+    test('personne n\'est connecté', () async {
+      await devenir(sarra);
+      await utilisateurs.supprimerCompte('pw');
+      await expectLater(
+        chat.ecouterMessages(acceptee.id),
+        emitsError('Tu n\'es pas connecté'),
+      );
+      expect((await chat.envoyerMessage(acceptee, 'Salam')).erreur, 'Tu n\'es pas connecté');
     });
   });
 
-  group('Chat : écrans', () {
-    testWidgets('"Contacter" ouvre le chat, on écrit et on envoie', (
-      WidgetTester tester,
-    ) async {
-      await afficher(tester, const MesDemandesScreen());
+  group('Écran : chat', () {
+    testWidgets('sans message : invitation à dire bonjour', (WidgetTester tester) async {
+      await afficher(tester, ChatScreen(demandeId: acceptee.id));
+      expect(find.textContaining('Aucun message. Dis bonjour à Nizar'), findsOneWidget);
+      expect(find.text('Nizar H.'), findsOneWidget); // en-tête
+      expect(find.text('Perceuse à prêter'), findsOneWidget);
+    });
 
-      // Badge des messages non lus et aperçu du dernier message
-      expect(find.text('1'), findsOneWidget);
-      expect(find.textContaining('Nizar : Passe avant 19h'), findsOneWidget);
+    testWidgets('envoyer un message : il s\'affiche, le champ est vidé', (WidgetTester tester) async {
+      await afficher(tester, ChatScreen(demandeId: acceptee.id));
 
-      // d2 (acceptée) est la première demande avec un bouton "Contacter"
-      await tester.tap(find.text('Contacter').first);
-      await tester.pumpAndSettle();
-      expect(find.byType(ChatScreen), findsOneWidget);
-      expect(find.text('Nizar H.'), findsOneWidget);
-      expect(
-        find.text('Salam Amira ! Oui bien sûr, je suis là après 17h.'),
-        findsOneWidget,
-      );
-      expect(find.text('Aujourd\'hui'), findsWidgets);
-
-      // Le bouton envoyer est désactivé tant que le champ est vide
-      final Finder boutonEnvoi = find.widgetWithIcon(IconButton, Icons.send);
-      expect(tester.widget<IconButton>(boutonEnvoi).onPressed, isNull);
-
-      await tester.enterText(find.byType(TextField), 'Je passe vers 18h');
+      await tester.enterText(find.byType(TextField), 'Salam Nizar');
       await tester.pump();
-      expect(tester.widget<IconButton>(boutonEnvoi).onPressed, isNotNull);
-
-      await tester.tap(boutonEnvoi);
+      await tester.tap(find.byTooltip('Envoyer'));
       await tester.pumpAndSettle();
-      expect(find.text('Je passe vers 18h'), findsOneWidget);
-      expect(tester.widget<IconButton>(boutonEnvoi).onPressed, isNull);
 
-      // Retour : le badge a disparu, l'aperçu montre mon message
-      await tester.tap(find.byIcon(Icons.arrow_back));
-      await tester.pumpAndSettle();
-      expect(find.byType(ChatScreen), findsNothing);
-      expect(chat.nombreNonLus('d2'), 0);
-      expect(find.text('1'), findsNothing);
-      expect(find.text('Toi : Je passe vers 18h'), findsOneWidget);
+      expect(find.text('Salam Nizar'), findsOneWidget); // la bulle
+      expect(chat.messages.single.auteurId, amira.id);
+      expect(find.text(''), findsWidgets); // le champ est vide
+      final TextField champ = tester.widget(find.byType(TextField));
+      expect(champ.controller!.text, isEmpty);
     });
 
-    testWidgets('un message rapide remplit le champ', (
-      WidgetTester tester,
-    ) async {
-      await afficher(tester, const ChatScreen(demandeId: 'd2'));
+    testWidgets('le bouton Envoyer est désactivé avec un champ vide', (WidgetTester tester) async {
+      await afficher(tester, ChatScreen(demandeId: acceptee.id));
+      final IconButton bouton = tester.widget(find.widgetWithIcon(IconButton, Icons.send));
+      expect(bouton.onPressed, isNull);
+    });
 
-      await tester.tap(find.text('À quelle heure ?'));
+    testWidgets('un message reçu s\'affiche en direct et est marqué comme lu', (WidgetTester tester) async {
+      await afficher(tester, ChatScreen(demandeId: acceptee.id));
+      chat.ajouterMessageDe(nizar, acceptee.id, 'Passe avant 19h');
+      await tester.pumpAndSettle();
+      expect(find.text('Passe avant 19h'), findsOneWidget);
+      expect(chat.messages.single.lu, isTrue);
+    });
+
+    testWidgets('messages rapides : remplissent le champ', (WidgetTester tester) async {
+      await afficher(tester, ChatScreen(demandeId: acceptee.id));
+      // La rangée de messages rapides défile : on amène celui-ci à l'écran
+      await tester.ensureVisible(find.text('Merci beaucoup !'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Merci beaucoup !'));
       await tester.pump();
-
-      final TextField champ = tester.widget<TextField>(find.byType(TextField));
-      expect(champ.controller!.text, 'À quelle heure ?');
+      final TextField champ = tester.widget(find.byType(TextField));
+      expect(champ.controller!.text, 'Merci beaucoup !');
     });
 
-    testWidgets('conversation vide : message d\'accueil', (
-      WidgetTester tester,
-    ) async {
-      // d4 (Youssef T.) vient d'être acceptée : aucun message pour l'instant
-      serviceRepository.changerStatutDemande('d4', StatutDemande.acceptee);
-      await afficher(tester, const ChatScreen(demandeId: 'd4'));
-
-      expect(
-        find.text('Aucun message. Dis bonjour à Youssef 👋'),
-        findsOneWidget,
+    testWidgets('demande en attente : le chat est fermé', (WidgetTester tester) async {
+      final DemandeService attente = depot.ajouterDemandeDe(
+        amira,
+        depot.ajouterServiceDe(sarra, titre: 'Courses'),
       );
-    });
-
-    testWidgets('demande en attente : pas de champ de saisie', (
-      WidgetTester tester,
-    ) async {
-      await afficher(tester, const ChatScreen(demandeId: 'd1'));
-
-      expect(
-        find.text('Le chat est disponible une fois la demande acceptée.'),
-        findsOneWidget,
-      );
+      await afficher(tester, ChatScreen(demandeId: attente.id));
+      expect(find.text('Le chat est disponible une fois la demande acceptée.'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
     });
 
-    testWidgets('demande réalisée : le chat reste lisible et on peut écrire', (
-      WidgetTester tester,
-    ) async {
-      serviceRepository.changerStatutDemande('d2', StatutDemande.realisee);
-      await afficher(tester, const ChatScreen(demandeId: 'd2'));
-
-      expect(find.text('Réalisée'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), 'Merci beaucoup !');
-      await tester.pump();
-      await tester.tap(find.widgetWithIcon(IconButton, Icons.send));
-      await tester.pumpAndSettle();
-      expect(chat.getMessages('d2').length, 4);
+    testWidgets('demande inconnue : message clair', (WidgetTester tester) async {
+      await afficher(tester, const ChatScreen(demandeId: 'inconnue'));
+      expect(find.text('Cette demande n\'existe plus'), findsOneWidget);
     });
 
-    testWidgets('la réponse automatique arrive après environ 2 secondes', (
-      WidgetTester tester,
-    ) async {
-      ChatRepository.reponseAutomatiqueActive = true;
-      await afficher(tester, const ChatScreen(demandeId: 'd2'));
-
-      await tester.enterText(find.byType(TextField), 'Salam');
-      await tester.pump();
-      await tester.tap(find.widgetWithIcon(IconButton, Icons.send));
-      await tester.pump();
-
-      // Pendant l'attente : "Nizar écrit…"
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.text('Nizar écrit…'), findsOneWidget);
-      expect(find.text('D\'accord, ça marche !'), findsNothing);
-
-      // Après 2 secondes : la réponse est là
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-      expect(find.text('Nizar écrit…'), findsNothing);
-      expect(find.text('D\'accord, ça marche !'), findsOneWidget);
-      expect(chat.nombreNonLus('d2'), 0); // l'écran ouvert l'a déjà lue
+    testWidgets('erreur de connexion lisible', (WidgetTester tester) async {
+      depot.erreur = 'Serveur injoignable, vérifie ta connexion Internet';
+      await afficher(tester, ChatScreen(demandeId: acceptee.id));
+      expect(find.text('Serveur injoignable, vérifie ta connexion Internet'), findsOneWidget);
     });
+  });
 
-    testWidgets('écran fermé avant la réponse : aucun plantage', (
-      WidgetTester tester,
-    ) async {
-      ChatRepository.reponseAutomatiqueActive = true;
+  group('Mes demandes → chat', () {
+    testWidgets('Contacter ouvre le chat de la demande', (WidgetTester tester) async {
+      chat.ajouterMessageDe(nizar, acceptee.id, 'Passe avant 19h');
       await afficher(tester, const MesDemandesScreen());
+      expect(find.text('1'), findsOneWidget); // badge "non lu"
 
-      await tester.tap(find.text('Contacter').first);
+      await tester.tap(find.text('Contacter'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Salam');
-      await tester.pump();
-      await tester.tap(find.widgetWithIcon(IconButton, Icons.send));
-      await tester.pump();
-
-      // On quitte le chat avant la réponse
-      await tester.tap(find.byIcon(Icons.arrow_back));
-      await tester.pumpAndSettle();
-      expect(find.byType(ChatScreen), findsNothing);
-
-      // La réponse arrive quand même, comme "non lue", sans erreur
-      await tester.pump(const Duration(seconds: 3));
-      expect(tester.takeException(), isNull);
-      expect(chat.nombreNonLus('d2'), 1);
+      expect(find.byType(ChatScreen), findsOneWidget);
+      expect(find.text('Passe avant 19h'), findsWidgets);
     });
   });
 }

@@ -27,6 +27,10 @@ class ServicesCommunsScreen extends StatefulWidget {
 class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
   final ServiceRepository _repository = ServiceRepository();
 
+  // Les créneaux de la semaine, en direct (créé UNE fois : voir FluxM2)
+  late final Stream<List<CreneauCommun>> _flux = _repository
+      .ecouterCreneauxDeLaSemaine(_lundi);
+
   late final DateTime _aujourdhui; // aujourd'hui, sans l'heure
   late final DateTime _lundi; // premier jour de la semaine affichée
   late DateTime _jourChoisi; // jour dont on affiche les créneaux
@@ -44,40 +48,53 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
     _jourChoisi = _aujourdhui; // aujourd'hui est choisi par défaut
   }
 
-  /// Ouvre l'inscription à un créneau, puis rafraîchit le planning au retour.
-  Future<void> _ouvrirInscription(CreneauCommun creneau) async {
-    await ouvrirEcran(context, InscriptionCreneauScreen(creneauId: creneau.id));
-    if (mounted) {
-      setState(() {});
-    }
+  /// Ouvre l'inscription à un créneau (le planning se met à jour tout seul).
+  void _ouvrirInscription(CreneauCommun creneau) {
+    ouvrirEcran(context, InscriptionCreneauScreen(creneauId: creneau.id));
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<CreneauCommun> creneaux = _repository.getCreneauxDuJour(_jourChoisi);
-
     return Scaffold(
       body: Column(
         children: [
           _enTete(),
           const SizedBox(height: 16),
-          _bandeauSemaine(),
-          const SizedBox(height: 16),
           Expanded(
-            child: creneaux.isEmpty
-                ? Center(
-                    child: Text(
-                      'Aucun créneau ce jour-là',
-                      style: TextStyle(color: AppColors.textSecondary),
+            child: FluxM2<List<CreneauCommun>>(
+              flux: _flux,
+              construire: (context, semaine) {
+                final List<CreneauCommun> creneaux = [];
+                for (final creneau in semaine) {
+                  if (memeJour(creneau.date, _jourChoisi)) {
+                    creneaux.add(creneau);
+                  }
+                }
+                return Column(
+                  children: [
+                    _bandeauSemaine(semaine),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: creneaux.isEmpty
+                          ? MessageEtat(
+                              texte: semaine.isEmpty
+                                  ? 'Aucun service commun pour l\'instant. '
+                                      'Publie le premier !'
+                                  : 'Aucun créneau ce jour-là',
+                              icone: Icons.calendar_month_outlined,
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              itemCount: creneaux.length,
+                              itemBuilder: (context, index) {
+                                return _carteCreneau(creneaux[index]);
+                              },
+                            ),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: creneaux.length,
-                    itemBuilder: (context, index) {
-                      return _carteCreneau(creneaux[index]);
-                    },
-                  ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -133,11 +150,11 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
   }
 
   /// Les 7 jours de la semaine (le jour choisi est doré).
-  Widget _bandeauSemaine() {
+  Widget _bandeauSemaine(List<CreneauCommun> semaine) {
     final List<Widget> jours = [];
     for (int i = 0; i < 7; i++) {
       final DateTime jour = DateTime(_lundi.year, _lundi.month, _lundi.day + i);
-      jours.add(Expanded(child: _caseJour(jour)));
+      jours.add(Expanded(child: _caseJour(jour, semaine)));
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -146,10 +163,15 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
   }
 
   /// Un jour du bandeau : "Lun" + numéro, et un point s'il y a des créneaux.
-  Widget _caseJour(DateTime jour) {
+  Widget _caseJour(DateTime jour, List<CreneauCommun> semaine) {
     final bool choisi = memeJour(jour, _jourChoisi);
     final bool estAujourdhui = memeJour(jour, _aujourdhui);
-    final bool aDesCreneaux = _repository.getCreneauxDuJour(jour).isNotEmpty;
+    bool aDesCreneaux = false;
+    for (final creneau in semaine) {
+      if (memeJour(creneau.date, jour)) {
+        aDesCreneaux = true;
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -211,8 +233,8 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
 
   /// La carte d'un créneau : titre, horaire, inscrit ou "Créneau libre".
   Widget _carteCreneau(CreneauCommun creneau) {
-    final String moi = _repository.getMonNom();
-    final bool estMoi = creneau.inscrit == moi;
+    final String moi = _repository.getMonId();
+    final bool estMoi = creneau.inscritId == moi;
 
     // Un créneau d'un jour déjà passé ne se réserve plus
     final bool passe = creneau.date.isBefore(_aujourdhui);

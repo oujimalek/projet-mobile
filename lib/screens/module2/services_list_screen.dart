@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import 'mes_demandes_screen.dart';
 import 'module2_outils.dart';
+import 'module2_widgets.dart';
 import 'service_detail_screen.dart';
 import 'service_form_screen.dart';
 import 'services_communs_screen.dart';
@@ -27,6 +28,9 @@ class ServicesListScreen extends StatefulWidget {
 class _ServicesListScreenState extends State<ServicesListScreen> {
   final ServiceRepository _repository = ServiceRepository();
 
+  // Les services en direct (créé UNE fois : voir FluxM2)
+  late final Stream<List<Service>> _flux = _repository.ecouterServices();
+
   // État de l'écran
   bool _afficherOffres = true; // true = onglet "Offres", false = "Demandes"
   String _categorieChoisie = 'Tous';
@@ -45,47 +49,22 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
   ];
 
   /// Les services à afficher selon l'onglet et la catégorie choisis.
-  List<Service> _servicesAffiches() {
+  List<Service> _servicesAffiches(List<Service> tous) {
     final List<Service> resultat = [];
-    for (final service in _repository.getServicesParCategorie(_categorieChoisie)) {
-      if (service.estOffre == _afficherOffres) {
-        resultat.add(service);
+    for (final service in tous) {
+      if (service.estOffre != _afficherOffres) {
+        continue;
       }
+      if (_categorieChoisie != 'Tous' && service.categorie != _categorieChoisie) {
+        continue;
+      }
+      resultat.add(service);
     }
     return resultat;
   }
 
-  /// Initiales d'un nom, par exemple "Karim M." donne "KM".
-  String _initiales(String nom) {
-    String initiales = '';
-    for (final mot in nom.split(' ')) {
-      if (mot.isNotEmpty && initiales.length < 2) {
-        initiales = initiales + mot[0].toUpperCase();
-      }
-    }
-    return initiales;
-  }
-
-  /// Temps écoulé depuis une date, en texte court : "12 min", "3 h",
-  /// "hier", ou la date (ex : "28/9") si c'est plus ancien.
-  String _depuisQuand(DateTime date) {
-    final Duration ecart = DateTime.now().difference(date);
-    if (ecart.inMinutes < 60) {
-      return '${ecart.inMinutes} min';
-    }
-    if (ecart.inHours < 24) {
-      return '${ecart.inHours} h';
-    }
-    if (ecart.inHours < 48) {
-      return 'hier';
-    }
-    return '${date.day}/${date.month}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final List<Service> services = _servicesAffiches();
-
     return Scaffold(
       body: Column(
         children: [
@@ -96,22 +75,29 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
           _filtresCategories(),
           const SizedBox(height: 12),
 
-          // ----- La liste des services -----
+          // ----- La liste des services (en direct) -----
           Expanded(
-            child: services.isEmpty
-                ? Center(
-                    child: Text(
-                      'Aucun service pour l\'instant',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                    itemCount: services.length,
-                    itemBuilder: (context, index) {
-                      return _carteService(services[index], index);
-                    },
-                  ),
+            child: FluxM2<List<Service>>(
+              flux: _flux,
+              construire: (context, tous) {
+                final List<Service> services = _servicesAffiches(tous);
+                if (services.isEmpty) {
+                  return MessageEtat(
+                    texte: tous.isEmpty
+                        ? 'Aucun service pour l\'instant. Publie le premier !'
+                        : 'Aucun service dans cette catégorie',
+                    icone: Icons.handshake_outlined,
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                  itemCount: services.length,
+                  itemBuilder: (context, index) {
+                    return _carteService(services[index], index);
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -163,21 +149,15 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
           // Accès à "Mes demandes" et au planning des services communs
           IconButton(
             tooltip: 'Mes demandes',
-            onPressed: () async {
-              await ouvrirEcran(context, const MesDemandesScreen());
-              if (mounted) {
-                setState(() {});
-              }
+            onPressed: () {
+              ouvrirEcran(context, const MesDemandesScreen());
             },
             icon: Icon(Icons.inbox_outlined, color: AppColors.card),
           ),
           IconButton(
             tooltip: 'Planning des services communs',
-            onPressed: () async {
-              await ouvrirEcran(context, const ServicesCommunsScreen());
-              if (mounted) {
-                setState(() {});
-              }
+            onPressed: () {
+              ouvrirEcran(context, const ServicesCommunsScreen());
             },
             icon: Icon(Icons.calendar_month_outlined, color: AppColors.card),
           ),
@@ -187,29 +167,24 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
   }
 
   /// Ouvre l'écran "Nouvelle publication". Au retour, on affiche l'onglet
-  /// du service publié pour qu'il apparaisse tout de suite dans la liste.
+  /// du service publié (la liste se met à jour toute seule).
   Future<void> _ouvrirPublication() async {
     final Service? publie = await ouvrirEcran<Service>(
       context,
       const ServiceFormScreen(),
     );
-    if (!mounted) {
+    if (!mounted || publie == null) {
       return;
     }
     setState(() {
-      if (publie != null) {
-        _afficherOffres = publie.estOffre;
-        _categorieChoisie = 'Tous';
-      }
+      _afficherOffres = publie.estOffre;
+      _categorieChoisie = 'Tous';
     });
   }
 
-  /// Ouvre le détail d'un service, puis rafraîchit la liste au retour.
-  Future<void> _ouvrirDetail(Service service) async {
-    await ouvrirEcran(context, ServiceDetailScreen(serviceId: service.id));
-    if (mounted) {
-      setState(() {});
-    }
+  /// Ouvre le détail d'un service.
+  void _ouvrirDetail(Service service) {
+    ouvrirEcran(context, ServiceDetailScreen(serviceId: service.id));
   }
 
   /// Les deux onglets "Offres" / "Demandes".
@@ -312,7 +287,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     final int couleur = index % 3;
 
     // Sous-titre : catégorie · auteur · bloc (+ jour si service commun)
-    String sousTitre = '${service.categorie} · ${service.auteur}';
+    String sousTitre = '${service.categorie} · ${service.auteurNom}';
     if (service.bloc.isNotEmpty) {
       sousTitre = '$sousTitre · ${service.bloc}';
     }
@@ -324,7 +299,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     String publication = '';
     final DateTime? date = service.datePublication;
     if (date != null) {
-      publication = _depuisQuand(date);
+      publication = depuisQuand(date);
     }
 
     return Padding(
@@ -346,7 +321,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
                 shape: BoxShape.circle,
               ),
               child: Text(
-                _initiales(service.auteur),
+                initiales(service.auteurNom),
                 style: TextStyle(
                   color: _textesAvatar[couleur],
                   fontWeight: FontWeight.bold,
