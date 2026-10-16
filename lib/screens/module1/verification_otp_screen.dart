@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
@@ -97,7 +98,12 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          resultat.estSucces ? 'Un nouvel e-mail t\'a été envoyé' : resultat.erreur!,
+          resultat.estSucces
+              ? tr(
+                  'Un nouvel e-mail t\'a été envoyé',
+                  'Ba3thnalek e-mail jdid',
+                )
+              : resultat.erreur!,
         ),
       ),
     );
@@ -126,7 +132,10 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
       context.go('/code-quartier');
     } else {
       setState(() {
-        _erreur = 'E-mail pas encore vérifié : clique sur le lien reçu';
+        _erreur = tr(
+          'E-mail pas encore vérifié : clique sur le lien reçu',
+          'El e-mail mazel ma tthabbtech : enzel 3al lien elli jek',
+        );
       });
     }
   }
@@ -144,8 +153,11 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
               padding: const EdgeInsets.all(24),
               children: [
                 TitreEcran(
-                  titre: 'Vérifie ton e-mail',
-                  sousTitre: 'Nous avons envoyé un lien de vérification à\n$email',
+                  titre: tr('Vérifie ton e-mail', 'Thabbet fel e-mail mte3ek'),
+                  sousTitre: tr(
+                    'Nous avons envoyé un lien de vérification à\n$email',
+                    'Ba3thna lien mta3 vérification l\n$email',
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -161,8 +173,12 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Ouvre ta boîte mail, clique sur le lien, '
-                        'puis reviens ici.',
+                        tr(
+                          'Ouvre ta boîte mail, clique sur le lien, '
+                              'puis reviens ici.',
+                          '7el el boîte mail, enzel 3al lien, '
+                              'w ba3d arja3 lahne.',
+                        ),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
@@ -186,7 +202,10 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                 const SizedBox(height: 24),
 
                 PrimaryButton(
-                  texte: 'J\'ai vérifié mon e-mail',
+                  texte: tr(
+                    'J\'ai vérifié mon e-mail',
+                    'Thabbet fel e-mail mte3i',
+                  ),
                   onPressed: _enChargement ? null : _verifier,
                 ),
                 if (_enChargement) const IndicateurChargement(),
@@ -206,9 +225,9 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.primary,
                     ),
-                    child: const Text(
-                      'Retour',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    child: Text(
+                      tr('Retour', 'Arja3'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -225,7 +244,7 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     if (_secondesRestantes > 0) {
       return Text.rich(
         TextSpan(
-          text: 'Renvoyer l\'e-mail dans ',
+          text: tr('Renvoyer l\'e-mail dans ', 'Ta3awed tab3ath el e-mail ba3d '),
           style: TextStyle(color: AppColors.textSecondary),
           children: [
             TextSpan(
@@ -241,9 +260,9 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     }
     return TextButton(
       onPressed: _renvoyerEmail,
-      child: const Text(
-        'Renvoyer l\'e-mail',
-        style: TextStyle(fontWeight: FontWeight.w600),
+      child: Text(
+        tr('Renvoyer l\'e-mail', 'Ab3ath el e-mail marra o5ra'),
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
   }

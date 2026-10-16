@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_text_field.dart';
 import 'widgets_module1.dart';
 
@@ -82,10 +83,13 @@ class _DialogueSmsState extends State<DialogueSms> {
   static String? _validerNumero(String? valeur) {
     final String texte = (valeur ?? '').trim();
     if (texte.isEmpty) {
-      return 'Saisis ton numéro';
+      return tr('Saisis ton numéro', 'Ekteb el nouméro mte3ek');
     }
     if (UtilisateurRepository.normaliserTelephone(texte) == null) {
-      return 'Numéro de téléphone invalide (8 chiffres)';
+      return tr(
+        'Numéro de téléphone invalide (8 chiffres)',
+        'Nouméro mouch s7i7 (8 ar9am)',
+      );
     }
     return null;
   }
@@ -153,11 +157,18 @@ class _DialogueSmsState extends State<DialogueSms> {
     final List<Widget> contenu = [];
     if (!_codeEnvoye) {
       if (widget.numeroFixe == null) {
-        contenu.add(_texte('Un code à 6 chiffres te sera envoyé par SMS.'));
+        contenu.add(
+          _texte(
+            tr(
+              'Un code à 6 chiffres te sera envoyé par SMS.',
+              'Bech yjik code b 6 ar9am b SMS.',
+            ),
+          ),
+        );
         contenu.add(const SizedBox(height: 16));
         contenu.add(
           AppTextField(
-            label: 'Numéro de téléphone',
+            label: tr('Numéro de téléphone', 'Nouméro el téléphone'),
             hint: '22 345 678',
             icone: Icons.phone_outlined,
             controller: _numeroController,
@@ -167,16 +178,29 @@ class _DialogueSmsState extends State<DialogueSms> {
         );
       } else {
         contenu.add(
-          _texte('Un code à 6 chiffres sera envoyé par SMS au '
-              '${widget.numeroFixe}.'),
+          _texte(
+            tr(
+              'Un code à 6 chiffres sera envoyé par SMS au '
+                  '${widget.numeroFixe}.',
+              'Bech yousel code b 6 ar9am b SMS lel '
+                  '${widget.numeroFixe}.',
+            ),
+          ),
         );
       }
     } else {
-      contenu.add(_texte('Saisis le code reçu au ${_numero.trim()}.'));
+      contenu.add(
+        _texte(
+          tr(
+            'Saisis le code reçu au ${_numero.trim()}.',
+            'Ekteb el code elli jek 3al ${_numero.trim()}.',
+          ),
+        ),
+      );
       contenu.add(const SizedBox(height: 16));
       contenu.add(
         SaisieCode(
-          libelle: 'Code SMS',
+          libelle: tr('Code SMS', 'Code el SMS'),
           onChanged: (String code) {
             setState(() {
               _code = code;
@@ -231,12 +255,14 @@ class _DialogueSmsState extends State<DialogueSms> {
       actions: [
         TextButton(
           onPressed: _enChargement ? null : () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(tr('Annuler', 'Batel')),
         ),
         TextButton(
           onPressed: actionPrincipale,
           child: Text(
-            _codeEnvoye ? 'Valider' : 'Recevoir le code',
+            _codeEnvoye
+                ? tr('Valider', 'Aked')
+                : tr('Recevoir le code', 'Ab3ath el code'),
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
@@ -255,13 +281,16 @@ class _DialogueSmsState extends State<DialogueSms> {
   Widget _ligneRenvoi() {
     if (_secondesRestantes > 0) {
       return Text(
-        'Renvoyer le code dans $_secondesRestantes s',
+        tr(
+          'Renvoyer le code dans $_secondesRestantes s',
+          'Ta3awed tab3ath el code ba3d $_secondesRestantes s',
+        ),
         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
       );
     }
     return TextButton(
       onPressed: _enChargement ? null : _envoyerCode,
-      child: const Text('Renvoyer le code'),
+      child: Text(tr('Renvoyer le code', 'Ab3ath el code marra o5ra')),
     );
   }
 }

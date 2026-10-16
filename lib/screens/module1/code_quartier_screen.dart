@@ -7,6 +7,7 @@ import '../../data/resultat.dart';
 import '../../data/services/localisation.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/houmani_logo.dart';
@@ -121,14 +122,21 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
           }
         }
         if (trouve == null) {
-          message = 'Aucun quartier trouvé à ta position. '
-              'Demande le code à ton administrateur.';
+          message = tr(
+            'Aucun quartier trouvé à ta position. '
+                'Demande le code à ton administrateur.',
+            'Ma l9ina 7atta houma fi blastek. '
+                'Otlob el code mel admin mte3ek.',
+          );
         } else if (_changement() &&
             trouve.id == _repository.getUtilisateurConnecte().quartierId) {
-          message = 'Tu es dans ton quartier actuel';
+          message = tr(
+            'Tu es dans ton quartier actuel',
+            'Enti fi houmtek tawa',
+          );
           trouve = null;
         } else {
-          message = 'Tu es dans ${trouve.nom}';
+          message = tr('Tu es dans ${trouve.nom}', 'Enti fi ${trouve.nom}');
         }
       }
     }
@@ -201,24 +209,29 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Changer de quartier ?'),
+          title: Text(tr('Changer de quartier ?', 'Tbadel houmtek ?')),
           content: Text(
-            'Tu vas quitter $actuel pour rejoindre ${nouveau.nom}. '
-            'Tu n\'auras plus accès à ton quartier actuel, et l\'administrateur '
-            'de ${nouveau.nom} devra valider ta demande.',
+            tr(
+              'Tu vas quitter $actuel pour rejoindre ${nouveau.nom}. '
+                  'Tu n\'auras plus accès à ton quartier actuel, et '
+                  'l\'administrateur de ${nouveau.nom} devra valider ta demande.',
+              'Bech to5rej men $actuel w tod5ol l ${nouveau.nom}. '
+                  'Ma 3adech todkhol l houmtek tawa, w el admin mta3 '
+                  '${nouveau.nom} lazem y9abel demande mte3ek.',
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(false);
               },
-              child: const Text('Annuler'),
+              child: Text(tr('Annuler', 'Batel')),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(true);
               },
-              child: const Text('Changer'),
+              child: Text(tr('Changer', 'Badel')),
             ),
           ],
         );
@@ -248,15 +261,23 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
               padding: const EdgeInsets.all(24),
               children: [
                 changement
-                    ? const TitreEcran(
-                        titre: 'Changer de quartier',
-                        sousTitre: 'Entre le code d\'invitation de ton nouveau '
-                            'quartier, ou cherche-le.',
+                    ? TitreEcran(
+                        titre: tr('Changer de quartier', 'Badel houmtek'),
+                        sousTitre: tr(
+                          'Entre le code d\'invitation de ton nouveau '
+                              'quartier, ou cherche-le.',
+                          'Ekteb code el invitation mta3 houmtek ejdida, '
+                              'wala lawej 3liha.',
+                        ),
                       )
-                    : const TitreEcran(
-                        titre: 'Rejoins ta houma',
-                        sousTitre: 'Entre le code d\'invitation reçu de ton '
-                            'administrateur, ou cherche ton quartier.',
+                    : TitreEcran(
+                        titre: tr('Rejoins ta houma', 'Od5ol l houmtek'),
+                        sousTitre: tr(
+                          'Entre le code d\'invitation reçu de ton '
+                              'administrateur, ou cherche ton quartier.',
+                          'Ekteb code el invitation elli 3tahoulek el admin, '
+                              'wala lawej 3la houmtek.',
+                        ),
                       ),
                 const SizedBox(height: 20),
                 // Demande précédente refusée (ex : au redémarrage de l'app,
@@ -266,21 +287,27 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   _bandeauRefus(),
 
                 // ----- Code d'invitation -----
-                const Text(
-                  'Code d\'invitation',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                Text(
+                  tr('Code d\'invitation', 'Code el invitation'),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 SaisieCode(
                   chiffresSeulement: false,
-                  libelle: 'Code d\'invitation',
+                  libelle: tr('Code d\'invitation', 'Code el invitation'),
                   onChanged: _codeModifie,
                 ),
                 if (_codeInconnu)
                   Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
-                      'Ce code ne correspond à aucun quartier',
+                      tr(
+                        'Ce code ne correspond à aucun quartier',
+                        'El code hedha mouch mta3 7atta houma',
+                      ),
                       style: TextStyle(color: AppColors.error, fontSize: 12),
                     ),
                   ),
@@ -291,8 +318,13 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
-                      '${_quartierDuCode!.nom} n\'a pas encore d\'administrateur : '
-                      'impossible de le rejoindre pour l\'instant.',
+                      tr(
+                        '${_quartierDuCode!.nom} n\'a pas encore '
+                            'd\'administrateur : impossible de le rejoindre '
+                            'pour l\'instant.',
+                        '${_quartierDuCode!.nom} mazel ma 3andhech admin : '
+                            'ma tnajjamch tod5olha tawa.',
+                      ),
                       style: TextStyle(color: AppColors.warning, fontSize: 12),
                     ),
                   ),
@@ -300,8 +332,11 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
                 // ----- Recherche d'un quartier -----
                 AppTextField(
-                  label: 'Rechercher un quartier',
-                  hint: 'Ex : Résidence El Yasmine, Ennasr...',
+                  label: tr('Rechercher un quartier', 'Lawej 3la houma'),
+                  hint: tr(
+                    'Ex : Résidence El Yasmine, Ennasr...',
+                    'Mathalan : Résidence El Yasmine, Ennasr...',
+                  ),
                   icone: Icons.search,
                   controller: _rechercheController,
                 ),
@@ -310,7 +345,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   child: TextButton.icon(
                     icon: const Icon(Icons.my_location),
                     label: Text(
-                      _localisation ? 'Localisation...' : 'Me localiser',
+                      _localisation
+                          ? tr('Localisation...', 'Nlawej 3la blastek...')
+                          : tr('Me localiser', 'Win ana ?'),
                     ),
                     onPressed: _localisation ? null : _meLocaliser,
                   ),
@@ -320,13 +357,16 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 const SizedBox(height: 24),
 
                 PrimaryButton(
-                  texte: 'Rejoindre la houma',
+                  texte: tr('Rejoindre la houma', 'Od5ol lel houma'),
                   onPressed: peutRejoindre ? _rejoindre : null,
                 ),
                 if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 10),
                 Text(
-                  'Ta demande sera validée par l\'administrateur du quartier.',
+                  tr(
+                    'Ta demande sera validée par l\'administrateur du quartier.',
+                    'El admin mta3 el houma bech y9abel demande mte3ek.',
+                  ),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
@@ -357,11 +397,20 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
           Expanded(
             child: Text(
               motif.isEmpty
-                  ? 'Ta dernière demande a été refusée par l\'administrateur. '
-                      'Vérifie le code ou choisis un autre quartier.'
-                  : 'Ta dernière demande a été refusée par l\'administrateur '
-                      '(motif : $motif). Vérifie le code ou choisis un autre '
-                      'quartier.',
+                  ? tr(
+                      'Ta dernière demande a été refusée par l\'administrateur. '
+                          'Vérifie le code ou choisis un autre quartier.',
+                      'El admin rfodh e5er demande mte3ek. '
+                          'Thabbet fel code wala a5tar houma o5ra.',
+                    )
+                  : tr(
+                      'Ta dernière demande a été refusée par l\'administrateur '
+                          '(motif : $motif). Vérifie le code ou choisis un '
+                          'autre quartier.',
+                      'El admin rfodh e5er demande mte3ek '
+                          '(sbab : $motif). Thabbet fel code wala a5tar '
+                          'houma o5ra.',
+                    ),
               style: TextStyle(color: AppColors.error, fontSize: 13),
             ),
           ),
@@ -379,7 +428,10 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
           Expanded(child: Divider(color: AppColors.border)),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Text('ou', style: TextStyle(color: AppColors.textSecondary)),
+            child: Text(
+              tr('ou', 'wala'),
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           Expanded(child: Divider(color: AppColors.border)),
         ],
@@ -414,7 +466,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     } else if (cartes.isEmpty) {
       cartes.add(
         Text(
-          'Aucun quartier trouvé',
+          tr('Aucun quartier trouvé', 'Ma l9ina 7atta houma'),
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary),
         ),
@@ -477,7 +529,10 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                     // Personne pour valider : on prévient avant la demande
                     if (!quartier.aUnAdmin)
                       Text(
-                        'Pas encore d\'administrateur',
+                        tr(
+                          'Pas encore d\'administrateur',
+                          'Mazel ma 3andhech admin',
+                        ),
                         style: TextStyle(
                           color: AppColors.warning,
                           fontSize: 12,

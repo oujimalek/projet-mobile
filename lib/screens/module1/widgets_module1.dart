@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 
 // Petits widgets utilisés par plusieurs écrans du module 1.
 // (Les composants communs à toute l'app restent dans lib/widgets/.)
@@ -45,9 +46,9 @@ class BoutonDeconnexion extends StatelessWidget {
         await UtilisateurRepository().deconnexion();
         routeur.go('/connexion'); // go : pas de retour possible
       },
-      child: const Text(
-        'Se déconnecter',
-        style: TextStyle(fontWeight: FontWeight.w600),
+      child: Text(
+        tr('Se déconnecter', 'O5rej'),
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -137,7 +138,7 @@ class BoutonAjouter extends StatelessWidget {
           border: Border.all(color: AppColors.border),
         ),
         child: Text(
-          '+ Ajouter',
+          tr('+ Ajouter', '+ Zid'),
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
       ),

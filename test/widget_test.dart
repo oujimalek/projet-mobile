@@ -1175,6 +1175,31 @@ void main() {
       expect(find.text('Houmti'), findsOneWidget);
       expect(find.text('Jirani'), findsOneWidget);
     });
+
+    testWidgets('Connexion : textes et erreurs en derja',
+        (WidgetTester tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      appRouter.go('/connexion');
+      await lancerApp(tester);
+      expect(find.text('Od5ol l houmtek'), findsOneWidget);
+
+      // Champs vides : les messages du formulaire sont en derja
+      await toucher(tester, find.text('Od5ol'));
+      expect(
+        find.text('Ekteb el e-mail wala el nouméro mte3ek'),
+        findsOneWidget,
+      );
+      expect(find.text('Ekteb el mot de passe mte3ek'), findsOneWidget);
+    });
+
+    testWidgets('Mot de passe oublié : écran en derja',
+        (WidgetTester tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      appRouter.go('/mot-de-passe-oublie');
+      await lancerApp(tester);
+      expect(find.text('Nsit kelmet esser'), findsOneWidget);
+      expect(find.text('Ab3ath el lien'), findsOneWidget);
+    });
   });
 
   // -------------------------------------------------------------------

@@ -9,6 +9,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/secondary_button.dart';
@@ -89,7 +90,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Code copié')),
+      SnackBar(content: Text(tr('Code copié', 'El code tnasakh'))),
     );
   }
 
@@ -105,7 +106,9 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
         Padding(
           padding: const EdgeInsets.only(top: 32),
           child: Text(
-            _erreur.isNotEmpty ? _erreur : 'Aucun quartier trouvé',
+            _erreur.isNotEmpty
+                ? _erreur
+                : tr('Aucun quartier trouvé', 'Ma l9ina 7atta houma'),
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.error),
           ),
@@ -125,8 +128,8 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
         contenu.add(
           SecondaryButton(
             texte: quartier.contour.length >= 3
-                ? 'Modifier les limites'
-                : 'Tracer les limites',
+                ? tr('Modifier les limites', 'Badel el 7doud')
+                : tr('Tracer les limites', 'Orsem el 7doud'),
             icone: Icons.draw_outlined,
             onPressed: _tracerLimites,
           ),
@@ -137,7 +140,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
         contenu.add(const SizedBox(height: 24));
         contenu.add(
           SecondaryButton(
-            texte: 'Changer de quartier',
+            texte: tr('Changer de quartier', 'Badel el houma'),
             icone: Icons.swap_horiz,
             onPressed: () {
               context.push('/code-quartier');
@@ -150,7 +153,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Mon quartier'),
+          AppHeader(titre: tr('Mon quartier', 'Houmti')),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -166,7 +169,9 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
   Widget _carteInfos(Quartier quartier) {
     String membres = '';
     if (_nbMembres != null) {
-      membres = _nbMembres == 1 ? '1 membre' : '$_nbMembres membres';
+      membres = _nbMembres == 1
+          ? tr('1 membre', '1 sekn')
+          : tr('$_nbMembres membres', '$_nbMembres sokkan');
     }
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -216,7 +221,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Code d\'invitation',
+                  tr('Code d\'invitation', 'Code el invitation'),
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
@@ -232,7 +237,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Copier le code',
+            tooltip: tr('Copier le code', 'Ansa5 el code'),
             icon: Icon(Icons.copy, color: AppColors.primary),
             onPressed: () {
               _copierCode(code);
@@ -247,7 +252,10 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
   Widget _carte(Quartier quartier) {
     if (!quartier.aUnePosition) {
       return Text(
-        'La carte du quartier n\'est pas encore disponible.',
+        tr(
+          'La carte du quartier n\'est pas encore disponible.',
+          'Kharitat el houma mazelet mouch mawjouda.',
+        ),
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
       );

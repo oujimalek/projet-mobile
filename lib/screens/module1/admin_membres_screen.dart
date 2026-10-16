@@ -4,6 +4,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
@@ -128,15 +129,18 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     }
     final Duration ecart = DateTime.now().difference(date);
     if (ecart.inMinutes < 60) {
-      return 'il y a ${ecart.inMinutes} min';
+      return tr(
+        'il y a ${ecart.inMinutes} min',
+        'hedhi ${ecart.inMinutes} d9i9a',
+      );
     }
     if (ecart.inHours < 24) {
-      return 'il y a ${ecart.inHours} h';
+      return tr('il y a ${ecart.inHours} h', 'hedhi ${ecart.inHours} se3a');
     }
     if (ecart.inDays == 1) {
-      return 'hier';
+      return tr('hier', 'il bera7');
     }
-    return 'il y a ${ecart.inDays} jours';
+    return tr('il y a ${ecart.inDays} jours', 'hedhi ${ecart.inDays} ayem');
   }
 
   /// Applique une action sur un membre, recharge les listes
@@ -187,7 +191,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         Padding(
           padding: EdgeInsets.only(top: 32),
           child: Text(
-            'Aucun membre ici',
+            tr('Aucun membre ici', 'Ma famma 7ad lahne'),
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary),
           ),
@@ -209,7 +213,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                 TextField(
                   controller: _rechercheController,
                   decoration: InputDecoration(
-                    hintText: 'Rechercher un membre...',
+                    hintText: tr('Rechercher un membre...', 'Lawej 3la sekn...'),
                     prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                   ),
                 ),
@@ -256,7 +260,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Membres',
+                  tr('Membres', 'Sokkan'),
                   style: TextStyle(
                     color: AppColors.primary,
                     fontSize: 26,
@@ -264,7 +268,10 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                   ),
                 ),
                 Text(
-                  '${admin.quartier} · $total membres',
+                  tr(
+                    '${admin.quartier} · $total membres',
+                    '${admin.quartier} · $total sokkan',
+                  ),
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
@@ -280,13 +287,29 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   Widget _statistiques() {
     return Row(
       children: [
-        _carteStat('${_actifs.length}', 'Actifs', AppColors.success),
+        _carteStat(
+          '${_actifs.length}',
+          tr('Actifs', 'Mawjoudin'),
+          AppColors.success,
+        ),
         const SizedBox(width: 8),
-        _carteStat('${_enAttente.length}', 'En attente', AppColors.warning),
+        _carteStat(
+          '${_enAttente.length}',
+          tr('En attente', 'Yestannew'),
+          AppColors.warning,
+        ),
         const SizedBox(width: 8),
-        _carteStat('${_bloques.length}', 'Bloqués', AppColors.error),
+        _carteStat(
+          '${_bloques.length}',
+          tr('Bloqués', 'Mbloukiyin'),
+          AppColors.error,
+        ),
         const SizedBox(width: 8),
-        _carteStat('$_nbRefuses', 'Refusés', AppColors.textSecondary),
+        _carteStat(
+          '$_nbRefuses',
+          tr('Refusés', 'Marfoudhin'),
+          AppColors.textSecondary,
+        ),
       ],
     );
   }
@@ -326,9 +349,12 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
       ),
       child: Row(
         children: [
-          _boutonOnglet('En attente', StatutUtilisateur.enAttente),
-          _boutonOnglet('Actifs', StatutUtilisateur.actif),
-          _boutonOnglet('Bloqués', StatutUtilisateur.bloque),
+          _boutonOnglet(
+            tr('En attente', 'Yestannew'),
+            StatutUtilisateur.enAttente,
+          ),
+          _boutonOnglet(tr('Actifs', 'Mawjoudin'), StatutUtilisateur.actif),
+          _boutonOnglet(tr('Bloqués', 'Mbloukiyin'), StatutUtilisateur.bloque),
         ],
       ),
     );
@@ -378,7 +404,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     }
     // Onglet Bloqués : on rappelle la raison donnée
     if (_onglet == StatutUtilisateur.bloque && membre.motif.isNotEmpty) {
-      morceaux.add('Motif : ${membre.motif}');
+      morceaux.add(tr('Motif : ${membre.motif}', 'Sbab : ${membre.motif}'));
     }
     final String detail = morceaux.join(' · ');
 
@@ -432,27 +458,41 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           children: [
             Expanded(
               child: PrimaryButton(
-                texte: 'Valider',
+                texte: tr('Valider', 'A9bel'),
                 onPressed: () {
-                  _action('${membre.prenom} a rejoint la houma', () {
-                    return _repository.validerMembre(membre.id);
-                  });
+                  _action(
+                    tr(
+                      '${membre.prenom} a rejoint la houma',
+                      '${membre.prenom} dkhal lel houma',
+                    ),
+                    () {
+                      return _repository.validerMembre(membre.id);
+                    },
+                  );
                 },
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _boutonRouge('Refuser', () async {
+              child: _boutonRouge(tr('Refuser', 'Orfodh'), () async {
                 final String? motif = await _demanderMotif(
-                  'Refuser la demande ?',
-                  '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
-                      'Il pourra faire une nouvelle demande.',
-                  'Refuser',
+                  tr('Refuser la demande ?', 'Torfodh el demande ?'),
+                  tr(
+                    '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
+                        'Il pourra faire une nouvelle demande.',
+                    '${membre.nomComplet} ma ynajjamch yodkhol lel houma. '
+                        'Ynajjem yab3ath demande jdida.',
+                  ),
+                  tr('Refuser', 'Orfodh'),
                 );
                 if (motif == null) {
                   return;
                 }
-                _action('Demande de ${membre.prenom} refusée', () {
+                _action(
+                    tr(
+                      'Demande de ${membre.prenom} refusée',
+                      'Demande mta3 ${membre.prenom} tarfdhet',
+                    ), () {
                   return _repository.refuserMembre(membre.id, motif);
                 });
               }),
@@ -464,25 +504,37 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         if (membre.id == _repository.getUtilisateurConnecte().id) {
           return const SizedBox();
         }
-        return _boutonRouge('Bloquer', () async {
+        return _boutonRouge(tr('Bloquer', 'Bloki'), () async {
           final String? motif = await _demanderMotif(
-            'Bloquer ce membre ?',
-            '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
-                'l\'application. Tu pourras le débloquer plus tard.',
-            'Bloquer',
+            tr('Bloquer ce membre ?', 'Tbloki el sekn hedha ?'),
+            tr(
+              '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
+                  'l\'application. Tu pourras le débloquer plus tard.',
+              '${membre.nomComplet} bech yokhrej w ma ynajjamch yesta3mel '
+                  'l\'appli. Tnajjem tdebloukih ba3d.',
+            ),
+            tr('Bloquer', 'Bloki'),
           );
           if (motif == null) {
             return;
           }
-          _action('${membre.prenom} est bloqué(e)', () {
+          _action(
+              tr(
+                '${membre.prenom} est bloqué(e)',
+                '${membre.prenom} tbloka',
+              ), () {
             return _repository.bloquerMembre(membre.id, motif);
           });
         });
       case StatutUtilisateur.bloque:
         return SecondaryButton(
-          texte: 'Débloquer',
+          texte: tr('Débloquer', 'Debloki'),
           onPressed: () {
-            _action('${membre.prenom} est débloqué(e)', () {
+            _action(
+                tr(
+                  '${membre.prenom} est débloqué(e)',
+                  '${membre.prenom} tdebloka',
+                ), () {
               return _repository.debloquerMembre(membre.id);
             });
           },
@@ -574,9 +626,15 @@ class _DialogueMotifState extends State<_DialogueMotif> {
               controller: _motifController,
               maxLength: 200,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Motif (vu par le membre)',
-                hintText: 'Ex : logement introuvable dans la résidence',
+              decoration: InputDecoration(
+                labelText: tr(
+                  'Motif (vu par le membre)',
+                  'Sbab (yarah el sekn)',
+                ),
+                hintText: tr(
+                  'Ex : logement introuvable dans la résidence',
+                  'Mathalan : el dar mouch mawjouda fel résidence',
+                ),
               ),
               validator: (String? valeur) {
                 return UtilisateurRepository.refusMotif(valeur ?? '');
@@ -590,7 +648,7 @@ class _DialogueMotifState extends State<_DialogueMotif> {
           onPressed: () {
             Navigator.of(context).pop(); // null = annulé
           },
-          child: const Text('Annuler'),
+          child: Text(tr('Annuler', 'Batel')),
         ),
         TextButton(
           onPressed: _valider,

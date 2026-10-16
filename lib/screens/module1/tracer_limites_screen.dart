@@ -6,6 +6,7 @@ import '../../data/models/quartier.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import 'carte_quartier.dart';
@@ -103,7 +104,9 @@ class _TracerLimitesScreenState extends State<TracerLimitesScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Limites enregistrées')),
+      SnackBar(
+        content: Text(tr('Limites enregistrées', 'El 7doud tsajlou')),
+      ),
     );
     Navigator.of(context).pop(true); // Mon quartier se recharge
   }
@@ -117,7 +120,9 @@ class _TracerLimitesScreenState extends State<TracerLimitesScreen> {
       corps = Padding(
         padding: const EdgeInsets.all(32),
         child: Text(
-          _erreur.isNotEmpty ? _erreur : 'Aucun quartier trouvé',
+          _erreur.isNotEmpty
+              ? _erreur
+              : tr('Aucun quartier trouvé', 'Ma l9ina 7atta houma'),
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.error),
         ),
@@ -134,7 +139,7 @@ class _TracerLimitesScreenState extends State<TracerLimitesScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Limites du quartier'),
+          AppHeader(titre: tr('Limites du quartier', '7doud el houma')),
           Expanded(child: corps),
         ],
       ),
@@ -206,10 +211,17 @@ class _TracerLimitesScreenState extends State<TracerLimitesScreen> {
   Widget _commandes() {
     String aide;
     if (_points.length < 3) {
-      aide = 'Touche la carte pour placer les coins du quartier '
-          '(${_points.length}/3 minimum).';
+      aide = tr(
+        'Touche la carte pour placer les coins du quartier '
+            '(${_points.length}/3 minimum).',
+        'Enzel 3al kharita bech t7ot zwaya el houma '
+            '(${_points.length}/3 3al a9al).',
+      );
     } else {
-      aide = '${_points.length} coins placés.';
+      aide = tr(
+        '${_points.length} coins placés.',
+        '${_points.length} zwaya mawjoudin.',
+      );
     }
 
     return Container(
@@ -225,14 +237,14 @@ class _TracerLimitesScreenState extends State<TracerLimitesScreen> {
               Expanded(
                 child: TextButton.icon(
                   icon: const Icon(Icons.undo),
-                  label: const Text('Annuler le dernier'),
+                  label: Text(tr('Annuler le dernier', 'Na77i e5er wa7ed')),
                   onPressed: _points.isEmpty ? null : _annulerDernier,
                 ),
               ),
               Expanded(
                 child: TextButton.icon(
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Tout effacer'),
+                  label: Text(tr('Tout effacer', 'Fasa5 kol chay')),
                   onPressed: _points.isEmpty ? null : _toutEffacer,
                 ),
               ),
@@ -240,7 +252,9 @@ class _TracerLimitesScreenState extends State<TracerLimitesScreen> {
           ),
           const SizedBox(height: 8),
           PrimaryButton(
-            texte: _enregistrement ? 'Enregistrement...' : 'Enregistrer',
+            texte: _enregistrement
+                ? tr('Enregistrement...', 'Nsajjel...')
+                : tr('Enregistrer', 'Sajjel'),
             icone: Icons.check,
             onPressed: _points.length < 3 || _enregistrement ? null : _enregistrer,
           ),

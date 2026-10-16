@@ -5,6 +5,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import 'widgets_module1.dart';
 
@@ -101,7 +102,9 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
     } else if (cartes.isEmpty) {
       cartes.add(
         _message(
-          _voisins.isEmpty ? 'Pas encore de voisins ici' : 'Aucun voisin trouvé',
+          _voisins.isEmpty
+              ? tr('Pas encore de voisins ici', 'Mazel ma famma 7atta jar lahne')
+              : tr('Aucun voisin trouvé', 'Ma l9ina 7atta jar'),
           AppColors.textSecondary,
         ),
       );
@@ -120,7 +123,7 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
                 TextField(
                   controller: _rechercheController,
                   decoration: InputDecoration(
-                    hintText: 'Nom ou compétence...',
+                    hintText: tr('Nom ou compétence...', 'Esm wala 5edma...'),
                     prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                   ),
                 ),
@@ -162,7 +165,7 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Voisins',
+                  tr('Voisins', 'Jirani'),
                   style: TextStyle(
                     color: AppColors.primary,
                     fontSize: 26,
@@ -170,7 +173,10 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
                   ),
                 ),
                 Text(
-                  '${moi.quartier} · ${_voisins.length} voisins',
+                  tr(
+                    '${moi.quartier} · ${_voisins.length} voisins',
+                    '${moi.quartier} · ${_voisins.length} jirane',
+                  ),
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
@@ -268,7 +274,12 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
         return AlertDialog(
           title: Text(voisin.nomComplet),
           content: Text(
-            numero.isEmpty ? 'Pas de numéro dans son profil' : numero,
+            numero.isEmpty
+                ? tr(
+                    'Pas de numéro dans son profil',
+                    'Ma 7attech nouméro fel profil mte3ou',
+                  )
+                : numero,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           actions: [
@@ -276,7 +287,7 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
               onPressed: () {
                 Navigator.of(contexteDialogue).pop();
               },
-              child: const Text('Fermer'),
+              child: Text(tr('Fermer', 'Sakker')),
             ),
             if (numero.isNotEmpty)
               TextButton(
@@ -288,12 +299,14 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
                   await Clipboard.setData(ClipboardData(text: numero));
                   fenetre.pop();
                   messager.showSnackBar(
-                    const SnackBar(content: Text('Numéro copié')),
+                    SnackBar(
+                      content: Text(tr('Numéro copié', 'El nouméro tnasakh')),
+                    ),
                   );
                 },
-                child: const Text(
-                  'Copier le numéro',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                child: Text(
+                  tr('Copier le numéro', 'Ansa5 el nouméro'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
           ],

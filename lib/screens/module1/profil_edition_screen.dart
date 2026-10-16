@@ -5,6 +5,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
@@ -63,7 +64,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
 
   String? _validerNom(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton nom complet';
+      return tr('Saisis ton nom complet', 'Ekteb esmek kemel');
     }
     return null;
   }
@@ -71,7 +72,10 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
   String? _validerTelephone(String? valeur) {
     // 8 chiffres, avec ou sans +216 : le numéro sert aussi à se connecter
     if (UtilisateurRepository.normaliserTelephone(valeur ?? '') == null) {
-      return 'Numéro de téléphone invalide (8 chiffres)';
+      return tr(
+        'Numéro de téléphone invalide (8 chiffres)',
+        'Nouméro mouch s7i7 (8 ar9am)',
+      );
     }
     return null;
   }
@@ -104,7 +108,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profil enregistré')),
+      SnackBar(content: Text(tr('Profil enregistré', 'El profil tsajjel'))),
     );
     context.pop(); // retour au profil
   }
@@ -139,9 +143,12 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Choisis ton avatar',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              Text(
+                tr('Choisis ton avatar', 'A5tar avatar'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 16),
               Wrap(spacing: 16, runSpacing: 16, children: avatars),
@@ -150,7 +157,9 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                 onPressed: () {
                   Navigator.of(context).pop(''); // '' = initiales
                 },
-                child: const Text('Utiliser mes initiales'),
+                child: Text(
+                  tr('Utiliser mes initiales', 'Esta3mel el 7rouf lowla'),
+                ),
               ),
             ],
           ),
@@ -173,24 +182,26 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Ajouter une compétence'),
+          title: Text(tr('Ajouter une compétence', 'Zid 5edma ta3refha')),
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Ex : Jardinage'),
+            decoration: InputDecoration(
+              hintText: tr('Ex : Jardinage', 'Mathalan : Jardinage'),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: const Text('Annuler'),
+              child: Text(tr('Annuler', 'Batel')),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(controller.text.trim());
               },
-              child: const Text('Ajouter'),
+              child: Text(tr('Ajouter', 'Zid')),
             ),
           ],
         );
@@ -215,12 +226,12 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
       body: Column(
         children: [
           AppHeader(
-            titre: 'Modifier le profil',
+            titre: tr('Modifier le profil', 'Badel el profil'),
             action: TextButton(
               onPressed: _enChargement ? null : _enregistrer,
-              child: const Text(
-                'Enregistrer',
-                style: TextStyle(fontWeight: FontWeight.w600),
+              child: Text(
+                tr('Enregistrer', 'Sajjel'),
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -247,9 +258,9 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                 Center(
                   child: TextButton(
                     onPressed: _choisirPhoto,
-                    child: const Text(
-                      'Changer la photo',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    child: Text(
+                      tr('Changer la photo', 'Badel el taswira'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -262,26 +273,32 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AppTextField(
-                        label: 'Nom complet',
+                        label: tr('Nom complet', 'Esmek kemel'),
                         controller: _nomController,
                         validator: _validerNom,
                       ),
                       const SizedBox(height: 14),
                       AppTextField(
-                        label: 'Numéro de téléphone',
+                        label: tr('Numéro de téléphone', 'Nouméro el téléphone'),
                         controller: _telephoneController,
                         clavier: TextInputType.phone,
                         validator: _validerTelephone,
                       ),
                       const SizedBox(height: 14),
                       AppTextField(
-                        label: 'Bâtiment et appartement',
-                        hint: 'Ex : Bloc B - Appt 12',
+                        label: tr('Bâtiment et appartement', 'El bloc w el dar'),
+                        hint: tr(
+                          'Ex : Bloc B - Appt 12',
+                          'Mathalan : Bloc B - Appt 12',
+                        ),
                         controller: _logementController,
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Visible uniquement par l\'administrateur du quartier.',
+                        tr(
+                          'Visible uniquement par l\'administrateur du quartier.',
+                          'Ken el admin mta3 el houma ychoufha.',
+                        ),
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -293,16 +310,19 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                 const SizedBox(height: 20),
 
                 // ----- Compétences -----
-                const Text(
-                  'Compétences',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                Text(
+                  tr('Compétences', 'Chnowa ta3ref ta3mel'),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: _pastillesCompetences()),
                 const SizedBox(height: 32),
 
                 PrimaryButton(
-                  texte: 'Enregistrer les modifications',
+                  texte: tr('Enregistrer les modifications', 'Sajjel el tabdil'),
                   onPressed: _enChargement ? null : _enregistrer,
                 ),
                 if (_enChargement) const IndicateurChargement(),
