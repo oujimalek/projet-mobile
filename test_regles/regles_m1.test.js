@@ -249,6 +249,36 @@ describe('rejoindre un quartier', () => {
     const db = base('bloque1');
     await assertFails(updateDoc(doc(db, 'utilisateurs/bloque1'), demande('q2')));
   });
+
+  // Écran Mon quartier : un résident actif quitte son quartier
+  test('résident actif : il quitte son quartier pour un autre', async () => {
+    const db = base('actif1');
+    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/actif1'), demande('q2')));
+  });
+
+  test('résident actif : redemander SON quartier (redevenir en attente) : refusé', async () => {
+    const db = base('actif1');
+    await assertFails(updateDoc(doc(db, 'utilisateurs/actif1'), demande('q1')));
+  });
+
+  test('admin actif : il ne peut pas quitter son quartier', async () => {
+    const db = base('admin1');
+    await assertFails(updateDoc(doc(db, 'utilisateurs/admin1'), demande('q2')));
+  });
+
+  test('résident actif : pas de rôle admin en changeant de quartier', async () => {
+    const db = base('actif1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/actif1'), { ...demande('q2'), role: 'admin' }),
+    );
+  });
+
+  test('résident actif : il doit repasser en attente', async () => {
+    const db = base('actif1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/actif1'), { ...demande('q2'), statut: 'actif' }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------
@@ -410,6 +440,35 @@ describe('quartiers et codes d\'invitation', () => {
     const db = base('attente1');
     await assertSucceeds(getDoc(doc(db, 'codesQuartier/YAS72B')));
     await assertFails(getDocs(collection(db, 'codesQuartier')));
+  });
+
+  // Écran Mon quartier : l'admin affiche le code de son quartier
+  function codesDe(db, quartierId) {
+    return getDocs(
+      query(collection(db, 'codesQuartier'), where('quartierId', '==', quartierId)),
+    );
+  }
+
+  test('l\'admin liste les codes de SON quartier', async () => {
+    await assertSucceeds(codesDe(base('admin1'), 'q1'));
+  });
+
+  test('l\'admin ne liste pas les codes d\'un autre quartier, ni tous les codes', async () => {
+    await assertFails(codesDe(base('admin2'), 'q1'));
+    await assertFails(getDocs(collection(base('admin1'), 'codesQuartier')));
+  });
+
+  test('un résident ne liste pas les codes, même de son quartier', async () => {
+    await assertFails(codesDe(base('actif1'), 'q1'));
+  });
+
+  test('l\'admin ne crée pas de code', async () => {
+    await assertFails(
+      setDoc(doc(base('admin1'), 'codesQuartier/NOUV01'), {
+        quartierId: 'q1',
+        quartierNom: 'El Yasmine',
+      }),
+    );
   });
 
   test('sans être connecté : rien', async () => {

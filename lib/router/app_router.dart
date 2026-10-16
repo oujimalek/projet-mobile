@@ -8,6 +8,7 @@ import '../screens/module1/attente_validation_screen.dart';
 import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
 import '../screens/module1/inscription_screen.dart';
+import '../screens/module1/mon_quartier_screen.dart';
 import '../screens/module1/mot_de_passe_oublie_screen.dart';
 import '../screens/module1/parametres_screen.dart';
 import '../screens/module1/profil_edition_screen.dart';
@@ -84,6 +85,12 @@ final GoRouter appRouter = GoRouter(
               path: 'membres',
               builder: (context, state) {
                 return const AdminMembresScreen(); // M1 (admin)
+              },
+            ),
+            GoRoute(
+              path: 'quartier',
+              builder: (context, state) {
+                return const MonQuartierScreen(); // M1
               },
             ),
           ],

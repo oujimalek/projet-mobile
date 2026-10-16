@@ -89,14 +89,19 @@ service cloud.firestore {
         && changeSeulement(['prenom', 'nom', 'telephone', 'logement',
              'competences', 'avatar']);
 
-      // Rejoindre / changer de quartier (compte en attente ou refusé) :
-      // e-mail vérifié, quartier existant, le statut (re)devient "enAttente"
+      // Rejoindre / changer de quartier : compte en attente ou refusé, OU
+      // résident actif qui quitte son quartier pour un AUTRE (écran Mon
+      // quartier ; l'admin ne peut pas : son quartier resterait sans admin).
+      // E-mail vérifié, quartier existant, le statut (re)devient "enAttente"
       // et la date de demande est l'heure du serveur (pas de triche sur
       // l'ordre de la file d'attente).
       allow update: if connecte()
         && monUid() == uid
         && request.auth.token.email_verified == true
-        && resource.data.statut in ['enAttente', 'refuse']
+        && (resource.data.statut in ['enAttente', 'refuse']
+            || (resource.data.statut == 'actif'
+                && resource.data.role != 'admin'
+                && request.resource.data.quartierId != resource.data.quartierId))
         && changeSeulement(['quartierId', 'quartierNom', 'residence',
              'statut', 'dateDemande'])
         && request.resource.data.statut == 'enAttente'
@@ -126,11 +131,14 @@ service cloud.firestore {
     }
 
     // ===================== M1 · Codes d'invitation =====================
-    // get (lire LE code tapé) : oui. list (lister tous les codes) : non.
+    // get (lire LE code tapé) : oui. list (lister tous les codes) : non,
+    // sauf l'admin, et seulement les codes de SON quartier (la requête doit
+    // filtrer quartierId), pour l'afficher dans l'écran Mon quartier.
     // Création : à la main dans la console (voir docs/schema_firestore.md).
     match /codesQuartier/{code} {
       allow get: if connecte();
-      allow list, write: if false;
+      allow list: if adminDe(resource.data.quartierId);
+      allow write: if false;
     }
 
     // ===================== Quartiers et leurs données =====================

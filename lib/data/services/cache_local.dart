@@ -92,8 +92,22 @@ class CacheLocal {
 
   Future<void> enregistrerQuartier(Quartier quartier) async {
     try {
-      final Map<String, dynamic> map = quartier.toMap();
-      map['id'] = quartier.id;
+      // Pas toMap() : Hive ne sait pas garder un GeoPoint (Firestore).
+      // Les points deviennent de simples {lat, lng}, relus par fromMap.
+      final List<Map<String, double>> contour = [];
+      for (final PointGps point in quartier.contour) {
+        contour.add({'lat': point.latitude, 'lng': point.longitude});
+      }
+      final PointGps? position = quartier.position;
+      final Map<String, dynamic> map = {
+        'id': quartier.id,
+        'nom': quartier.nom,
+        'localisation': quartier.localisation,
+        'position': position == null
+            ? null
+            : {'lat': position.latitude, 'lng': position.longitude},
+        'contour': contour,
+      };
       final Box<dynamic> boite = await _ouvrir();
       await boite.put(_cleQuartier, map);
     } catch (e) {

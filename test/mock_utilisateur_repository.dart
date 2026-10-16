@@ -41,6 +41,14 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       localisation: 'Ennasr 2, Ariana',
       codeInvitation: 'YAS72B',
       nbMembres: 42,
+      // Seul quartier placé sur la carte (les autres : pas de coordonnées)
+      position: PointGps(36.8625, 10.1700),
+      contour: [
+        PointGps(36.8640, 10.1680),
+        PointGps(36.8640, 10.1720),
+        PointGps(36.8610, 10.1720),
+        PointGps(36.8610, 10.1680),
+      ],
     ),
     Quartier(
       id: 'q2',
@@ -447,6 +455,11 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     if (!_emailsVerifies.contains(_connecte.id)) {
       return const Resultat.echec('Action non autorisée');
     }
+    final String? refus =
+        UtilisateurRepository.refusChangement(_connecte, quartier);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
     final Utilisateur demande = _connecte.copier(
       quartierId: quartier.id,
       quartier: quartier.nom,
@@ -474,6 +487,19 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     for (final Quartier quartier in _quartiers) {
       if (quartier.nom == _connecte.quartier) {
         return Resultat.succes(quartier);
+      }
+    }
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<String?>> getCodeInvitation() async {
+    if (!_connecte.estAdmin) {
+      return const Resultat.echec('Action non autorisée');
+    }
+    for (final Quartier quartier in _quartiers) {
+      if (quartier.nom == _connecte.quartier) {
+        return Resultat.succes(quartier.codeInvitation);
       }
     }
     return const Resultat.succes(null);

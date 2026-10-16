@@ -460,6 +460,11 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<void>> rejoindreQuartier(Quartier quartier) async {
+    final String? refus =
+        UtilisateurRepository.refusChangement(_connecte, quartier);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
     final Utilisateur demande = _connecte.copier(
       quartierId: quartier.id,
       quartier: quartier.nom,
@@ -504,6 +509,28 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       if (enCache != null && enCache.id == quartierId) {
         return Resultat.succes(enCache);
       }
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<String?>> getCodeInvitation() async {
+    if (!_connecte.estAdmin) {
+      return const Resultat.echec('Action non autorisée');
+    }
+    try {
+      // Le filtre sur quartierId est obligatoire : firestore.rules ne laisse
+      // l'admin lister QUE les codes de son quartier
+      final QuerySnapshot<Map<String, dynamic>> resultat = await _base
+          .collection('codesQuartier')
+          .where('quartierId', isEqualTo: _connecte.quartierId)
+          .limit(1)
+          .get();
+      if (resultat.docs.isEmpty) {
+        return const Resultat.succes(null);
+      }
+      return Resultat.succes(resultat.docs.first.id); // l'id EST le code
+    } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
     }
   }

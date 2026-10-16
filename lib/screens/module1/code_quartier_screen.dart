@@ -18,6 +18,9 @@ import 'widgets_module1.dart';
 /// - taper le code d'invitation à 6 caractères donné par l'admin ;
 /// - OU chercher le quartier par son nom et le sélectionner.
 /// La demande part ensuite à l'administrateur (écran d'attente).
+///
+/// Ouvert depuis "Mon quartier" par un résident actif : c'est un
+/// changement de quartier (flèche retour, confirmation avant d'envoyer).
 class CodeQuartierScreen extends StatefulWidget {
   const CodeQuartierScreen({super.key});
 
@@ -106,6 +109,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     if (quartier == null) {
       return;
     }
+    if (_changement() && !await _confirmerChangement(quartier)) {
+      return;
+    }
     setState(() {
       _enChargement = true;
     });
@@ -126,24 +132,74 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     context.go('/attente');
   }
 
+  /// true : un résident actif change de quartier (venu de "Mon quartier").
+  bool _changement() {
+    return _repository.getUtilisateurConnecte().statut ==
+        StatutUtilisateur.actif;
+  }
+
+  /// Prévient le résident qu'il quitte son quartier actuel.
+  /// Renvoie true s'il confirme.
+  Future<bool> _confirmerChangement(Quartier nouveau) async {
+    final String actuel = _repository.getUtilisateurConnecte().quartier;
+    final bool? confirme = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Changer de quartier ?'),
+          content: Text(
+            'Tu vas quitter $actuel pour rejoindre ${nouveau.nom}. '
+            'Tu n\'auras plus accès à ton quartier actuel, et l\'administrateur '
+            'de ${nouveau.nom} devra valider ta demande.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('Changer'),
+            ),
+          ],
+        );
+      },
+    );
+    return confirme == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Bouton actif seulement si un quartier est choisi et rien n'est en cours
     final bool peutRejoindre = _quartierChoisi() != null && !_enChargement;
+    final bool changement = _changement();
 
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: '', action: BoutonDeconnexion()),
+          // Changement : flèche retour vers "Mon quartier" (pas de déconnexion)
+          changement
+              ? const AppHeader(titre: '')
+              : const AppHeader(titre: '', action: BoutonDeconnexion()),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                const TitreEcran(
-                  titre: 'Rejoins ta houma',
-                  sousTitre: 'Entre le code d\'invitation reçu de ton '
-                      'administrateur, ou cherche ton quartier.',
-                ),
+                changement
+                    ? const TitreEcran(
+                        titre: 'Changer de quartier',
+                        sousTitre: 'Entre le code d\'invitation de ton nouveau '
+                            'quartier, ou cherche-le.',
+                      )
+                    : const TitreEcran(
+                        titre: 'Rejoins ta houma',
+                        sousTitre: 'Entre le code d\'invitation reçu de ton '
+                            'administrateur, ou cherche ton quartier.',
+                      ),
                 const SizedBox(height: 20),
                 // Demande précédente refusée (ex : au redémarrage de l'app,
                 // l'utilisateur arrive ici directement) : on explique pourquoi
@@ -249,7 +305,12 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   /// Les cartes des quartiers trouvés (avec un bouton radio).
   List<Widget> _listeQuartiers() {
     final List<Widget> cartes = [];
+    final Utilisateur moi = _repository.getUtilisateurConnecte();
     for (final Quartier quartier in _quartiersTrouves) {
+      // Changement de quartier : on ne propose pas le quartier actuel
+      if (_changement() && quartier.id == moi.quartierId) {
+        continue;
+      }
       cartes.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 10),

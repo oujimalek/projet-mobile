@@ -107,6 +107,12 @@ class _AppDrawerState extends State<AppDrawer> {
         actif: widget.chemin == '/profil',
         onTap: () => _allerA('/profil'),
       ),
+      _rubrique(
+        icone: Icons.location_city_outlined,
+        titre: 'Mon quartier',
+        actif: widget.chemin.startsWith('/profil/quartier'),
+        onTap: () => _ouvrir('/profil/quartier'),
+      ),
     ];
     if (utilisateur.estAdmin) {
       rubriquesCompte.add(

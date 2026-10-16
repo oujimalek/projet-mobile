@@ -150,6 +150,7 @@ passe `statut` à `refuse` au lieu de supprimer le document. Pourquoi :
 | Créer | Soi-même, à l'inscription : `statut = enAttente`, `role = resident` (impossible de se déclarer admin) |
 | Modifier son profil | Soi-même si `actif`, sans changer `statut`, `role`, ni `quartierId` |
 | Rejoindre / changer de quartier | Soi-même si `enAttente` ou `refuse`, **e-mail vérifié**, vers un quartier qui existe ; le statut redevient `enAttente` |
+| Quitter son quartier pour un autre | Un résident `actif` (pas l'admin), vers un **autre** quartier : il perd l'ancien et repasse `enAttente` dans le nouveau |
 | Valider / refuser / bloquer / débloquer | L'admin **actif** du quartier, **uniquement** le champ `statut`, jamais sur lui-même |
 | Supprimer | Personne depuis l'app |
 
@@ -160,6 +161,8 @@ inscription ──► enAttente ──(admin valide)──► actif ◄──(ad
                    ▲   │                        │                          ▲
                    │   └──(admin refuse)──► refuse                         │
                    └──(choisit un autre quartier)┘     └──(admin bloque)───┘
+
+actif (résident) ──(change de quartier, écran « Mon quartier »)──► enAttente (nouveau quartier)
 ```
 
 Un compte `bloque` ne peut **plus rien lire** sauf son propre profil :
@@ -174,6 +177,11 @@ l'application affiche « compte bloqué » et le déconnecte.
 | `localisation` | `localisation` | string | ex. « Ennasr 2, Ariana » |
 | `codeInvitation` | **déplacé** dans `codesQuartier` | | Sinon tout compte connecté pourrait le lire |
 | `nbMembres` | **non stocké** | | `count()` sur `utilisateurs` où `quartierId == id` et `statut == actif` |
+| `position` | `position` | geopoint (optionnel) | Le centre du quartier sur la carte |
+| `contour` | `contour` | array de geopoint (optionnel) | Les coins du quartier, dans l'ordre (3 au minimum pour dessiner la zone) |
+
+Sans `position` ni `contour`, l'écran « Mon quartier » affiche un message à
+la place de la carte (OpenStreetMap, aucune clé d'API).
 
 - **Lire** : tout compte connecté, même en attente (il faut chercher un
   quartier avant d'être validé). Seuls le nom et la localisation sont visibles.
@@ -193,8 +201,10 @@ L'identifiant du document **est** le code (ex. `YAS72B`).
 
 - **Lire un code précis** (`get`) : tout compte connecté. On ne peut lire
   que le code que l'on a tapé.
-- **Lister les codes** (`list`) : **interdit**. Personne ne peut obtenir
-  tous les codes.
+- **Lister les codes** (`list`) : seulement l'**admin actif**, et seulement
+  les codes de **son** quartier (la requête filtre `quartierId`). Il voit et
+  copie ainsi son code dans « Mon quartier ». Personne ne peut obtenir tous
+  les codes.
 - **Écrire** : personne depuis l'app (console).
 
 Le code sert de raccourci. La vraie sécurité reste la **validation par l'admin**.
@@ -412,6 +422,14 @@ S'inscrire, valider l'e-mail, puis entrer le code `YAS72B`. Le compte est
 Console → `utilisateurs` → le document de son compte → modifier
 `statut` = `actif` et `role` = `admin`. Relancer l'application. Cet admin
 valide ensuite tous les autres voisins depuis l'écran « Membres du quartier ».
+
+**Étape 4 (optionnelle) : placer le quartier sur la carte.**
+Console → `quartiers` → le document du quartier → *Ajouter un champ* :
+- `position`, type **geopoint** : latitude puis longitude du centre
+  (ex. `36.8625` et `10.17`). Dans Google Maps, un clic droit sur un point
+  affiche ses coordonnées.
+- `contour`, type **array** : ajouter un élément par coin du quartier, chacun
+  de type **geopoint**, en faisant le tour dans l'ordre (3 coins au minimum).
 
 ## 9. Hors ligne
 

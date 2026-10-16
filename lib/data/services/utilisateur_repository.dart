@@ -44,6 +44,22 @@ abstract class UtilisateurRepository {
     return instance;
   }
 
+  /// Pourquoi [utilisateur] ne peut pas demander [quartier] (null : il peut).
+  /// Partagé par les deux implémentations ; firestore.rules vérifie la
+  /// même chose côté serveur.
+  static String? refusChangement(Utilisateur utilisateur, Quartier quartier) {
+    if (utilisateur.statut != StatutUtilisateur.actif) {
+      return null; // en attente ou refusé : il choisit librement
+    }
+    if (utilisateur.estAdmin) {
+      return 'Un administrateur ne peut pas quitter son quartier';
+    }
+    if (utilisateur.quartierId == quartier.id) {
+      return 'Tu fais déjà partie de ce quartier';
+    }
+    return null;
+  }
+
   // =====================================================================
   // Connexion et inscription (Firebase Auth : e-mail + mot de passe)
   // =====================================================================
@@ -141,10 +157,18 @@ abstract class UtilisateurRepository {
   /// Envoie la demande pour rejoindre un quartier :
   /// l'utilisateur connecté passe "en attente" de validation.
   /// (Firebase exige un e-mail vérifié.)
+  /// Sert aussi à CHANGER de quartier (écran Mon quartier) : un résident
+  /// actif quitte le sien et attend la validation du nouveau. Refusé pour
+  /// un administrateur (son quartier resterait sans admin) et pour le
+  /// quartier où l'on est déjà.
   Future<Resultat<void>> rejoindreQuartier(Quartier quartier);
 
   /// Le quartier de l'utilisateur connecté (`donnee == null` s'il n'en a pas).
   Future<Resultat<Quartier?>> getQuartierConnecte();
+
+  /// Le code d'invitation du quartier, pour que l'admin le partage.
+  /// Réservé à l'admin (`donnee == null` : aucun code trouvé).
+  Future<Resultat<String?>> getCodeInvitation();
 
   // =====================================================================
   // Administration des membres

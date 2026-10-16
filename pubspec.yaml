@@ -48,6 +48,8 @@ dependencies:
   # le téléphone pour l'afficher sans réseau. hive_ce = version maintenue de Hive.
   hive_ce: ^2.22.0
   hive_ce_flutter: ^2.5.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 
 dev_dependencies:
   flutter_test:

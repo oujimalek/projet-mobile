@@ -17,6 +17,7 @@ import 'package:houmani/screens/module1/attente_validation_screen.dart';
 import 'package:houmani/screens/module1/code_quartier_screen.dart';
 import 'package:houmani/screens/module1/connexion_screen.dart';
 import 'package:houmani/screens/module1/inscription_screen.dart';
+import 'package:houmani/screens/module1/mon_quartier_screen.dart';
 import 'package:houmani/screens/module1/mot_de_passe_oublie_screen.dart';
 import 'package:houmani/screens/module1/parametres_screen.dart';
 import 'package:houmani/screens/module1/profil_edition_screen.dart';
@@ -891,6 +892,114 @@ void main() {
       await toucher(tester, find.text('Clair'));
       expect(AppColors.sombre, isFalse);
       expect(AppColors.background, fondClair);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Mon quartier et changement de quartier
+  // -------------------------------------------------------------------
+
+  group('Mon quartier', () {
+    // Pas de vraie carte : elle téléchargerait des images sur Internet
+    setUp(() {
+      MonQuartierScreen.afficherCarte = false;
+    });
+
+    tearDown(() {
+      MonQuartierScreen.afficherCarte = true;
+    });
+
+    // Connecte un résident actif du quartier El Yasmine
+    Future<void> connecterResident() async {
+      mock.ajouterCompte(compteDeTest(StatutUtilisateur.actif), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+    }
+
+    testWidgets('Admin : infos, carte et code d\'invitation, pas de changement',
+        (WidgetTester tester) async {
+      await lancerApp(tester);
+      await toucherOnglet(tester, 'Profil');
+      await toucher(tester, find.text('Mon quartier'));
+
+      expect(find.byType(MonQuartierScreen), findsOneWidget);
+      expect(find.text('Résidence El Yasmine'), findsOneWidget);
+      expect(find.text('Ennasr 2, Ariana'), findsOneWidget);
+      expect(find.text('YAS72B'), findsOneWidget);
+      expect(find.byKey(const Key('carteQuartier')), findsOneWidget);
+      expect(find.text('Changer de quartier'), findsNothing);
+    });
+
+    testWidgets('Menu → Mon quartier ouvre l\'écran',
+        (WidgetTester tester) async {
+      await lancerApp(tester);
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      await toucherDansMenu(tester, find.text('Mon quartier'));
+      expect(find.byType(MonQuartierScreen), findsOneWidget);
+    });
+
+    testWidgets('Résident : nombre de membres, pas de code',
+        (WidgetTester tester) async {
+      await connecterResident();
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      expect(find.textContaining('membres'), findsOneWidget);
+      expect(find.text('YAS72B'), findsNothing);
+      expect(find.text('Changer de quartier'), findsOneWidget);
+    });
+
+    testWidgets('Quartier sans coordonnées : message à la place de la carte',
+        (WidgetTester tester) async {
+      mock.ajouterCompte(
+        compteDeTest(StatutUtilisateur.actif)
+            .copier(quartierId: 'q2', quartier: 'Cité El Wafa'),
+        'secret123',
+      );
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      expect(find.byKey(const Key('carteQuartier')), findsNothing);
+      expect(
+        find.text('La carte du quartier n\'est pas encore disponible.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Résident : changer de quartier demande une confirmation',
+        (WidgetTester tester) async {
+      await connecterResident();
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Changer de quartier'));
+      expect(find.byType(CodeQuartierScreen), findsOneWidget);
+      // Mode changement : flèche retour, pas de déconnexion,
+      // et le quartier actuel n'est pas proposé
+      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+      expect(find.text('Se déconnecter'), findsNothing);
+      expect(find.text('Résidence El Yasmine'), findsNothing);
+
+      await toucher(tester, find.text('Cité El Wafa'));
+      await toucher(tester, find.text('Rejoindre la houma'));
+      expect(find.text('Changer de quartier ?'), findsOneWidget);
+
+      // Annuler : rien ne change
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CodeQuartierScreen), findsOneWidget);
+      expect(mock.getUtilisateurConnecte().quartierId, 'q1');
+
+      await toucher(tester, find.text('Rejoindre la houma'));
+      await tester.tap(find.text('Changer'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AttenteValidationScreen), findsOneWidget);
+      expect(mock.getUtilisateurConnecte().quartierId, 'q2');
+      expect(
+        mock.getUtilisateurConnecte().statut,
+        StatutUtilisateur.enAttente,
+      );
     });
   });
 }

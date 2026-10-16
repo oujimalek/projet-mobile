@@ -272,6 +272,16 @@ class _ProfilScreenState extends State<ProfilScreen> {
       lignes.add(Divider(height: 1, color: AppColors.border));
     }
 
+    lignes.add(
+      _ligneLien(
+        'Mon quartier',
+        onTap: () {
+          _ouvrirPuisRafraichir('/profil/quartier');
+        },
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+
     // go : ces liens ouvrent l'onglet du module correspondant
     lignes.add(_ligneLien('Mes services', onTap: () => context.go('/services')));
     lignes.add(Divider(height: 1, color: AppColors.border));

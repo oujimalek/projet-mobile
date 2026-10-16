@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
+import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module1/widgets_module1.dart';
 import 'mock_utilisateur_repository.dart';
 
@@ -161,6 +162,120 @@ void main() {
       expect(q.localisation, '');
       expect(q.codeInvitation, '');
       expect(q.nbMembres, 0);
+      expect(q.position, isNull);
+      expect(q.contour, isEmpty);
+      expect(q.aUnePosition, false);
+    });
+
+    test('fromMap lit la position et le contour (GeoPoint)', () {
+      final Quartier q = Quartier.fromMap('q1', {
+        'nom': 'El Yasmine',
+        'position': const GeoPoint(36.86, 10.17),
+        'contour': [const GeoPoint(36.1, 10.1), const GeoPoint(36.2, 10.2)],
+      });
+      expect(q.position!.latitude, 36.86);
+      expect(q.position!.longitude, 10.17);
+      expect(q.contour.length, 2);
+      expect(q.contour[1].latitude, 36.2);
+      expect(q.aUnePosition, true);
+    });
+
+    test('fromMap accepte des points {lat, lng} et ignore le reste', () {
+      final Quartier q = Quartier.fromMap('q1', {
+        'position': {'lat': 36, 'lng': 10.5},
+        'contour': [
+          {'lat': 36.1, 'lng': 10.1},
+          'pas un point',
+        ],
+      });
+      expect(q.position!.latitude, 36.0);
+      expect(q.position!.longitude, 10.5);
+      expect(q.contour.length, 1);
+    });
+
+    test('un contour seul suffit pour être sur la carte', () {
+      const Quartier q = Quartier(
+        id: 'q1',
+        nom: 'A',
+        localisation: 'B',
+        contour: [PointGps(36.1, 10.1)],
+      );
+      expect(q.aUnePosition, true);
+    });
+
+    test('toMap ajoute position et contour en GeoPoint quand ils existent', () {
+      const Quartier q = Quartier(
+        id: 'q1',
+        nom: 'A',
+        localisation: 'B',
+        position: PointGps(36.86, 10.17),
+        contour: [PointGps(36.1, 10.1)],
+      );
+      final Map<String, dynamic> map = q.toMap();
+      expect(map['position'], const GeoPoint(36.86, 10.17));
+      expect(map['contour'], [const GeoPoint(36.1, 10.1)]);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  group('Changement de quartier (refusChangement)', () {
+    const Quartier q1 = Quartier(id: 'q1', nom: 'El Yasmine', localisation: 'A');
+    const Quartier q2 = Quartier(id: 'q2', nom: 'El Wafa', localisation: 'B');
+    const Utilisateur resident = Utilisateur(
+      id: 'r1',
+      prenom: 'Rim',
+      nom: 'Saidi',
+      email: '',
+      telephone: '',
+      quartierId: 'q1',
+      quartier: 'El Yasmine',
+      residence: 'El Yasmine',
+    );
+
+    test('un résident actif peut changer de quartier', () {
+      expect(UtilisateurRepository.refusChangement(resident, q2), isNull);
+    });
+
+    test('un résident actif ne peut pas redemander son quartier', () {
+      expect(
+        UtilisateurRepository.refusChangement(resident, q1),
+        'Tu fais déjà partie de ce quartier',
+      );
+    });
+
+    test('un admin ne peut pas quitter son quartier', () {
+      const Utilisateur admin = Utilisateur(
+        id: 'a1',
+        prenom: 'Amira',
+        nom: 'Ben Salah',
+        email: '',
+        telephone: '',
+        quartierId: 'q1',
+        quartier: 'El Yasmine',
+        residence: 'El Yasmine',
+        role: RoleUtilisateur.admin,
+      );
+      expect(
+        UtilisateurRepository.refusChangement(admin, q2),
+        'Un administrateur ne peut pas quitter son quartier',
+      );
+    });
+
+    test('pas de restriction pour un compte en attente ou refusé', () {
+      expect(
+        UtilisateurRepository.refusChangement(
+          resident.copier(statut: StatutUtilisateur.refuse),
+          q1,
+        ),
+        isNull,
+      );
+      expect(
+        UtilisateurRepository.refusChangement(
+          resident.copier(statut: StatutUtilisateur.enAttente),
+          q1,
+        ),
+        isNull,
+      );
     });
   });
 
@@ -314,6 +429,68 @@ void main() {
         expect(u.quartier, 'Cité El Wafa');
         expect(u.residence, 'Cité El Wafa');
         expect(u.statut, StatutUtilisateur.enAttente);
+      });
+
+      test('l\'admin de démo ne peut pas changer de quartier', () async {
+        final Resultat<void> r = await repo.rejoindreQuartier(
+          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Un administrateur ne peut pas quitter son quartier');
+        expect(repo.getUtilisateurConnecte().quartierId, 'q1');
+      });
+
+      test('un résident actif change de quartier et repasse en attente',
+          () async {
+        // Un résident actif de q1 (e-mail vérifié par ajouterCompte)
+        repo.ajouterCompte(
+          const Utilisateur(
+            id: 'r1',
+            prenom: 'Rim',
+            nom: 'Saidi',
+            email: 'rim@houmani.tn',
+            telephone: '',
+            quartierId: 'q1',
+            quartier: 'Résidence El Yasmine',
+            residence: 'Résidence El Yasmine',
+          ),
+          'secret123',
+        );
+        await repo.connexion('rim@houmani.tn', 'secret123');
+        expect(repo.getUtilisateurConnecte().statut, StatutUtilisateur.actif);
+
+        // Redemander q1 : refusé
+        final Resultat<void> meme = await repo.rejoindreQuartier(
+          const Quartier(id: 'q1', nom: 'Résidence El Yasmine', localisation: 'A'),
+        );
+        expect(meme.erreur, 'Tu fais déjà partie de ce quartier');
+
+        final Resultat<void> r = await repo.rejoindreQuartier(
+          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+        );
+        expect(r.estSucces, true);
+        expect(repo.getUtilisateurConnecte().quartierId, 'q2');
+        expect(repo.getUtilisateurConnecte().statut, StatutUtilisateur.enAttente);
+      });
+
+      test('getCodeInvitation renvoie le code du quartier de l\'admin',
+          () async {
+        final Resultat<String?> r = await repo.getCodeInvitation();
+        expect(r.donnee, 'YAS72B');
+      });
+
+      test('getCodeInvitation est refusé à un résident', () async {
+        await creerCompte();
+        final Resultat<String?> r = await repo.getCodeInvitation();
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Action non autorisée');
+      });
+
+      test('getQuartierConnecte donne la position du quartier de démo',
+          () async {
+        final Resultat<Quartier?> r = await repo.getQuartierConnecte();
+        expect(r.donnee!.aUnePosition, true);
+        expect(r.donnee!.contour.length, 4);
       });
 
       test('trouverParCode accepte un code en minuscules', () async {
