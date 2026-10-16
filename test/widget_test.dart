@@ -465,13 +465,21 @@ void main() {
     expect(find.byType(ConnexionScreen), findsOneWidget);
   });
 
-  testWidgets('Le menu ouvre la démo, qui ouvre le module 1',
+  testWidgets('Menu : ni démo ni "Modifier mon profil"',
       (WidgetTester tester) async {
     await lancerApp(tester);
-
     await tester.tap(find.byTooltip('Menu'));
     await tester.pumpAndSettle();
-    await toucherDansMenu(tester, find.text('Démo des modules'));
+    await toucherDansMenu(tester, find.text('Paramètres'));
+    expect(find.byType(ParametresScreen), findsOneWidget);
+    expect(find.text('Démo des modules'), findsNothing);
+    expect(find.text('Modifier mon profil'), findsNothing);
+  });
+
+  testWidgets('La démo (adresse /demo) ouvre le module 1',
+      (WidgetTester tester) async {
+    appRouter.go('/demo');
+    await lancerApp(tester);
     expect(find.byType(DemoScreen), findsOneWidget);
     expect(find.text('Ahla bik !'), findsOneWidget);
 
@@ -765,6 +773,67 @@ void main() {
     expect(find.byType(ConnexionScreen), findsOneWidget);
     expect(find.text('Ton compte a été supprimé'), findsOneWidget);
   });
+
+  // -------------------------------------------------------------------
+  // Navigation : flèches retour et bouton retour du téléphone
+  // -------------------------------------------------------------------
+
+  testWidgets('Retour du téléphone sur un onglet → Accueil',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    expect(find.byType(ProfilScreen), findsOneWidget);
+
+    await retourTelephone(tester);
+    expect(find.byType(AccueilScreen), findsOneWidget);
+  });
+
+  testWidgets('Retour du téléphone sur un écran ouvert → écran précédent',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Paramètres'));
+    expect(find.byType(ParametresScreen), findsOneWidget);
+
+    await retourTelephone(tester);
+    expect(find.byType(ProfilScreen), findsOneWidget);
+  });
+
+  testWidgets('Menu → Membres du quartier : la flèche ramène à l\'Accueil',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await toucherDansMenu(tester, find.text('Membres du quartier'));
+    expect(find.byType(AdminMembresScreen), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.byType(AccueilScreen), findsOneWidget);
+  });
+
+  testWidgets('Vérification et code du quartier : pas de flèche, déconnexion',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteSansQuartier(), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/verification');
+    await lancerApp(tester);
+    await tester.pumpAndSettle();
+
+    // E-mail déjà vérifié : on arrive au choix du quartier, sans flèche
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back), findsNothing);
+
+    await tester.tap(find.text('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+}
+
+/// Simule le bouton retour du téléphone.
+Future<void> retourTelephone(WidgetTester tester) async {
+  await tester.binding.handlePopRoute();
+  await tester.pumpAndSettle();
 }
 
 /// Remplit, dans l'ordre, les champs de la fenêtre ouverte.

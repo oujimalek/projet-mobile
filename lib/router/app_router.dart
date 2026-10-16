@@ -175,16 +175,29 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: cleCoquille, // permet d'ouvrir le menu depuis chaque onglet
-      drawer: AppDrawer(chemin: chemin), // menu latéral (glisser depuis la gauche)
-      body: child,
-      bottomNavigationBar: AppBottomNav(
-        indexActif: _indexActif(),
-        onTap: (index) {
-          // go : remplace l'onglet affiché (pas de flèche retour entre onglets)
-          context.go(cheminsOnglets[index]);
-        },
+    // Bouton retour du téléphone sur un onglet autre que l'Accueil :
+    // on revient à l'Accueil au lieu de quitter l'application
+    final bool surOngletAutreQueAccueil =
+        cheminsOnglets.contains(chemin) && chemin != '/accueil';
+
+    return PopScope(
+      canPop: !surOngletAutreQueAccueil,
+      onPopInvokedWithResult: (bool aQuitte, Object? resultat) {
+        if (!aQuitte) {
+          context.go('/accueil');
+        }
+      },
+      child: Scaffold(
+        key: cleCoquille, // permet d'ouvrir le menu depuis chaque onglet
+        drawer: AppDrawer(chemin: chemin), // menu latéral (glisser depuis la gauche)
+        body: child,
+        bottomNavigationBar: AppBottomNav(
+          indexActif: _indexActif(),
+          onTap: (index) {
+            // go : remplace l'onglet affiché (pas de flèche retour entre onglets)
+            context.go(cheminsOnglets[index]);
+          },
+        ),
       ),
     );
   }

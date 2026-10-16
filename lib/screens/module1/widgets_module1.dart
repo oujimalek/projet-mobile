@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
+import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 
 // Petits widgets utilisés par plusieurs écrans du module 1.
@@ -25,6 +27,29 @@ String? cheminSelonStatut(Utilisateur utilisateur) {
       return '/code-quartier';
     case StatutUtilisateur.bloque:
       return null;
+  }
+}
+
+/// Bouton "Se déconnecter" des écrans de l'inscription (vérification,
+/// code du quartier, attente) : ils n'ont ni menu ni flèche retour,
+/// c'est leur seule sortie vers la connexion.
+class BoutonDeconnexion extends StatelessWidget {
+  const BoutonDeconnexion({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: () async {
+        // On garde le routeur avant l'attente (l'écran peut changer)
+        final GoRouter routeur = GoRouter.of(context);
+        await UtilisateurRepository().deconnexion();
+        routeur.go('/connexion'); // go : pas de retour possible
+      },
+      child: const Text(
+        'Se déconnecter',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
   }
 }
 

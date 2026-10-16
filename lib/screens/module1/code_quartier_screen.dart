@@ -134,7 +134,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: ''),
+          const AppHeader(titre: '', action: BoutonDeconnexion()),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),

@@ -124,7 +124,10 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Validation en cours'),
+          const AppHeader(
+            titre: 'Validation en cours',
+            action: BoutonDeconnexion(),
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),

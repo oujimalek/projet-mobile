@@ -98,18 +98,14 @@ class _AppDrawerState extends State<AppDrawer> {
   Widget build(BuildContext context) {
     final Utilisateur utilisateur = _repository.getUtilisateurConnecte();
 
-    // Rubriques du compte (+ "Membres du quartier" pour l'admin)
+    // Rubriques du compte (+ "Membres du quartier" pour l'admin).
+    // "Modifier mon profil" est sur l'écran Profil (bouton "Modifier").
     final List<Widget> rubriquesCompte = [
       _rubrique(
         icone: Icons.person_outline,
         titre: 'Mon profil',
         actif: widget.chemin == '/profil',
         onTap: () => _allerA('/profil'),
-      ),
-      _rubrique(
-        icone: Icons.edit_outlined,
-        titre: 'Modifier mon profil',
-        onTap: () => _ouvrir('/modifier-profil'),
       ),
     ];
     if (utilisateur.estAdmin) {
@@ -119,7 +115,8 @@ class _AppDrawerState extends State<AppDrawer> {
           titre: 'Membres du quartier',
           badge: _enAttente,
           actif: widget.chemin.startsWith('/profil/membres'),
-          onTap: () => _allerA('/profil/membres'),
+          // push : la flèche retour ramène à l'écran d'où on vient
+          onTap: () => _ouvrir('/profil/membres'),
         ),
       );
     }
@@ -128,13 +125,6 @@ class _AppDrawerState extends State<AppDrawer> {
         icone: Icons.settings_outlined,
         titre: 'Paramètres',
         onTap: () => _ouvrir('/parametres'),
-      ),
-    );
-    rubriquesCompte.add(
-      _rubrique(
-        icone: Icons.apps_outlined,
-        titre: 'Démo des modules',
-        onTap: () => _ouvrir('/demo'),
       ),
     );
 
