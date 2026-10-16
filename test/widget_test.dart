@@ -22,6 +22,7 @@ import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
+import 'package:houmani/widgets/app_drawer.dart';
 
 import 'mock_utilisateur_repository.dart';
 
@@ -59,6 +60,19 @@ Future<void> toucher(WidgetTester tester, Finder finder) async {
   }
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+/// Fait défiler le menu latéral jusqu'au widget, puis le touche.
+Future<void> toucherDansMenu(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    100,
+    scrollable: find
+        .descendant(of: find.byType(Drawer), matching: find.byType(Scrollable))
+        .first,
+  );
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
@@ -255,6 +269,113 @@ void main() {
     expect(find.text('Ta demande a été acceptée !'), findsOneWidget);
   });
 
+  testWidgets(
+      'Module 1 de bout en bout : conditions, œil, inscription, accueil, '
+      'profil, déconnexion, reconnexion', (WidgetTester tester) async {
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    // 1. Connexion : pied de page © et conditions en lecture seule
+    await toucher(tester, find.text('Conditions d\'utilisation'));
+    expect(find.text('1. Objet'), findsOneWidget);
+    expect(find.text('J\'accepte'), findsNothing); // lecture seule
+    await tester.tap(find.text('Fermer'));
+    await tester.pumpAndSettle();
+    expect(find.text('© 2026 Houmani. Tous droits réservés.'), findsOneWidget);
+
+    // 2. Inscription
+    await toucher(tester, find.text('S\'inscrire'));
+    await tester.enterText(find.byType(TextFormField).at(0), 'Nour Trabelsi');
+    await tester.enterText(find.byType(TextFormField).at(1), '+216 22 333 444');
+    await tester.enterText(find.byType(TextFormField).at(2), 'nour@houmani.tn');
+    await tester.enterText(find.byType(TextFormField).at(3), 'nour2026');
+
+    // Le bouton œil affiche puis masque le mot de passe
+    bool masque() {
+      return tester.widget<EditableText>(find.byType(EditableText).at(3)).obscureText;
+    }
+    expect(masque(), isTrue);
+    await toucher(tester, find.byTooltip('Afficher le mot de passe'));
+    expect(masque(), isFalse);
+    await toucher(tester, find.byTooltip('Masquer le mot de passe'));
+    expect(masque(), isTrue);
+
+    // Les conditions s'ouvrent depuis le lien, défilent jusqu'au ©,
+    // et "J'accepte" coche la case
+    await toucher(tester, find.text('conditions d\'utilisation'));
+    await tester.scrollUntilVisible(
+      find.text('9. Modification des conditions'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('conditions_texte')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.text('J\'accepte'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+    await toucher(tester, find.widgetWithText(ElevatedButton, 'S\'inscrire'));
+
+    // 3. E-mail vérifié → code du quartier → attente → validée
+    expect(find.byType(VerificationOtpScreen), findsOneWidget);
+    await mock.simulerVerificationEmail();
+    await toucher(tester, find.text('J\'ai vérifié mon e-mail'));
+    await tester.enterText(find.byType(TextField).first, 'YAS72B');
+    await tester.pump();
+    await toucher(tester, find.text('Rejoindre la houma'));
+    expect(find.byType(AttenteValidationScreen), findsOneWidget);
+    await mock.simulerValidation();
+    await toucher(tester, find.text('Vérifier ma demande'));
+
+    // 4. Accueil : salutation et invitation à compléter le profil
+    expect(find.byType(AccueilScreen), findsOneWidget);
+    expect(find.text('Ahla Nour !'), findsOneWidget);
+    // On laisse disparaître le message "Ta demande a été acceptée !"
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Ton profil est complet à'), findsOneWidget);
+    await toucher(tester, find.textContaining('Ton profil est complet à'));
+    expect(find.byType(ProfilEditionScreen), findsOneWidget);
+    await toucher(tester, find.text('+ Ajouter'));
+    await tester.enterText(find.byType(TextField).last, 'Cuisine');
+    await toucher(tester, find.text('Ajouter'));
+    await toucher(tester, find.text('Enregistrer les modifications'));
+    expect(
+      UtilisateurRepository().getUtilisateurConnecte().competences,
+      contains('Cuisine'),
+    );
+
+    // 5. Profil depuis le menu, puis déconnexion
+    // (toucher a fait défiler l'accueil caché sous l'édition : on remonte)
+    expect(find.byType(AccueilScreen), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, 3000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Drawer), findsOneWidget);
+    await toucherDansMenu(
+      tester,
+      find.descendant(of: find.byType(Drawer), matching: find.text('Mon profil')),
+    );
+    expect(find.byType(ProfilScreen), findsOneWidget);
+    expect(find.text('Nour Trabelsi'), findsOneWidget);
+    expect(find.text('Cuisine'), findsOneWidget);
+    cleCoquille.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+
+    // 6. Reconnexion avec le nouveau compte : retour direct à l'accueil
+    await tester.enterText(find.byType(TextFormField).at(0), 'nour@houmani.tn');
+    await tester.enterText(find.byType(TextFormField).at(1), 'nour2026');
+    await toucher(tester, find.text('Se connecter'));
+    expect(find.byType(AccueilScreen), findsOneWidget);
+    expect(find.text('Ahla Nour !'), findsOneWidget);
+  });
+
   testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
       (WidgetTester tester) async {
     appRouter.go('/connexion');
@@ -304,12 +425,52 @@ void main() {
     expect(UtilisateurRepository().getUtilisateurConnecte().avatar, 'chat');
   });
 
-  testWidgets('Accueil ouvre la démo, qui ouvre le module 1',
+  testWidgets('Accueil : salutation, raccourcis et demandes en attente',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    expect(find.text('Ahla Amira !'), findsOneWidget);
+    expect(find.text('3 demandes d\'adhésion en attente'), findsOneWidget);
+
+    // Un raccourci ouvre l'onglet du module
+    await toucher(tester, find.text('Signaler'));
+    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+  });
+
+  testWidgets('Menu latéral : modules, sous-rubriques et déconnexion',
       (WidgetTester tester) async {
     await lancerApp(tester);
 
-    await tester.tap(find.text('Voir la démo des modules'));
+    await tester.tap(find.byTooltip('Menu'));
     await tester.pumpAndSettle();
+    expect(find.byType(Drawer), findsOneWidget);
+    expect(find.text('Amira Ben Salah'), findsOneWidget);
+
+    // Un module se déplie et montre ses sous-rubriques
+    // (dans le menu, pas l'onglet "Services" de la barre du bas)
+    await tester.tap(
+      find.descendant(of: find.byType(Drawer), matching: find.text('Services')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Offres et demandes'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ServicesListScreen), findsOneWidget);
+    expect(find.byType(Drawer), findsNothing);
+
+    // Déconnexion depuis la carte du bas
+    cleCoquille.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
+  testWidgets('Le menu ouvre la démo, qui ouvre le module 1',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await toucherDansMenu(tester, find.text('Démo des modules'));
     expect(find.byType(DemoScreen), findsOneWidget);
     expect(find.text('Ahla bik !'), findsOneWidget);
 
