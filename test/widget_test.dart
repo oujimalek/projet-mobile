@@ -455,6 +455,15 @@ void main() {
     expect(find.text('Ahla Nour !'), findsOneWidget);
   });
 
+  testWidgets('Profil : bouton Se déconnecter en bas de l\'écran',
+      (WidgetTester tester) async {
+    appRouter.go('/profil');
+    await lancerApp(tester);
+    expect(find.byType(ProfilScreen), findsOneWidget);
+    await toucher(tester, find.text('Se déconnecter'));
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
   testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
       (WidgetTester tester) async {
     appRouter.go('/connexion');

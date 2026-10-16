@@ -60,6 +60,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
     }
   }
 
+  Future<void> _seDeconnecter() async {
+    await _repository.deconnexion();
+    if (mounted) {
+      // go : on remplace tout, pas de retour vers le profil
+      context.go('/connexion');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Utilisateur utilisateur = _repository.getUtilisateurConnecte();
@@ -105,10 +113,24 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(height: 20),
 
                 // ----- Liens -----
-                // (La déconnexion est dans le menu latéral, carte du bas)
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(children: _liens(context, utilisateur)),
+                ),
+                const SizedBox(height: 12),
+
+                // ----- Déconnexion -----
+                // (aussi dans le menu latéral, mais ici on la trouve tout
+                // de suite, par exemple pour changer de compte de test)
+                Center(
+                  child: TextButton(
+                    onPressed: _seDeconnecter,
+                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                    child: Text(
+                      tr('Se déconnecter', 'O5rej'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
               ],
             ),
