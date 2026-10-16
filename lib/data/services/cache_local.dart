@@ -20,6 +20,7 @@ class CacheLocal {
   static const String _nomBoite = 'houmani_cache';
   static const String _cleUtilisateur = 'utilisateur';
   static const String _cleQuartier = 'quartier';
+  static const String _cleTheme = 'theme';
 
   /// Dossier des fichiers Hive. null = dossier de l'application (cas normal).
   /// Les tests donnent un dossier temporaire.
@@ -126,14 +127,41 @@ class CacheLocal {
   }
 
   // =====================================================================
+  // Apparence (thème clair / sombre / système)
+  // =====================================================================
+
+  /// Enregistre le thème choisi dans Paramètres (ex : "sombre").
+  Future<void> enregistrerTheme(String mode) async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      await boite.put(_cleTheme, mode);
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+    }
+  }
+
+  /// Le thème enregistré, ou null s'il n'y en a pas.
+  Future<String?> lireTheme() async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      final dynamic brut = boite.get(_cleTheme);
+      return brut is String ? brut : null;
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+      return null;
+    }
+  }
+
+  // =====================================================================
   // Nettoyage
   // =====================================================================
 
-  /// Efface tout (à la déconnexion : le téléphone peut être partagé).
+  /// Efface le profil et le quartier (à la déconnexion : le téléphone peut
+  /// être partagé). Le thème est gardé : c'est un réglage du téléphone.
   Future<void> vider() async {
     try {
       final Box<dynamic> boite = await _ouvrir();
-      await boite.clear();
+      await boite.deleteAll([_cleUtilisateur, _cleQuartier]);
     } catch (e) {
       debugPrint('CacheLocal : $e');
     }

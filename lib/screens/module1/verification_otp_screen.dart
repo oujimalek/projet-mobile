@@ -154,13 +154,13 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
                   child: Column(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.mark_email_unread_outlined,
                         size: 48,
                         color: AppColors.primary,
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Ouvre ta boîte mail, clique sur le lien, '
                         'puis reviens ici.',
                         textAlign: TextAlign.center,
@@ -177,7 +177,7 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
                     child: Text(
                       _erreur,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.error,
                         fontWeight: FontWeight.w600,
                       ),
@@ -226,11 +226,11 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
       return Text.rich(
         TextSpan(
           text: 'Renvoyer l\'e-mail dans ',
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary),
           children: [
             TextSpan(
               text: _formaterTemps(_secondesRestantes),
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.secondary,
                 fontWeight: FontWeight.w600,
               ),

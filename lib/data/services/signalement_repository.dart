@@ -10,7 +10,7 @@ import '../models/signalement.dart';
 class SignalementRepository {
   /// Les catégories affichées dans la GridView de création de signalement.
   List<CategorieSignalement> getCategories() {
-    return const [
+    return [
       CategorieSignalement(
         id: 'electricite',
         nom: 'Électricité',

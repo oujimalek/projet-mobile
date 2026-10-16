@@ -116,7 +116,7 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
           const AppHeader(titre: 'Inscription à un créneau'),
           Expanded(
             child: depart == null
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Ce créneau n\'existe plus',
                       style: TextStyle(color: AppColors.textSecondary),
@@ -196,7 +196,7 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
                     'Me rappeler la veille',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  subtitle: const Text(
+                  subtitle: Text(
                     'Le rappel est enregistré, sans notification pour l\'instant',
                     style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
@@ -218,7 +218,7 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.card,
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
@@ -239,7 +239,7 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
                     onPressed: choisiEstMoi ? _desister : null,
                   ),
                   if (!choisiEstMoi)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.only(top: 6),
                       child: Text(
                         'Sélectionne ton créneau (« Toi ») pour te désister',
@@ -262,7 +262,7 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
         children: [
           Icon(icone, size: 20, color: AppColors.primary),
           const SizedBox(width: 12),
-          Text(titre, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(titre, style: TextStyle(color: AppColors.textSecondary)),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -285,13 +285,13 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
 
     Widget etat;
     if (creneau.estLibre) {
-      etat = const PastilleTexte(
+      etat = PastilleTexte(
         texte: 'Libre',
         couleur: AppColors.badgeResolu,
         fond: AppColors.badgeResoluFond,
       );
     } else if (estMoi) {
-      etat = const PastilleTexte(
+      etat = PastilleTexte(
         texte: 'Toi',
         couleur: AppColors.primary,
         fond: AppColors.primaryLight,
@@ -299,7 +299,7 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
     } else {
       etat = Text(
         'Pris par ${creneau.inscrit}',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
       );
     }
 

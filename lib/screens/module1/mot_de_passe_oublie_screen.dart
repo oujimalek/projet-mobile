@@ -136,11 +136,11 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
         child: Container(
           width: 88,
           height: 88,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.primaryLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.mark_email_read_outlined,
             color: AppColors.primary,
             size: 44,
@@ -156,7 +156,7 @@ class _MotDePasseOublieScreenState extends State<MotDePasseOublieScreen> {
         ),
       ),
       const SizedBox(height: 8),
-      const Text(
+      Text(
         'Pense à vérifier tes courriers indésirables (spam).',
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),

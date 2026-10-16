@@ -140,7 +140,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Connecte-toi à ta houma',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
@@ -201,7 +201,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
           Text(
             _message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.error,
               fontWeight: FontWeight.w600,
             ),
@@ -214,7 +214,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text(
+              Text(
                 'Pas encore de compte ?',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
@@ -237,7 +237,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
               onPressed: () {
                 afficherConditions(context, avecAcceptation: false);
               },
-              child: const Text(
+              child: Text(
                 'Conditions d\'utilisation',
                 style: TextStyle(
                   color: AppColors.textSecondary,
@@ -247,7 +247,7 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
               ),
             ),
           ),
-          const Text(
+          Text(
             copyrightHoumani,
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),

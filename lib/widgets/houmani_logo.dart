@@ -10,14 +10,14 @@ class HoumaniLogo extends StatelessWidget {
   final double taille;
   final bool avecNom;
   final bool blanc;
-  final Color couleurNom;
+  final Color? couleurNom; // par défaut : bleu de la marque
 
   const HoumaniLogo({
     super.key,
     this.taille = 80,
     this.avecNom = false,
     this.blanc = false,
-    this.couleurNom = AppColors.primary,
+    this.couleurNom,
   });
 
   @override
@@ -38,7 +38,7 @@ class HoumaniLogo extends StatelessWidget {
         Text(
           'Houmani',
           style: TextStyle(
-            color: couleurNom,
+            color: couleurNom ?? AppColors.primary,
             fontSize: taille * 0.3,
             fontWeight: FontWeight.bold,
           ),

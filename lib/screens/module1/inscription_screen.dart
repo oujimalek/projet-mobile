@@ -145,7 +145,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // ----- En-tête : logo + titre -----
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +225,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Text(
+                Text(
                   'Déjà membre ?',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
@@ -281,7 +281,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                 Checkbox(
                   value: _conditionsAcceptees,
                   activeColor: AppColors.secondary,
-                  side: const BorderSide(color: AppColors.secondary, width: 1.5),
+                  side: BorderSide(color: AppColors.secondary, width: 1.5),
                   onChanged: (valeur) {
                     setState(() {
                       _conditionsAcceptees = valeur ?? false;
@@ -293,14 +293,14 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                   child: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         'J\'accepte les ',
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
                       // Le lien ouvre les conditions à lire
                       GestureDetector(
                         onTap: _lireConditions,
-                        child: const Text(
+                        child: Text(
                           'conditions d\'utilisation',
                           style: TextStyle(
                             color: AppColors.secondary,
@@ -318,7 +318,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
           ),
         ),
         if (_erreurConditions)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 12, top: 6),
             child: Text(
               'Tu dois accepter les conditions d\'utilisation',

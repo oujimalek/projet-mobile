@@ -115,7 +115,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (demande == null) {
-      return const Scaffold(
+      return Scaffold(
         body: Center(
           child: Text(
             'Cette demande n\'existe plus',
@@ -136,7 +136,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(child: _listeMessages(demande, interlocuteur)),
             _zoneSaisie(),
           ] else
-            const Expanded(
+            Expanded(
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.all(24),
@@ -166,7 +166,7 @@ class _ChatScreenState extends State<ChatScreen> {
         16,
         16,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -176,7 +176,7 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () {
               Navigator.of(context).maybePop();
             },
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back, color: AppColors.primary),
           ),
           AvatarInitiales(nom: interlocuteur, taille: 42),
           const SizedBox(width: 12),
@@ -199,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         titre,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
@@ -226,7 +226,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return Center(
         child: Text(
           'Aucun message. Dis bonjour à ${prenomDe(interlocuteur)} 👋',
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
       );
     }
@@ -247,7 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             '${prenomDe(interlocuteur)} écrit…',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontStyle: FontStyle.italic,
               color: AppColors.textSecondary,
@@ -327,7 +327,7 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(height: 3),
               Text(
                 _heure(message.date),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   color: AppColors.textSecondary,
                 ),

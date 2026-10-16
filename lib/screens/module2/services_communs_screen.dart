@@ -65,7 +65,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
           const SizedBox(height: 16),
           Expanded(
             child: creneaux.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Aucun créneau ce jour-là',
                       style: TextStyle(color: AppColors.textSecondary),
@@ -97,7 +97,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
         24,
         16,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -107,7 +107,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
             onPressed: () {
               Navigator.of(context).maybePop();
             },
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back, color: AppColors.primary),
           ),
           Expanded(
             child: Column(
@@ -119,7 +119,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
                 ),
                 Text(
                   residence,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
                   ),
@@ -223,16 +223,16 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
       final String qui = creneau.estLibre ? '' : ' · ${estMoi ? 'Toi' : creneau.inscrit}';
       statut = Text(
         'Créneau passé$qui',
-        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
       );
     } else if (creneau.estLibre) {
-      statut = const PastilleTexte(
+      statut = PastilleTexte(
         texte: 'Créneau libre',
         couleur: AppColors.badgeResolu,
         fond: AppColors.badgeResoluFond,
       );
     } else if (estMoi) {
-      statut = const PastilleTexte(
+      statut = PastilleTexte(
         texte: 'Toi',
         couleur: AppColors.primary,
         fond: AppColors.primaryLight,
@@ -240,7 +240,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
     } else {
       statut = Text(
         'Inscrit : ${creneau.inscrit}',
-        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
       );
     }
 
@@ -283,7 +283,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     '${dateCourte(creneau.date)} · ${creneau.heureDebut} – ${creneau.heureFin}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
                     ),

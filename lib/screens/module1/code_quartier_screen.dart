@@ -163,7 +163,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   onChanged: _codeModifie,
                 ),
                 if (_codeInconnu)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
                       'Ce code ne correspond à aucun quartier',
@@ -189,7 +189,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 ),
                 if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'Ta demande sera validée par l\'administrateur du quartier.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
@@ -213,7 +213,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
         border: Border.all(color: AppColors.error),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Icon(Icons.info_outline, color: AppColors.error),
           SizedBox(width: 10),
@@ -231,7 +231,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
   /// Ligne "——— ou ———" entre les deux façons de choisir.
   Widget _separateurOu() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
@@ -262,12 +262,12 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
         Text(
           _erreurRecherche,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.error),
+          style: TextStyle(color: AppColors.error),
         ),
       );
     } else if (cartes.isEmpty) {
       cartes.add(
-        const Text(
+        Text(
           'Aucun quartier trouvé',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary),
@@ -323,7 +323,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                     // quartier qu'on n'a pas encore rejoint.)
                     Text(
                       quartier.localisation,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
                       ),

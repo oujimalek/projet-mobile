@@ -111,7 +111,7 @@ class DemoScreen extends StatelessWidget {
   Widget _enTete() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 56, 16, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -120,7 +120,7 @@ class DemoScreen extends StatelessWidget {
           // Logo blanc directement sur le fond bleu de l'en-tête
           const HoumaniLogo(taille: 64, blanc: true),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -185,12 +185,12 @@ class DemoScreen extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     ecranNom,
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            Icon(Icons.chevron_right, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -223,7 +223,7 @@ class DemoScreen extends StatelessWidget {
             children: [
               ArchDateBlock(date: DateTime(2026, 10, 17)),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Fête des voisins\nYaatik saha !',
                   style: TextStyle(color: AppColors.textSecondary),

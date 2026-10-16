@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
@@ -19,6 +20,7 @@ const String versionHoumani = '1.0.0';
 /// - Sécurité : changer le mot de passe, changer l'e-mail, supprimer le
 ///   compte. Chaque action ouvre une fenêtre (showDialog) avec un Form ;
 ///   le mot de passe actuel est toujours redemandé (exigé par Firebase).
+/// - Apparence : thème comme le téléphone, clair ou sombre.
 /// - À propos : conditions d'utilisation, version, copyright.
 class ParametresScreen extends StatefulWidget {
   const ParametresScreen({super.key});
@@ -210,14 +212,14 @@ class _ParametresScreenState extends State<ParametresScreen> {
                         titre: 'Changer le mot de passe',
                         onTap: _changerMotDePasse,
                       ),
-                      const Divider(height: 1, color: AppColors.border),
+                      Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.alternate_email,
                         titre: 'Changer l\'e-mail',
                         detail: email,
                         onTap: _changerEmail,
                       ),
-                      const Divider(height: 1, color: AppColors.border),
+                      Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.delete_outline,
                         titre: 'Supprimer mon compte',
@@ -228,6 +230,33 @@ class _ParametresScreenState extends State<ParametresScreen> {
                   ),
                 ),
                 if (_enChargement) const IndicateurChargement(),
+                const SizedBox(height: 24),
+
+                _titreSection('APPARENCE'),
+                AppCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _choixTheme(
+                        ModeTheme.systeme,
+                        Icons.brightness_auto_outlined,
+                        'Comme le téléphone',
+                      ),
+                      Divider(height: 1, color: AppColors.border),
+                      _choixTheme(
+                        ModeTheme.clair,
+                        Icons.light_mode_outlined,
+                        'Clair',
+                      ),
+                      Divider(height: 1, color: AppColors.border),
+                      _choixTheme(
+                        ModeTheme.sombre,
+                        Icons.dark_mode_outlined,
+                        'Sombre',
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 _titreSection('À PROPOS'),
@@ -242,7 +271,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
                           afficherConditions(context, avecAcceptation: false);
                         },
                       ),
-                      const Divider(height: 1, color: AppColors.border),
+                      Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.info_outline,
                         titre: 'Version',
@@ -252,7 +281,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   copyrightHoumani,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
@@ -270,7 +299,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
         titre,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.bold,
@@ -280,14 +309,33 @@ class _ParametresScreenState extends State<ParametresScreen> {
     );
   }
 
+  /// Une ligne du choix de thème : coche dorée sur le choix actuel.
+  /// Le changement est immédiat (PreferenceTheme prévient HoumaniApp).
+  Widget _choixTheme(ModeTheme mode, IconData icone, String titre) {
+    final bool choisi = PreferenceTheme.mode.value == mode;
+    return _ligne(
+      icone: icone,
+      titre: titre,
+      onTap: () {
+        PreferenceTheme.choisir(mode);
+      },
+      fin: choisi
+          ? Icon(Icons.check, color: AppColors.secondary)
+          : const SizedBox(width: 24),
+    );
+  }
+
   /// Une ligne de réglage. onTap null : ligne d'information (pas de flèche).
+  /// fin : ce qui remplace la flèche à droite (ex : une coche).
   Widget _ligne({
     required IconData icone,
     required String titre,
     String? detail,
-    Color couleur = AppColors.textPrimary,
+    Color? couleur, // par défaut : couleur du texte
     Function()? onTap,
+    Widget? fin,
   }) {
+    final Color couleurLigne = couleur ?? AppColors.textPrimary;
     return InkWell(
       // Pendant le chargement, les lignes ne réagissent plus
       onTap: _enChargement ? null : onTap,
@@ -295,7 +343,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
           children: [
-            Icon(icone, color: couleur, size: 22),
+            Icon(icone, color: couleurLigne, size: 22),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -306,14 +354,14 @@ class _ParametresScreenState extends State<ParametresScreen> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: couleur,
+                      color: couleurLigne,
                     ),
                   ),
                   if (detail != null)
                     Text(
                       detail,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,
                       ),
@@ -321,8 +369,10 @@ class _ParametresScreenState extends State<ParametresScreen> {
                 ],
               ),
             ),
-            if (onTap != null)
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            if (fin != null)
+              fin
+            else if (onTap != null)
+              Icon(Icons.chevron_right, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -408,7 +458,7 @@ class _DialogueSecuriteState extends State<DialogueSecurite> {
       contenu.add(
         Text(
           widget.explication!,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
       );
       contenu.add(const SizedBox(height: 16));

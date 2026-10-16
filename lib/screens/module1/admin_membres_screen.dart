@@ -38,12 +38,13 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   String _erreur = ''; // ex : pas de réseau
 
   // Couleurs des avatars, choisies à tour de rôle
-  static const List<Color> _couleursAvatar = [
+  // (des `get` : les couleurs suivent le thème clair/sombre)
+  static List<Color> get _couleursAvatar => [
     AppColors.primary,
     AppColors.secondary,
     AppColors.textSecondary,
   ];
-  static const List<Color> _fondsAvatar = [
+  static List<Color> get _fondsAvatar => [
     AppColors.primaryLight,
     AppColors.secondaryLight,
     AppColors.backgroundSecondary,
@@ -173,13 +174,13 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           child: Text(
             _erreur,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.error),
+            style: TextStyle(color: AppColors.error),
           ),
         ),
       );
     } else if (cartes.isEmpty) {
       cartes.add(
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(top: 32),
           child: Text(
             'Aucun membre ici',
@@ -203,7 +204,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                 // Même style que les autres champs (thème de l'app)
                 TextField(
                   controller: _rechercheController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Rechercher un membre...',
                     prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                   ),
@@ -232,7 +233,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         20,
         20,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -242,13 +243,13 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
             onPressed: () {
               Navigator.of(context).maybePop();
             },
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back, color: AppColors.primary),
           ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Membres',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -258,7 +259,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                 ),
                 Text(
                   '${admin.quartier} · $total membres',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -356,7 +357,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                     const SizedBox(height: 2),
                     Text(
                       detail,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
@@ -479,7 +480,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         foregroundColor: AppColors.error,
         backgroundColor: AppColors.card,
         minimumSize: const Size.fromHeight(50),
-        side: const BorderSide(color: AppColors.error, width: 1.5),
+        side: BorderSide(color: AppColors.error, width: 1.5),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
         ),

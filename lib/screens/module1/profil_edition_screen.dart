@@ -286,7 +286,7 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
                         controller: _logementController,
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'Visible uniquement par l\'administrateur du quartier.',
                         style: TextStyle(
                           color: AppColors.textSecondary,

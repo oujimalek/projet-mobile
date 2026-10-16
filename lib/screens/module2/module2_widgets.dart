@@ -19,7 +19,7 @@ class AvatarInitiales extends StatelessWidget {
       width: taille,
       height: taille,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primaryLight,
         shape: BoxShape.circle,
       ),

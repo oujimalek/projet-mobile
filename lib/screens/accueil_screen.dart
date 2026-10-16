@@ -237,7 +237,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
         20,
         24,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -272,7 +272,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
               children: [
                 Text(
                   '${_salutationDuMoment()} · ${_dateDuJour()}',
-                  style: const TextStyle(color: AppColors.primaryLight),
+                  style: TextStyle(color: AppColors.primaryLight),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -286,13 +286,13 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined,
+                    Icon(Icons.location_on_outlined,
                         color: AppColors.primaryLight, size: 16),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         utilisateur.quartier,
-                        style: const TextStyle(color: AppColors.primaryLight),
+                        style: TextStyle(color: AppColors.primaryLight),
                       ),
                     ),
                   ],
@@ -344,11 +344,11 @@ class _AccueilScreenState extends State<AccueilScreen> {
           Container(
             width: 42,
             height: 42,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.badgeEnAttenteFond,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.how_to_reg_outlined,
+            child: Icon(Icons.how_to_reg_outlined,
                 color: AppColors.badgeEnAttente),
           ),
           const SizedBox(width: 12),
@@ -358,14 +358,14 @@ class _AccueilScreenState extends State<AccueilScreen> {
               children: [
                 Text(texte, style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Touche pour les valider',
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          Icon(Icons.chevron_right, color: AppColors.textSecondary),
         ],
       ),
     );
@@ -385,7 +385,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome_outlined, color: AppColors.secondary),
+              Icon(Icons.auto_awesome_outlined, color: AppColors.secondary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -393,7 +393,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              const Text(
+              Text(
                 'Compléter',
                 style: TextStyle(
                   color: AppColors.secondary,
@@ -413,7 +413,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Ajoute ta photo et tes compétences : tes voisins sauront '
             'qui tu es et comment tu peux les aider.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
@@ -447,13 +447,13 @@ class _AccueilScreenState extends State<AccueilScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.lightbulb_outline, color: AppColors.primary),
+          Icon(Icons.lightbulb_outline, color: AppColors.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Astuce du jour',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -527,7 +527,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
               children: [
                 Text(
                   '${evenement.date.day}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.secondary,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -535,7 +535,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 ),
                 Text(
                   mois[evenement.date.month - 1],
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.secondary,
                     fontSize: 12,
                   ),
@@ -555,7 +555,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '$heure · ${evenement.lieu}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
                   ),
@@ -563,7 +563,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 const SizedBox(height: 2),
                 Text(
                   '${evenement.participants} participants',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
                   ),
@@ -585,18 +585,18 @@ class _AccueilScreenState extends State<AccueilScreen> {
           Container(
             width: 42,
             height: 42,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.primaryLight,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.poll_outlined, color: AppColors.primary),
+            child: Icon(Icons.poll_outlined, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Sondage en cours',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -612,7 +612,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 const SizedBox(height: 2),
                 Text(
                   '${sondage.totalVotes} votes · donne ton avis',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
                   ),
@@ -620,7 +620,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          Icon(Icons.chevron_right, color: AppColors.textSecondary),
         ],
       ),
     );
@@ -663,7 +663,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 const SizedBox(height: 2),
                 Text(
                   '${service.categorie} · ${service.auteur}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
                   ),

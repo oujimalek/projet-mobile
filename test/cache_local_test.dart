@@ -136,6 +136,20 @@ void main() {
       expect((await cache.lireUtilisateur())?.id, amira.id);
     });
 
+    test('thème : vide au départ, puis on relit le choix', () async {
+      expect(await cache.lireTheme(), isNull);
+      await cache.enregistrerTheme('sombre');
+      expect(await cache.lireTheme(), 'sombre');
+    });
+
+    test('vider garde le thème (réglage du téléphone)', () async {
+      await cache.enregistrerUtilisateur(amira);
+      await cache.enregistrerTheme('clair');
+      await cache.vider();
+      expect(await cache.lireUtilisateur(), isNull);
+      expect(await cache.lireTheme(), 'clair');
+    });
+
     test('les données restent sur le disque après fermer()', () async {
       await cache.enregistrerUtilisateur(amira);
       await cache.enregistrerQuartier(

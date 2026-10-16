@@ -138,7 +138,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                     width: 104,
                     height: 104,
                     alignment: Alignment.center,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.primaryLight,
                       shape: BoxShape.circle,
                     ),
@@ -157,7 +157,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                   'ton inscription. Reviens vérifier ta demande un peu plus '
                   'tard.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),
@@ -183,7 +183,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                         titre: 'Demande envoyée',
                         detail: _heureDemande(utilisateur.dateDemande),
                       ),
-                      const Divider(color: AppColors.border),
+                      Divider(color: AppColors.border),
                       _etape(
                         icone: Icons.radio_button_checked,
                         couleur: AppColors.warning,
@@ -194,7 +194,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
                           statut: StatutSignalement.enAttente,
                         ),
                       ),
-                      const Divider(color: AppColors.border),
+                      Divider(color: AppColors.border),
                       _etape(
                         icone: Icons.radio_button_unchecked,
                         couleur: AppColors.border,
@@ -266,7 +266,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
             const SizedBox(height: 2),
             Text(
               detail,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
               ),

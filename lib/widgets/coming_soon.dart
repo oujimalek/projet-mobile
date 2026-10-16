@@ -20,11 +20,11 @@ class ComingSoon extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.construction,
                 size: 40,
                 color: AppColors.primary,
@@ -39,7 +39,7 @@ class ComingSoon extends StatelessWidget {
             Text(
               module,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
         ),

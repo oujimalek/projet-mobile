@@ -87,7 +87,7 @@ Future<bool> afficherConditions(
 }) async {
   // Le contenu : chaque article = un titre en gras + son paragraphe
   final List<Widget> contenu = [
-    const Text(
+    Text(
       'Dernière mise à jour : 16 octobre 2026',
       style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
     ),
@@ -104,14 +104,14 @@ Future<bool> afficherConditions(
     contenu.add(
       Text(
         article[1],
-        style: const TextStyle(height: 1.45, color: AppColors.textPrimary),
+        style: TextStyle(height: 1.45, color: AppColors.textPrimary),
       ),
     );
     contenu.add(const SizedBox(height: 14));
   }
-  contenu.add(const Divider(color: AppColors.border));
+  contenu.add(Divider(color: AppColors.border));
   contenu.add(
-    const Center(
+    Center(
       child: Text(
         copyrightHoumani,
         style: TextStyle(color: AppColors.textSecondary, fontSize: 12),

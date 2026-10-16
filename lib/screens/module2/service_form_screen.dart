@@ -133,7 +133,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                       const _Etiquette('Catégorie'),
                       _pastillesCategories(),
                       if (_erreurCategorie)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.only(top: 6),
                           child: Text(
                             'Choisis une catégorie',
@@ -178,7 +178,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.card,
               border: Border(top: BorderSide(color: AppColors.border)),
             ),

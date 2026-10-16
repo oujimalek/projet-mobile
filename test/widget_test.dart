@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/services/cache_local.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
@@ -23,6 +26,8 @@ import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
+import 'package:houmani/theme/app_theme.dart';
+import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
 
 import 'mock_utilisateur_repository.dart';
@@ -827,6 +832,66 @@ void main() {
     await tester.tap(find.text('Se déconnecter'));
     await tester.pumpAndSettle();
     expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------
+  // Apparence : mode sombre
+  // -------------------------------------------------------------------
+
+  group('Mode sombre', () {
+    late Directory dossier;
+
+    setUp(() {
+      // Le choix est enregistré dans un dossier temporaire
+      dossier = Directory.systemTemp.createTempSync('houmani_theme_');
+      PreferenceTheme.cache = CacheLocal(dossier: dossier.path);
+    });
+
+    // Les réglages sont globaux : on remet le thème clair pour les autres tests
+    tearDown(() {
+      PreferenceTheme.mode.value = ModeTheme.systeme;
+      AppColors.sombre = false;
+      PreferenceTheme.cache = CacheLocal();
+    });
+
+    test('Système suit le téléphone, Clair et Sombre l\'ignorent', () {
+      expect(PreferenceTheme.estSombre(ModeTheme.systeme, true), isTrue);
+      expect(PreferenceTheme.estSombre(ModeTheme.systeme, false), isFalse);
+      expect(PreferenceTheme.estSombre(ModeTheme.clair, true), isFalse);
+      expect(PreferenceTheme.estSombre(ModeTheme.sombre, false), isTrue);
+    });
+
+    test('les couleurs changent avec AppColors.sombre', () {
+      AppColors.sombre = false;
+      final Color fondClair = AppColors.background;
+      AppColors.sombre = true;
+      expect(AppColors.background, isNot(fondClair));
+      expect(AppTheme.actuel.brightness, Brightness.dark);
+    });
+
+    testWidgets('Paramètres : choisir Sombre puis Clair change tout l\'écran',
+        (WidgetTester tester) async {
+      appRouter.go('/parametres');
+      await lancerApp(tester);
+      final Color fondClair = AppColors.background;
+
+      await toucher(tester, find.text('Sombre'));
+      expect(PreferenceTheme.mode.value, ModeTheme.sombre);
+      expect(AppColors.sombre, isTrue);
+      // L'écran ouvert (const) est bien redessiné avec les couleurs sombres :
+      // le fond (thème) et les séparateurs (lus dans AppColors)
+      final BuildContext ecran = tester.element(find.byType(ParametresScreen));
+      expect(Theme.of(ecran).scaffoldBackgroundColor, AppColors.background);
+      expect(AppColors.background, isNot(fondClair));
+      expect(tester.widget<Divider>(find.byType(Divider).first).color,
+          AppColors.border);
+      // La coche est sur "Sombre"
+      expect(find.byIcon(Icons.check), findsOneWidget);
+
+      await toucher(tester, find.text('Clair'));
+      expect(AppColors.sombre, isFalse);
+      expect(AppColors.background, fondClair);
+    });
   });
 }
 

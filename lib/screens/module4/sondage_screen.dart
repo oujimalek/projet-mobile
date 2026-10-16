@@ -142,7 +142,7 @@ class _SondageScreenState extends State<SondageScreen> {
                     StatusBadge(statut: statut),
                     Text(
                       _sousTitre(),
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -152,7 +152,7 @@ class _SondageScreenState extends State<SondageScreen> {
                 Text(
                   _texteTotal(),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -165,7 +165,7 @@ class _SondageScreenState extends State<SondageScreen> {
               children: [
                 Text(
                   _aVote ? 'Yaatik saha, ton vote est enregistré !' : '',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.success,
                     fontWeight: FontWeight.w600,
                   ),
@@ -255,7 +255,7 @@ class _SondageScreenState extends State<SondageScreen> {
                   ),
                   Text(
                     '${_votes[index]} votes',
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ],
               ),

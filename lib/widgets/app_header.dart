@@ -28,7 +28,7 @@ class AppHeader extends StatelessWidget {
         24,
         16,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -39,7 +39,7 @@ class AppHeader extends StatelessWidget {
               onPressed: () {
                 Navigator.of(context).maybePop();
               },
-              icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+              icon: Icon(Icons.arrow_back, color: AppColors.primary),
             ),
           Expanded(
             child: Text(
