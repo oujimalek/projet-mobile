@@ -229,8 +229,11 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Bouton actif seulement si un quartier est choisi et rien n'est en cours
-    final bool peutRejoindre = _quartierChoisi() != null && !_enChargement;
+    // Bouton actif seulement si un quartier est choisi, qu'il a un admin
+    // pour valider la demande, et que rien n'est en cours
+    final Quartier? choisi = _quartierChoisi();
+    final bool peutRejoindre =
+        choisi != null && choisi.aUnAdmin && !_enChargement;
     final bool changement = _changement();
 
     return Scaffold(
@@ -281,6 +284,18 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                       style: TextStyle(color: AppColors.error, fontSize: 12),
                     ),
                   ),
+                // Code valide mais personne pour valider la demande
+                if (_code.length == 6 &&
+                    _quartierDuCode != null &&
+                    !_quartierDuCode!.aUnAdmin)
+                  Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      '${_quartierDuCode!.nom} n\'a pas encore d\'administrateur : '
+                      'impossible de le rejoindre pour l\'instant.',
+                      style: TextStyle(color: AppColors.warning, fontSize: 12),
+                    ),
+                  ),
                 _separateurOu(),
 
                 // ----- Recherche d'un quartier -----
@@ -326,6 +341,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
   /// Bandeau rouge clair : la dernière demande a été refusée.
   Widget _bandeauRefus() {
+    final String motif = _repository.getUtilisateurConnecte().motif;
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(12),
@@ -340,8 +356,12 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Ta dernière demande a été refusée par l\'administrateur. '
-              'Vérifie le code ou choisis un autre quartier.',
+              motif.isEmpty
+                  ? 'Ta dernière demande a été refusée par l\'administrateur. '
+                      'Vérifie le code ou choisis un autre quartier.'
+                  : 'Ta dernière demande a été refusée par l\'administrateur '
+                      '(motif : $motif). Vérifie le code ou choisis un autre '
+                      'quartier.',
               style: TextStyle(color: AppColors.error, fontSize: 13),
             ),
           ),
@@ -454,6 +474,16 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                         fontSize: 12,
                       ),
                     ),
+                    // Personne pour valider : on prévient avant la demande
+                    if (!quartier.aUnAdmin)
+                      Text(
+                        'Pas encore d\'administrateur',
+                        style: TextStyle(
+                          color: AppColors.warning,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                   ],
                 ),
               ),

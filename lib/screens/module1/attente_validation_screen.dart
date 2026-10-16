@@ -73,7 +73,7 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
     }
     final Utilisateur utilisateur = resultat.donnee!;
     // Le message reste visible sur l'écran suivant (ScaffoldMessenger commun)
-    _afficherMessage(_messageSelonStatut(utilisateur.statut));
+    _afficherMessage(_messageSelonStatut(utilisateur));
     // Même choix d'écran qu'à la connexion et au démarrage
     final String? chemin = cheminSelonStatut(utilisateur);
     if (chemin != null && chemin != '/attente') {
@@ -81,14 +81,18 @@ class _AttenteValidationScreenState extends State<AttenteValidationScreen> {
     }
   }
 
-  String _messageSelonStatut(StatutUtilisateur statut) {
-    switch (statut) {
+  String _messageSelonStatut(Utilisateur utilisateur) {
+    switch (utilisateur.statut) {
       case StatutUtilisateur.actif:
         return 'Ta demande a été acceptée !';
       case StatutUtilisateur.refuse:
+        // Le motif donné par l'admin, s'il y en a un
+        if (utilisateur.motif.isNotEmpty) {
+          return 'Ta demande a été refusée : ${utilisateur.motif}';
+        }
         return 'Ta demande a été refusée : choisis un autre quartier';
       case StatutUtilisateur.bloque:
-        return 'Ton compte a été bloqué par l\'administrateur';
+        return UtilisateurRepository.messageBloque(utilisateur.motif);
       case StatutUtilisateur.enAttente:
         return 'Toujours en attente de validation';
     }

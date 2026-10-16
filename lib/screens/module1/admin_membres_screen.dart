@@ -33,6 +33,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
   List<Utilisateur> _enAttente = [];
   List<Utilisateur> _actifs = [];
   List<Utilisateur> _bloques = [];
+  int _nbRefuses = 0; // pas d'onglet : seulement compté (statistiques)
 
   bool _enChargement = true; // true jusqu'au premier chargement
   String _erreur = ''; // ex : pas de réseau
@@ -67,11 +68,14 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         await _repository.getMembres(StatutUtilisateur.actif);
     final Resultat<List<Utilisateur>> bloques =
         await _repository.getMembres(StatutUtilisateur.bloque);
+    final Resultat<int> refuses =
+        await _repository.compterMembres(StatutUtilisateur.refuse);
     if (!mounted) {
       return;
     }
     setState(() {
       _enChargement = false;
+      _nbRefuses = refuses.donnee ?? 0;
       // En cas d'échec, l'onglet reste vide et on affiche pourquoi
       _enAttente = enAttente.donnee ?? [];
       _actifs = actifs.donnee ?? [];
@@ -210,6 +214,8 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                _statistiques(),
+                const SizedBox(height: 14),
                 _onglets(),
                 const SizedBox(height: 14),
                 ...cartes,
@@ -266,6 +272,46 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           ),
           const Pastille(texte: 'Admin'),
         ],
+      ),
+    );
+  }
+
+  /// Les statistiques du quartier : actifs, en attente, bloqués, refusés.
+  Widget _statistiques() {
+    return Row(
+      children: [
+        _carteStat('${_actifs.length}', 'Actifs', AppColors.success),
+        const SizedBox(width: 8),
+        _carteStat('${_enAttente.length}', 'En attente', AppColors.warning),
+        const SizedBox(width: 8),
+        _carteStat('${_bloques.length}', 'Bloqués', AppColors.error),
+        const SizedBox(width: 8),
+        _carteStat('$_nbRefuses', 'Refusés', AppColors.textSecondary),
+      ],
+    );
+  }
+
+  Widget _carteStat(String valeur, String libelle, Color couleur) {
+    return Expanded(
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        child: Column(
+          children: [
+            Text(
+              valeur,
+              style: TextStyle(
+                color: couleur,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              libelle,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -330,6 +376,10 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     if (_onglet == StatutUtilisateur.enAttente && depuis.isNotEmpty) {
       morceaux.add(depuis);
     }
+    // Onglet Bloqués : on rappelle la raison donnée
+    if (_onglet == StatutUtilisateur.bloque && membre.motif.isNotEmpty) {
+      morceaux.add('Motif : ${membre.motif}');
+    }
     final String detail = morceaux.join(' · ');
 
     return AppCard(
@@ -393,17 +443,17 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: _boutonRouge('Refuser', () async {
-                final bool ok = await _confirmer(
+                final String? motif = await _demanderMotif(
                   'Refuser la demande ?',
                   '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
                       'Il pourra faire une nouvelle demande.',
                   'Refuser',
                 );
-                if (!ok) {
+                if (motif == null) {
                   return;
                 }
                 _action('Demande de ${membre.prenom} refusée', () {
-                  return _repository.refuserMembre(membre.id);
+                  return _repository.refuserMembre(membre.id, motif);
                 });
               }),
             ),
@@ -415,17 +465,17 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           return const SizedBox();
         }
         return _boutonRouge('Bloquer', () async {
-          final bool ok = await _confirmer(
+          final String? motif = await _demanderMotif(
             'Bloquer ce membre ?',
             '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
                 'l\'application. Tu pourras le débloquer plus tard.',
             'Bloquer',
           );
-          if (!ok) {
+          if (motif == null) {
             return;
           }
           _action('${membre.prenom} est bloqué(e)', () {
-            return _repository.bloquerMembre(membre.id);
+            return _repository.bloquerMembre(membre.id, motif);
           });
         });
       case StatutUtilisateur.bloque:
@@ -442,34 +492,15 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
     }
   }
 
-  /// Demande confirmation avant une action négative (refuser, bloquer).
-  /// true si l'admin a confirmé.
-  Future<bool> _confirmer(String titre, String message, String action) async {
-    final bool? reponse = await showDialog<bool>(
+  /// Avant une action négative (refuser, bloquer) : l'admin confirme et
+  /// donne la raison, montrée au membre. null si l'admin a annulé.
+  Future<String?> _demanderMotif(String titre, String message, String action) {
+    return showDialog<String>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(titre),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(false);
-              },
-              child: const Text('Annuler'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(true);
-              },
-              style: TextButton.styleFrom(foregroundColor: AppColors.error),
-              child: Text(action),
-            ),
-          ],
-        );
+        return _DialogueMotif(titre: titre, message: message, action: action);
       },
     );
-    return reponse ?? false; // fermé sans choisir = annulé
   }
 
   /// Bouton blanc à bordure rouge (action négative : refuser, bloquer).
@@ -487,6 +518,86 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       child: Text(texte),
+    );
+  }
+}
+
+/// La fenêtre "Refuser / Bloquer" avec le champ du motif.
+/// Un widget à part : il garde son propre TextEditingController,
+/// libéré (dispose) quand la fenêtre se ferme.
+class _DialogueMotif extends StatefulWidget {
+  final String titre;
+  final String message;
+  final String action; // texte du bouton rouge, ex : "Bloquer"
+
+  const _DialogueMotif({
+    required this.titre,
+    required this.message,
+    required this.action,
+  });
+
+  @override
+  State<_DialogueMotif> createState() {
+    return _DialogueMotifState();
+  }
+}
+
+class _DialogueMotifState extends State<_DialogueMotif> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _motifController = TextEditingController();
+
+  @override
+  void dispose() {
+    _motifController.dispose();
+    super.dispose();
+  }
+
+  void _valider() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(_motifController.text.trim());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.titre),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.message),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _motifController,
+              maxLength: 200,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Motif (vu par le membre)',
+                hintText: 'Ex : logement introuvable dans la résidence',
+              ),
+              validator: (String? valeur) {
+                return UtilisateurRepository.refusMotif(valeur ?? '');
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(); // null = annulé
+          },
+          child: const Text('Annuler'),
+        ),
+        TextButton(
+          onPressed: _valider,
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          child: Text(widget.action),
+        ),
+      ],
     );
   }
 }

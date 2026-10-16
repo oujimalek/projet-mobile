@@ -74,8 +74,9 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['prenom', 'nom', 'email',
              'telephone', 'quartierId', 'quartierNom', 'residence',
              'logement', 'statut', 'role', 'competences', 'avatar',
-             'dateDemande'])
+             'dateDemande', 'motif'])
         && request.resource.data.email == request.auth.token.email
+        && request.resource.data.get('motif', '') == ''
         && request.resource.data.statut == 'enAttente'
         && request.resource.data.role == 'resident'
         && request.resource.data.get('quartierId', null) == null
@@ -103,17 +104,25 @@ service cloud.firestore {
                 && resource.data.role != 'admin'
                 && request.resource.data.quartierId != resource.data.quartierId))
         && changeSeulement(['quartierId', 'quartierNom', 'residence',
-             'statut', 'dateDemande'])
+             'statut', 'dateDemande', 'motif'])
         && request.resource.data.statut == 'enAttente'
+        && request.resource.data.get('motif', '') == ''
         && request.resource.data.dateDemande == request.time
         && exists(/databases/$(database)/documents/quartiers/$(request.resource.data.quartierId));
 
       // Admin du quartier : change UNIQUEMENT le statut d'un membre
-      // (valider, refuser, bloquer, débloquer), jamais le sien.
+      // (valider, refuser, bloquer, débloquer) et le motif, jamais le sien.
+      // Refuser / bloquer : motif obligatoire (3 à 200 caractères, montré au
+      // membre). Valider / débloquer : motif effacé.
       allow update: if adminDe(resource.data.quartierId)
         && monUid() != uid
-        && changeSeulement(['statut'])
-        && request.resource.data.statut in ['actif', 'bloque', 'refuse'];
+        && changeSeulement(['statut', 'motif'])
+        && ((request.resource.data.statut == 'actif'
+             && request.resource.data.get('motif', '') == '')
+            || (request.resource.data.statut in ['bloque', 'refuse']
+                && request.resource.data.motif is string
+                && request.resource.data.motif.size() >= 3
+                && request.resource.data.motif.size() <= 200));
 
       // Après un changement d'e-mail (lien de confirmation cliqué) :
       // recopier dans le profil l'adresse de Firebase Auth, et rien d'autre.

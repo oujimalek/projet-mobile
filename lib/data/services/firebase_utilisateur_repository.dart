@@ -294,8 +294,8 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       // Même règle qu'à la connexion : un compte bloqué est déconnecté
       if (utilisateur.statut == StatutUtilisateur.bloque) {
         await deconnexion();
-        return const Resultat.echec(
-          'Ton compte a été bloqué par l\'administrateur',
+        return Resultat.echec(
+          UtilisateurRepository.messageBloque(utilisateur.motif),
         );
       }
       await _memoriser(utilisateur);
@@ -659,6 +659,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       residence: quartier.nom, // comme le mock : lu par le module 3
       statut: StatutUtilisateur.enAttente,
       dateDemande: DateTime.now(),
+      motif: '', // nouvelle demande : on oublie un ancien refus
     );
     try {
       await _utilisateurs.doc(demande.id).update({
@@ -666,6 +667,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'quartierNom': quartier.nom,
         'residence': quartier.nom,
         'statut': StatutUtilisateur.enAttente.name,
+        'motif': '',
         'dateDemande': FieldValue.serverTimestamp(), // l'heure du serveur
       });
       await _memoriser(demande);
@@ -802,35 +804,44 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<void>> validerMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   @override
-  Future<Resultat<void>> refuserMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.refuse);
+  Future<Resultat<void>> refuserMembre(String id, String motif) {
+    return _changerStatut(id, StatutUtilisateur.refuse, motif);
   }
 
   @override
-  Future<Resultat<void>> bloquerMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.bloque);
+  Future<Resultat<void>> bloquerMembre(String id, String motif) {
+    return _changerStatut(id, StatutUtilisateur.bloque, motif);
   }
 
   @override
   Future<Resultat<void>> debloquerMembre(String id) {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   // =====================================================================
   // Outils internes
   // =====================================================================
 
-  /// L'admin ne change QUE le statut (seul champ permis par firestore.rules).
+  /// L'admin ne change QUE le statut et le motif (seuls champs permis par
+  /// firestore.rules). Motif vide pour actif, 3 à 200 caractères sinon.
   Future<Resultat<void>> _changerStatut(
     String id,
     StatutUtilisateur statut,
+    String motif,
   ) async {
+    final String texte = motif.trim();
+    if (statut != StatutUtilisateur.actif) {
+      final String? refus = UtilisateurRepository.refusMotif(texte);
+      if (refus != null) {
+        return Resultat.echec(refus);
+      }
+    }
     try {
-      await _utilisateurs.doc(id).update({'statut': statut.name});
+      await _utilisateurs.doc(id).update({'statut': statut.name, 'motif': texte});
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -896,8 +907,8 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     // Compte bloqué : on ne le laisse pas connecté
     if (utilisateur.statut == StatutUtilisateur.bloque) {
       await _auth.signOut();
-      return const Resultat.echec(
-        'Ton compte a été bloqué par l\'administrateur',
+      return Resultat.echec(
+        UtilisateurRepository.messageBloque(utilisateur.motif),
       );
     }
     await _memoriser(utilisateur);

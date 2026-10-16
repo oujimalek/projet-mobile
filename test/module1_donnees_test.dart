@@ -280,8 +280,10 @@ void main() {
 
   // -------------------------------------------------------------------
   group('Changement de quartier (refusChangement)', () {
-    const Quartier q1 = Quartier(id: 'q1', nom: 'El Yasmine', localisation: 'A');
-    const Quartier q2 = Quartier(id: 'q2', nom: 'El Wafa', localisation: 'B');
+    const Quartier q1 =
+        Quartier(id: 'q1', nom: 'El Yasmine', localisation: 'A', aUnAdmin: true);
+    const Quartier q2 =
+        Quartier(id: 'q2', nom: 'El Wafa', localisation: 'B', aUnAdmin: true);
     const Utilisateur resident = Utilisateur(
       id: 'r1',
       prenom: 'Rim',
@@ -295,6 +297,15 @@ void main() {
 
     test('un résident actif peut changer de quartier', () {
       expect(UtilisateurRepository.refusChangement(resident, q2), isNull);
+    });
+
+    test('pas de demande vers un quartier sans administrateur', () {
+      const Quartier sansAdmin =
+          Quartier(id: 'q3', nom: 'Les Jasmins', localisation: 'C');
+      expect(
+        UtilisateurRepository.refusChangement(resident, sansAdmin),
+        'Ce quartier n\'a pas encore d\'administrateur',
+      );
     });
 
     test('un résident actif ne peut pas redemander son quartier', () {
@@ -386,13 +397,17 @@ void main() {
       });
 
       test('échoue pour un compte bloqué', () async {
-        await repo.bloquerMembre('u1');
+        await repo.bloquerMembre('u1', 'Comportement');
         final Resultat<dynamic> r = await repo.connexion(
           MockUtilisateurRepository.emailDemo,
           MockUtilisateurRepository.motDePasseDemo,
         );
         expect(r.estSucces, false);
-        expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
+        // Le membre voit la raison donnée par l'admin
+        expect(
+          r.erreur,
+          'Ton compte a été bloqué par l\'administrateur : Comportement',
+        );
       });
     });
 
@@ -579,11 +594,14 @@ void main() {
       });
 
       test('compte bloqué : pas de connexion par SMS', () async {
-        await repo.bloquerMembre('u1');
+        await repo.bloquerMembre('u1', 'Comportement');
         await repo.envoyerCodeSms('22345678');
         final Resultat<Utilisateur> r =
             await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
-        expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
+        expect(
+          r.erreur,
+          'Ton compte a été bloqué par l\'administrateur : Comportement',
+        );
       });
     });
 
@@ -661,7 +679,12 @@ void main() {
       test('rejoindreQuartier est refusé avant la vérification', () async {
         await creerCompte();
         final Resultat<void> r = await repo.rejoindreQuartier(
-          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
         );
         expect(r.estSucces, false);
         expect(r.erreur, 'Action non autorisée');
@@ -672,7 +695,12 @@ void main() {
         await creerCompte();
         await repo.simulerVerificationEmail();
         final Resultat<void> r = await repo.rejoindreQuartier(
-          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
         );
         expect(r.estSucces, true);
 
@@ -685,7 +713,12 @@ void main() {
 
       test('l\'admin de démo ne peut pas changer de quartier', () async {
         final Resultat<void> r = await repo.rejoindreQuartier(
-          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
         );
         expect(r.estSucces, false);
         expect(r.erreur, 'Un administrateur ne peut pas quitter son quartier');
@@ -713,12 +746,22 @@ void main() {
 
         // Redemander q1 : refusé
         final Resultat<void> meme = await repo.rejoindreQuartier(
-          const Quartier(id: 'q1', nom: 'Résidence El Yasmine', localisation: 'A'),
+          const Quartier(
+            id: 'q1',
+            nom: 'Résidence El Yasmine',
+            localisation: 'A',
+            aUnAdmin: true,
+          ),
         );
         expect(meme.erreur, 'Tu fais déjà partie de ce quartier');
 
         final Resultat<void> r = await repo.rejoindreQuartier(
-          const Quartier(id: 'q2', nom: 'Cité El Wafa', localisation: 'Ennasr 1'),
+          const Quartier(
+            id: 'q2',
+            nom: 'Cité El Wafa',
+            localisation: 'Ennasr 1',
+            aUnAdmin: true,
+          ),
         );
         expect(r.estSucces, true);
         expect(repo.getUtilisateurConnecte().quartierId, 'q2');
@@ -801,15 +844,30 @@ void main() {
         expect(r.donnee, 2);
       });
 
-      test('refuserMembre met le statut refuse', () async {
-        await repo.refuserMembre('u4');
+      test('refuserMembre met le statut refuse et garde le motif', () async {
+        await repo.refuserMembre('u4', '  Logement introuvable  ');
         final Resultat<List<Utilisateur>> refuses =
             await repo.getMembres(StatutUtilisateur.refuse);
         expect(refuses.donnee!.map((m) => m.id), ['u4']);
+        // Espaces autour enlevés
+        expect(refuses.donnee!.first.motif, 'Logement introuvable');
+      });
+
+      test('refuser ou bloquer sans motif valable : refusé', () async {
+        final Resultat<void> vide = await repo.refuserMembre('u4', '  ');
+        expect(vide.estSucces, false);
+        expect(vide.erreur, UtilisateurRepository.refusMotif(''));
+        final Resultat<void> long =
+            await repo.bloquerMembre('u2', 'x' * 201);
+        expect(long.estSucces, false);
+        // Rien n'a changé
+        final Resultat<int> enAttente =
+            await repo.compterMembres(StatutUtilisateur.enAttente);
+        expect(enAttente.donnee, 3);
       });
 
       test('bloquerMembre puis debloquerMembre change le statut', () async {
-        await repo.bloquerMembre('u2');
+        await repo.bloquerMembre('u2', 'Insultes');
         final Resultat<int> bloques =
             await repo.compterMembres(StatutUtilisateur.bloque);
         expect(bloques.donnee, 2);
@@ -818,6 +876,10 @@ void main() {
         final Resultat<int> bloquesApres =
             await repo.compterMembres(StatutUtilisateur.bloque);
         expect(bloquesApres.donnee, 1);
+        // Débloqué : l'ancien motif est effacé
+        final Resultat<List<Utilisateur>> actifs =
+            await repo.getMembres(StatutUtilisateur.actif);
+        expect(actifs.donnee!.firstWhere((m) => m.id == 'u2').motif, '');
       });
 
       test('validerMembre échoue pour un id inconnu', () async {
@@ -881,6 +943,58 @@ void main() {
         expect(r.estSucces, false);
         expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
         expect(repo.getUtilisateurConnecte().id, isEmpty);
+      });
+    });
+
+    group('motif de refus / blocage', () {
+      test('refusMotif : 3 à 200 caractères', () {
+        expect(UtilisateurRepository.refusMotif('ok'), isNotNull);
+        expect(UtilisateurRepository.refusMotif('   abc   '), isNull);
+        expect(UtilisateurRepository.refusMotif('x' * 200), isNull);
+        expect(UtilisateurRepository.refusMotif('x' * 201), isNotNull);
+      });
+
+      test('messageBloque ajoute le motif s\'il y en a un', () {
+        expect(
+          UtilisateurRepository.messageBloque(''),
+          'Ton compte a été bloqué par l\'administrateur',
+        );
+        expect(
+          UtilisateurRepository.messageBloque('Spam'),
+          'Ton compte a été bloqué par l\'administrateur : Spam',
+        );
+      });
+
+      test('Utilisateur : le motif passe par toMap / fromMap', () {
+        const Utilisateur u = Utilisateur(
+          id: 'm1',
+          prenom: 'A',
+          nom: 'B',
+          email: '',
+          telephone: '',
+          quartier: '',
+          residence: '',
+          motif: 'Spam',
+        );
+        expect(Utilisateur.fromMap('m1', u.toMap()).motif, 'Spam');
+        // Ancien document sans motif : vide
+        expect(Utilisateur.fromMap('m1', {}).motif, '');
+      });
+
+      test('Quartier.fromMap : aUnAdmin seulement si true', () {
+        expect(Quartier.fromMap('q', {'aUnAdmin': true}).aUnAdmin, true);
+        expect(Quartier.fromMap('q', {}).aUnAdmin, false);
+      });
+
+      test('on ne rejoint pas un quartier sans administrateur', () async {
+        await creerCompte();
+        await repo.simulerVerificationEmail();
+        final Resultat<List<Quartier>> trouves =
+            await repo.rechercherQuartiers('Jasmins');
+        final Quartier sansAdmin = trouves.donnee!.single;
+        expect(sansAdmin.aUnAdmin, false);
+        final Resultat<void> r = await repo.rejoindreQuartier(sansAdmin);
+        expect(r.erreur, 'Ce quartier n\'a pas encore d\'administrateur');
       });
     });
 

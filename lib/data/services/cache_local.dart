@@ -107,6 +107,7 @@ class CacheLocal {
             ? null
             : {'lat': position.latitude, 'lng': position.longitude},
         'contour': contour,
+        'aUnAdmin': quartier.aUnAdmin,
       };
       final Box<dynamic> boite = await _ouvrir();
       await boite.put(_cleQuartier, map);

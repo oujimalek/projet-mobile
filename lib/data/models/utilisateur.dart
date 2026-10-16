@@ -42,6 +42,9 @@ class Utilisateur {
   // Avatar choisi dans la galerie (ex : "chat"), vide = initiales
   final String avatar;
 
+  // Raison donnée par l'admin quand il refuse ou bloque (vide sinon)
+  final String motif;
+
   const Utilisateur({
     required this.id,
     required this.prenom,
@@ -62,6 +65,7 @@ class Utilisateur {
     this.nbSignalements = 0,
     this.dateDemande,
     this.avatar = '',
+    this.motif = '',
   });
 
   String get nomComplet => '$prenom $nom';
@@ -96,6 +100,7 @@ class Utilisateur {
     List<String>? competences,
     DateTime? dateDemande,
     String? avatar,
+    String? motif,
   }) {
     return Utilisateur(
       id: id,
@@ -115,6 +120,7 @@ class Utilisateur {
       nbSignalements: nbSignalements,
       dateDemande: dateDemande ?? this.dateDemande,
       avatar: avatar ?? this.avatar,
+      motif: motif ?? this.motif,
     );
   }
 
@@ -138,6 +144,7 @@ class Utilisateur {
       'role': role.name,
       'competences': competences,
       'avatar': avatar,
+      'motif': motif,
       'dateDemande': dateDemande, // DateTime → Timestamp (fait par Firestore)
     };
   }
@@ -162,6 +169,7 @@ class Utilisateur {
           : RoleUtilisateur.resident,
       competences: List<String>.from(map['competences'] ?? []),
       avatar: map['avatar'] ?? '',
+      motif: map['motif'] ?? '',
       dateDemande: date?.toDate(),
     );
   }

@@ -117,6 +117,7 @@ L'identifiant du document est l'`uid` Firebase Auth. Le mot de passe n'est
 | `competences` | `competences` | array de string | |
 | `avatar` | `avatar` | string | Identifiant d'un des 6 avatars prédéfinis |
 | `dateDemande` | `dateDemande` | timestamp | Date de la demande d'adhésion |
+| `motif` | `motif` | string | Raison donnée par l'admin quand il refuse ou bloque (3 à 200 caractères, montrée au membre) ; `''` sinon |
 | `servicesRendus`, `noteMoyenne`, `nbSignalements` | **non stockés** | | Calculés (voir ci-dessous) |
 
 **Pourquoi les statistiques du profil ne sont pas stockées.** Si
@@ -152,7 +153,7 @@ passe `statut` à `refuse` au lieu de supprimer le document. Pourquoi :
 | Modifier son profil | Soi-même si `actif`, sans changer `statut`, `role`, ni `quartierId` |
 | Rejoindre / changer de quartier | Soi-même si `enAttente` ou `refuse`, **e-mail vérifié**, vers un quartier qui existe ; le statut redevient `enAttente` |
 | Quitter son quartier pour un autre | Un résident `actif` (pas l'admin), vers un **autre** quartier : il perd l'ancien et repasse `enAttente` dans le nouveau |
-| Valider / refuser / bloquer / débloquer | L'admin **actif** du quartier, **uniquement** le champ `statut`, jamais sur lui-même |
+| Valider / refuser / bloquer / débloquer | L'admin **actif** du quartier, **uniquement** `statut` et `motif`, jamais sur lui-même. Refuser / bloquer : motif obligatoire (3 à 200 caractères) ; valider / débloquer : motif remis à `''` |
 | Supprimer | Personne depuis l'app |
 
 Cycle de vie du statut :
@@ -180,6 +181,7 @@ l'application affiche « compte bloqué » et le déconnecte.
 | `nbMembres` | **non stocké** | | `count()` sur `utilisateurs` où `quartierId == id` et `statut == actif` |
 | `position` | `position` | geopoint (optionnel) | Le centre du quartier sur la carte |
 | `contour` | `contour` | array de geopoint (optionnel) | Les coins du quartier, dans l'ordre (3 au minimum pour dessiner la zone) |
+| `aUnAdmin` | `aUnAdmin` | bool (optionnel, `false` si absent) | `true` quand le quartier a un admin. Sinon l'app affiche « Pas encore d'administrateur » et empêche de le rejoindre (personne ne validerait la demande). Écrit à la main (section 8), jamais par l'app |
 
 Sans `position` ni `contour`, l'écran « Mon quartier » affiche un message à
 la place de la carte (OpenStreetMap, aucune clé d'API).
@@ -444,19 +446,27 @@ soumise aux règles. À faire une seule fois.
 Console Firebase → *Firestore Database* → *Démarrer une collection* :
 - collection `quartiers`, ID automatique, champs
   `nom` (string) = `Résidence El Yasmine`,
-  `localisation` (string) = `Ennasr 2, Ariana`.
+  `localisation` (string) = `Ennasr 2, Ariana`,
+  `aUnAdmin` (boolean) = `false`.
   Noter l'ID généré.
 - collection `codesQuartier`, ID du document = `YAS72B`, champs
   `quartierId` (string) = l'ID noté, `quartierNom` (string) = `Résidence El Yasmine`.
 
 **Étape 2 : créer son compte dans l'application.**
-S'inscrire, valider l'e-mail, puis entrer le code `YAS72B`. Le compte est
-`enAttente`. (Possible à partir de la phase 5, quand les écrans utilisent Firebase.)
+S'inscrire et valider l'e-mail. Tant que le quartier n'a pas d'admin
+(`aUnAdmin` = `false`), l'app refuse de le rejoindre : pour le futur admin,
+mettre provisoirement `aUnAdmin` = `true`, entrer le code `YAS72B`. Le
+compte est `enAttente`.
 
 **Étape 3 : se nommer admin.**
 Console → `utilisateurs` → le document de son compte → modifier
-`statut` = `actif` et `role` = `admin`. Relancer l'application. Cet admin
-valide ensuite tous les autres voisins depuis l'écran « Membres du quartier ».
+`statut` = `actif` et `role` = `admin`. Vérifier que le quartier a bien
+`aUnAdmin` = `true`. Relancer l'application. Cet admin valide ensuite tous
+les autres voisins depuis l'écran « Membres du quartier ».
+
+Si l'admin perd son rôle (ou supprime son compte), remettre `aUnAdmin` =
+`false` : les voisins voient alors « Pas encore d'administrateur » au lieu
+d'attendre une validation qui ne viendrait jamais.
 
 **Étape 4 (optionnelle) : placer le quartier sur la carte.**
 Le plus simple : l'admin ouvre « Mon quartier » → « Tracer les limites » et

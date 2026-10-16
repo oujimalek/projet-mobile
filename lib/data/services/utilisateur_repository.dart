@@ -48,6 +48,10 @@ abstract class UtilisateurRepository {
   /// Partagé par les deux implémentations ; firestore.rules vérifie la
   /// même chose côté serveur.
   static String? refusChangement(Utilisateur utilisateur, Quartier quartier) {
+    // Personne pour valider la demande : elle resterait en attente
+    if (!quartier.aUnAdmin) {
+      return 'Ce quartier n\'a pas encore d\'administrateur';
+    }
     if (utilisateur.statut != StatutUtilisateur.actif) {
       return null; // en attente ou refusé : il choisit librement
     }
@@ -73,6 +77,28 @@ abstract class UtilisateurRepository {
       return '100 points au maximum';
     }
     return null;
+  }
+
+  /// Pourquoi ce motif de refus ou de blocage n'est pas valable (null : il
+  /// l'est). De 3 à 200 caractères, comme dans firestore.rules.
+  static String? refusMotif(String motif) {
+    final int longueur = motif.trim().length;
+    if (longueur < 3) {
+      return 'Explique la raison en quelques mots (3 caractères minimum)';
+    }
+    if (longueur > 200) {
+      return '200 caractères au maximum';
+    }
+    return null;
+  }
+
+  /// Le message montré à un membre bloqué, avec la raison si l'admin
+  /// en a donné une.
+  static String messageBloque(String motif) {
+    if (motif.isEmpty) {
+      return 'Ton compte a été bloqué par l\'administrateur';
+    }
+    return 'Ton compte a été bloqué par l\'administrateur : $motif';
   }
 
   /// Le numéro tunisien réduit à ses 8 chiffres : "+216 22 345 678",
@@ -271,12 +297,14 @@ abstract class UtilisateurRepository {
   Future<Resultat<void>> validerMembre(String id);
 
   /// L'admin refuse une demande : le membre passe "refuse"
-  /// (il pourra choisir un autre quartier).
-  Future<Resultat<void>> refuserMembre(String id);
+  /// (il pourra choisir un autre quartier). Le [motif] (3 à 200
+  /// caractères, voir refusMotif) est montré au membre.
+  Future<Resultat<void>> refuserMembre(String id, String motif);
 
-  /// L'admin bloque un membre actif.
-  Future<Resultat<void>> bloquerMembre(String id);
+  /// L'admin bloque un membre actif, avec un [motif] montré au membre.
+  Future<Resultat<void>> bloquerMembre(String id, String motif);
 
-  /// L'admin débloque un membre : il redevient actif.
+  /// L'admin débloque un membre : il redevient actif (motif effacé).
+  /// Valider efface aussi le motif.
   Future<Resultat<void>> debloquerMembre(String id);
 }

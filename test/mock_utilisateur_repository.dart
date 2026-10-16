@@ -50,6 +50,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         PointGps(36.8610, 10.1720),
         PointGps(36.8610, 10.1680),
       ],
+      aUnAdmin: true,
     ),
     Quartier(
       id: 'q2',
@@ -57,7 +58,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       localisation: 'Ennasr 1, Ariana',
       codeInvitation: 'WAF18C',
       nbMembres: 18,
+      aUnAdmin: true,
     ),
+    // Pas encore d'administrateur : on ne peut pas le rejoindre
     Quartier(
       id: 'q3',
       nom: 'Résidence Les Jasmins',
@@ -237,9 +240,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
           _motsDePasse[membre.id] == motDePasse) {
         // Même règle que Firebase : un compte bloqué reste déconnecté
         if (membre.statut == StatutUtilisateur.bloque) {
-          return const Resultat.echec(
-            'Ton compte a été bloqué par l\'administrateur',
-          );
+          return Resultat.echec(UtilisateurRepository.messageBloque(membre.motif));
         }
         _connecte = membre;
         return Resultat.succes(membre);
@@ -323,6 +324,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     // Les données sont déjà en mémoire : rien à recharger.
     // Comme Firebase : un compte bloqué est déconnecté.
     if (_connecte.statut == StatutUtilisateur.bloque) {
+      final String message = UtilisateurRepository.messageBloque(_connecte.motif);
       _connecte = const Utilisateur(
         id: '',
         prenom: '',
@@ -332,9 +334,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         quartier: '',
         residence: '',
       );
-      return const Resultat.echec(
-        'Ton compte a été bloqué par l\'administrateur',
-      );
+      return Resultat.echec(message);
     }
     return Resultat.succes(_connecte);
   }
@@ -382,9 +382,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       return const Resultat.echec(UtilisateurRepository.numeroNonVerifie);
     }
     if (titulaire.statut == StatutUtilisateur.bloque) {
-      return const Resultat.echec(
-        'Ton compte a été bloqué par l\'administrateur',
-      );
+      return Resultat.echec(UtilisateurRepository.messageBloque(titulaire.motif));
     }
     _connecte = titulaire;
     return Resultat.succes(titulaire);
@@ -566,6 +564,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       residence: quartier.nom,
       statut: StatutUtilisateur.enAttente,
       dateDemande: DateTime.now(),
+      motif: '', // nouvelle demande : on oublie un ancien refus
     );
 
     // On l'ajoute à la liste des membres (s'il n'y est pas déjà)
@@ -622,6 +621,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
           nbMembres: ancien.nbMembres,
           position: Quartier.milieu(contour),
           contour: List.of(contour),
+          aUnAdmin: ancien.aUnAdmin,
         );
         return const Resultat.succes(null);
       }
@@ -669,23 +669,23 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<void>> validerMembre(String id) async {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   @override
-  Future<Resultat<void>> refuserMembre(String id) async {
+  Future<Resultat<void>> refuserMembre(String id, String motif) async {
     // Comme Firebase : le membre passe "refuse" (il n'est plus dans les onglets)
-    return _changerStatut(id, StatutUtilisateur.refuse);
+    return _changerStatut(id, StatutUtilisateur.refuse, motif);
   }
 
   @override
-  Future<Resultat<void>> bloquerMembre(String id) async {
-    return _changerStatut(id, StatutUtilisateur.bloque);
+  Future<Resultat<void>> bloquerMembre(String id, String motif) async {
+    return _changerStatut(id, StatutUtilisateur.bloque, motif);
   }
 
   @override
   Future<Resultat<void>> debloquerMembre(String id) async {
-    return _changerStatut(id, StatutUtilisateur.actif);
+    return _changerStatut(id, StatutUtilisateur.actif, '');
   }
 
   // =====================================================================
@@ -737,10 +737,22 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
-  Resultat<void> _changerStatut(String id, StatutUtilisateur statut) {
+  /// Même vérification du motif que Firebase (vide pour actif).
+  Resultat<void> _changerStatut(
+    String id,
+    StatutUtilisateur statut,
+    String motif,
+  ) {
+    final String texte = motif.trim();
+    if (statut != StatutUtilisateur.actif) {
+      final String? refus = UtilisateurRepository.refusMotif(texte);
+      if (refus != null) {
+        return Resultat.echec(refus);
+      }
+    }
     for (final Utilisateur membre in _membres) {
       if (membre.id == id) {
-        _remplacer(membre.copier(statut: statut));
+        _remplacer(membre.copier(statut: statut, motif: texte));
         return const Resultat.succes(null);
       }
     }

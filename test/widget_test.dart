@@ -760,11 +760,42 @@ void main() {
     expect(find.text('Refuser la demande ?'), findsNothing);
     expect(find.text('En attente (3)'), findsOneWidget);
 
-    // Confirmer : la demande quitte la liste
+    // Confirmer sans motif : la fenêtre reste ouverte avec l'erreur
     await toucher(tester, find.text('Refuser').first);
     await tester.tap(find.widgetWithText(TextButton, 'Refuser'));
     await tester.pumpAndSettle();
+    expect(find.text('Refuser la demande ?'), findsOneWidget);
+    expect(
+      find.text('Explique la raison en quelques mots (3 caractères minimum)'),
+      findsOneWidget,
+    );
+
+    // Avec un motif : la demande quitte la liste, le motif est gardé
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Motif (vu par le membre)'),
+      'Logement introuvable',
+    );
+    await tester.tap(find.widgetWithText(TextButton, 'Refuser'));
+    await tester.pumpAndSettle();
     expect(find.text('En attente (2)'), findsOneWidget);
+    final List<Utilisateur> refuses =
+        (await mock.getMembres(StatutUtilisateur.refuse)).donnee!;
+    expect(refuses.single.motif, 'Logement introuvable');
+  });
+
+  testWidgets('Membres : statistiques du quartier',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Membres du quartier'));
+
+    expect(find.text('Refusés'), findsOneWidget);
+    expect(find.text('Actifs'), findsOneWidget);
+    // 4 actifs, 3 en attente, 1 bloqué, 0 refusé (données de démo)
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('0'), findsOneWidget);
   });
 
   testWidgets('Membres : bloquer demande une confirmation',
@@ -776,10 +807,35 @@ void main() {
 
     await toucher(tester, find.text('Bloquer').first);
     expect(find.text('Bloquer ce membre ?'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Motif (vu par le membre)'),
+      'Insultes',
+    );
     await tester.tap(find.widgetWithText(TextButton, 'Bloquer'));
     await tester.pumpAndSettle();
     expect(find.text('Actifs (3)'), findsOneWidget);
     expect(find.text('Bloqués (2)'), findsOneWidget); // 1 au départ + 1
+
+    // Onglet Bloqués : le motif est rappelé
+    await toucher(tester, find.text('Bloqués (2)'));
+    expect(find.textContaining('Motif : Insultes'), findsOneWidget);
+  });
+
+  testWidgets('Code du quartier : un quartier sans admin ne peut pas être rejoint',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteSansQuartier(), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/code-quartier');
+    await lancerApp(tester);
+
+    await tester.enterText(find.byType(EditableText).first, 'JAS33A');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('n\'a pas encore d\'administrateur'),
+        findsWidgets);
+    // Bouton désactivé : toucher ne fait rien
+    await toucher(tester, find.text('Rejoindre la houma'));
+    expect(find.byType(CodeQuartierScreen), findsOneWidget);
+    expect(mock.getUtilisateurConnecte().quartierId ?? '', isEmpty);
   });
 
   // -------------------------------------------------------------------

@@ -157,6 +157,22 @@ describe('inscription (create)', () => {
     );
   });
 
+  test('motif vide : autorisé, motif rempli : refusé', async () => {
+    const db = base('nouveau', false);
+    await assertFails(
+      setDoc(doc(db, 'utilisateurs/nouveau'), {
+        ...nouveauProfil('nouveau@houmani.tn'),
+        motif: 'Je me bloque moi-même',
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'utilisateurs/nouveau'), {
+        ...nouveauProfil('nouveau@houmani.tn'),
+        motif: '',
+      }),
+    );
+  });
+
   test('champ inconnu : refusé', async () => {
     const db = base('nouveau', false);
     await assertFails(
@@ -209,8 +225,16 @@ describe('rejoindre un quartier', () => {
       residence: 'El Wafa',
       statut: 'enAttente',
       dateDemande: serverTimestamp(),
+      motif: '', // l'ancien motif de refus est effacé
     };
   }
+
+  test('pas de motif rempli en refaisant une demande', async () => {
+    const db = base('refuse1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/refuse1'), { ...demande('q2'), motif: 'Moi' }),
+    );
+  });
 
   test('compte refusé, e-mail vérifié : il redemande un quartier', async () => {
     const db = base('refuse1');
@@ -287,13 +311,44 @@ describe('rejoindre un quartier', () => {
 describe('administration des membres', () => {
   test('l\'admin valide une demande de SON quartier', async () => {
     const db = base('admin1');
-    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/attente1'), { statut: 'actif' }));
+    await assertSucceeds(
+      updateDoc(doc(db, 'utilisateurs/attente1'), { statut: 'actif', motif: '' }),
+    );
   });
 
-  test('l\'admin bloque puis débloque un membre', async () => {
+  test('l\'admin bloque (avec motif) puis débloque un membre', async () => {
     const db = base('admin1');
-    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/actif1'), { statut: 'bloque' }));
-    await assertSucceeds(updateDoc(doc(db, 'utilisateurs/actif1'), { statut: 'actif' }));
+    const profil = doc(db, 'utilisateurs/actif1');
+    await assertSucceeds(updateDoc(profil, { statut: 'bloque', motif: 'Insultes' }));
+    // Débloquer : le motif doit être effacé
+    await assertFails(updateDoc(profil, { statut: 'actif' }));
+    await assertSucceeds(updateDoc(profil, { statut: 'actif', motif: '' }));
+  });
+
+  test('l\'admin refuse une demande avec un motif', async () => {
+    const db = base('admin1');
+    await assertSucceeds(
+      updateDoc(doc(db, 'utilisateurs/attente1'), {
+        statut: 'refuse',
+        motif: 'Logement introuvable',
+      }),
+    );
+  });
+
+  test('refuser ou bloquer sans motif valable : refusé', async () => {
+    const db = base('admin1');
+    const profil = doc(db, 'utilisateurs/attente1');
+    await assertFails(updateDoc(profil, { statut: 'refuse' }));
+    await assertFails(updateDoc(profil, { statut: 'refuse', motif: 'no' }));
+    await assertFails(updateDoc(profil, { statut: 'bloque', motif: 'x'.repeat(201) }));
+    await assertFails(updateDoc(profil, { statut: 'bloque', motif: 42 }));
+  });
+
+  test('valider avec un motif rempli : refusé', async () => {
+    const db = base('admin1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/attente1'), { statut: 'actif', motif: 'Bienvenue' }),
+    );
   });
 
   test('l\'admin ne change que le statut', async () => {

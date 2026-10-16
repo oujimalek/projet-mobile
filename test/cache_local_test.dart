@@ -108,11 +108,13 @@ void main() {
         id: 'q2',
         nom: 'Cité El Wafa',
         localisation: 'Ennasr 1, Ariana',
+        aUnAdmin: true,
       ));
       final Quartier? q = await cache.lireQuartier();
       expect(q!.id, 'q2');
       expect(q.nom, 'Cité El Wafa');
       expect(q.localisation, 'Ennasr 1, Ariana');
+      expect(q.aUnAdmin, true);
       expect(q.position, isNull);
       expect(q.contour, isEmpty);
     });
