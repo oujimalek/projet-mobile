@@ -202,6 +202,44 @@ void main() {
     expect(find.byType(AccueilScreen), findsOneWidget);
   });
 
+  testWidgets('Connexion par SMS : numéro, code à 6 chiffres, accueil',
+      (WidgetTester tester) async {
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Se connecter par SMS'));
+    expect(find.text('Connexion par SMS'), findsOneWidget);
+
+    // Étape 1 : le numéro du compte de démo
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextFormField),
+      ),
+      '22 345 678',
+    );
+    await tester.tap(find.text('Recevoir le code'));
+    await tester.pumpAndSettle();
+    expect(find.text('Renvoyer le code dans 30 s'), findsOneWidget);
+
+    // Étape 2 : mauvais code, puis le bon
+    final Finder champCode = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(champCode, '000000');
+    await tester.pump();
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Code incorrect'), findsOneWidget);
+
+    await tester.enterText(champCode, MockUtilisateurRepository.codeSmsDemo);
+    await tester.pump();
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(AccueilScreen), findsOneWidget);
+  });
+
   testWidgets('Profil : l\'admin valide une demande dans la liste des membres',
       (WidgetTester tester) async {
     await lancerApp(tester);
@@ -794,6 +832,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('Mot de passe modifié'), findsOneWidget);
+  });
+
+  testWidgets('Paramètres : vérifier son numéro par SMS',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(
+      compteDeTest(StatutUtilisateur.actif).copier(telephone: '+216 20 000 000'),
+      'secret123',
+    );
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/parametres');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Vérifier mon numéro'));
+    expect(find.textContaining('+216 20 000 000'), findsWidgets);
+
+    await tester.tap(find.text('Recevoir le code'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      MockUtilisateurRepository.codeSmsDemo,
+    );
+    await tester.pump();
+    await tester.tap(find.text('Valider'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      find.text('Numéro vérifié : tu peux te connecter par SMS'),
+      findsOneWidget,
+    );
+    expect(find.text('Numéro vérifié'), findsOneWidget);
   });
 
   testWidgets('Paramètres : supprimer son compte → retour à la connexion',

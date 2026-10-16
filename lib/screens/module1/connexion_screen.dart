@@ -10,6 +10,7 @@ import '../../widgets/houmani_logo.dart';
 import '../../widgets/nail_divider.dart';
 import '../../widgets/primary_button.dart';
 import 'conditions_utilisation.dart';
+import 'dialogue_sms.dart';
 import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 3, connexion.
@@ -126,6 +127,31 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
     context.go(chemin);
   }
 
+  /// "Se connecter par SMS" : la fenêtre du code, puis le même aiguillage
+  /// que la connexion par mot de passe.
+  Future<void> _seConnecterParSms() async {
+    setState(() {
+      _message = '';
+    });
+    final bool connecte = await afficherDialogueSms(
+      context,
+      titre: 'Connexion par SMS',
+      valider: UtilisateurRepository().connexionParSms,
+    );
+    if (!connecte || !mounted) {
+      return;
+    }
+    final String? chemin =
+        cheminSelonStatut(UtilisateurRepository().getUtilisateurConnecte());
+    if (chemin == null) {
+      setState(() {
+        _message = 'Ton compte a été bloqué par l\'administrateur';
+      });
+      return;
+    }
+    context.go(chemin);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,7 +228,16 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             onPressed: _enChargement ? null : _seConnecter,
           ),
           if (_enChargement) const IndicateurChargement(),
-          const SizedBox(height: 12),
+          Center(
+            child: TextButton.icon(
+              onPressed: _enChargement ? null : _seConnecterParSms,
+              icon: const Icon(Icons.sms_outlined, size: 18),
+              label: const Text(
+                'Se connecter par SMS',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
 
           // ----- Erreur de connexion -----
           Text(

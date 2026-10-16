@@ -498,6 +498,95 @@ void main() {
       });
     });
 
+    group('code SMS', () {
+      test('connexion par SMS avec un numéro vérifié et le bon code', () async {
+        expect((await repo.envoyerCodeSms('+216 22 345 678')).estSucces, true);
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.estSucces, true);
+        expect(r.donnee!.id, 'u1');
+      });
+
+      test('mauvais code : refusé', () async {
+        await repo.envoyerCodeSms('22345678');
+        final Resultat<Utilisateur> r = await repo.connexionParSms('000000');
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Code incorrect');
+      });
+
+      test('sans avoir demandé de code : refusé', () async {
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, 'Demande d\'abord un code');
+      });
+
+      test('numéro invalide : le SMS ne part pas', () async {
+        final Resultat<void> r = await repo.envoyerCodeSms('1234');
+        expect(r.erreur, 'Numéro de téléphone invalide (8 chiffres)');
+      });
+
+      test('numéro jamais vérifié (ou inconnu) : "pas encore vérifié"',
+          () async {
+        await repo.envoyerCodeSms('98 765 432'); // Sarra : pas vérifié
+        Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, UtilisateurRepository.numeroNonVerifie);
+
+        await repo.envoyerCodeSms('29 999 999'); // personne
+        r = await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, UtilisateurRepository.numeroNonVerifie);
+      });
+
+      test('vérifier son numéro, puis se connecter par SMS', () async {
+        await creerCompte(); // Nour, +216 20 000 000
+        expect(repo.telephoneEstVerifie(), false);
+
+        await repo.envoyerCodeSms('+216 20 000 000');
+        final Resultat<void> v =
+            await repo.verifierTelephone(MockUtilisateurRepository.codeSmsDemo);
+        expect(v.estSucces, true);
+        expect(repo.telephoneEstVerifie(), true);
+
+        await repo.envoyerCodeSms('20000000');
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.donnee!.prenom, 'Nour');
+      });
+
+      test('vérifier : le code doit aller au numéro du profil', () async {
+        await creerCompte();
+        await repo.envoyerCodeSms('22 345 678'); // pas son numéro
+        final Resultat<void> r =
+            await repo.verifierTelephone(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, 'Le code doit être envoyé au numéro de ton profil');
+        expect(repo.telephoneEstVerifie(), false);
+      });
+
+      test('changer de numéro : il n\'est plus vérifié', () async {
+        expect(repo.telephoneEstVerifie(), true); // démo : déjà vérifié
+        await repo.modifierProfil(
+          nomComplet: 'Amira Ben Salah',
+          telephone: '+216 21 000 111',
+          logement: 'Bloc B - Appt 12',
+          competences: const [],
+        );
+        expect(repo.telephoneEstVerifie(), false);
+
+        await repo.envoyerCodeSms('21000111');
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, UtilisateurRepository.numeroNonVerifie);
+      });
+
+      test('compte bloqué : pas de connexion par SMS', () async {
+        await repo.bloquerMembre('u1');
+        await repo.envoyerCodeSms('22345678');
+        final Resultat<Utilisateur> r =
+            await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
+        expect(r.erreur, 'Ton compte a été bloqué par l\'administrateur');
+      });
+    });
+
     group('inscription et vérification de l\'e-mail', () {
       test('refuse un e-mail déjà utilisé', () async {
         final Resultat<dynamic> r = await repo.inscription(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -88,28 +90,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         email: email,
         password: motDePasse,
       );
-      final DocumentSnapshot<Map<String, dynamic>> document =
-          await _utilisateurs.doc(credential.user!.uid).get();
-      if (!document.exists) {
-        await _auth.signOut();
-        return const Resultat.echec('Profil introuvable, contacte l\'administrateur');
-      }
-
-      final Utilisateur utilisateur = await _synchroniserEmail(
-        credential.user!,
-        Utilisateur.fromMap(document.id, document.data()!),
-      );
-      // Compte bloqué : on ne le laisse pas connecté
-      if (utilisateur.statut == StatutUtilisateur.bloque) {
-        await _auth.signOut();
-        return const Resultat.echec(
-          'Ton compte a été bloqué par l\'administrateur',
-        );
-      }
-      await _memoriser(utilisateur);
-      // Comptes créés avant la connexion par numéro : on crée leur fiche
-      await _ajouterFicheTelephone(utilisateur);
-      return Resultat.succes(utilisateur);
+      return await _chargerProfil(credential.user!);
     } on FirebaseAuthException catch (e) {
       final String message = _messageAuth(e.code);
       if (parNumero && message == 'E-mail ou mot de passe incorrect') {
@@ -340,6 +321,140 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   }
 
   // =====================================================================
+  // Code SMS (Firebase Phone Auth)
+  // =====================================================================
+
+  // Le dernier envoi : Firebase donne un identifiant, que l'on combine
+  // ensuite avec les 6 chiffres tapés
+  String? _idVerification;
+  String? _numeroSms; // les 8 chiffres qui ont reçu le code
+  // Android lit parfois le SMS tout seul : la preuve arrive sans code
+  PhoneAuthCredential? _preuveAuto;
+
+  @override
+  Future<Resultat<void>> envoyerCodeSms(String telephone) async {
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
+    _idVerification = null;
+    _preuveAuto = null;
+    _numeroSms = numero;
+    // verifyPhoneNumber répond en appelant une des fonctions ci-dessous ;
+    // le Completer transforme la première réponse en un Future à attendre
+    final Completer<Resultat<void>> reponse = Completer<Resultat<void>>();
+    try {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: '+216$numero',
+        timeout: const Duration(seconds: 60),
+        codeSent: (String idVerification, int? jetonRenvoi) {
+          _idVerification = idVerification;
+          if (!reponse.isCompleted) {
+            reponse.complete(const Resultat.succes(null));
+          }
+        },
+        verificationCompleted: (PhoneAuthCredential preuve) {
+          _preuveAuto = preuve;
+          if (!reponse.isCompleted) {
+            reponse.complete(const Resultat.succes(null));
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          if (!reponse.isCompleted) {
+            reponse.complete(Resultat.echec(_messageAuth(e.code)));
+          }
+        },
+        codeAutoRetrievalTimeout: (String idVerification) {
+          _idVerification = idVerification;
+        },
+      );
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageAuth(e.code));
+    }
+    // Sécurité : si Firebase ne répond jamais, on n'attend pas à l'infini
+    return reponse.future.timeout(
+      const Duration(seconds: 90),
+      onTimeout: () {
+        return const Resultat.echec('Le SMS n\'est pas parti, réessaie');
+      },
+    );
+  }
+
+  @override
+  Future<Resultat<Utilisateur>> connexionParSms(String code) async {
+    final PhoneAuthCredential? preuve = _preuveSms(code);
+    if (preuve == null) {
+      return const Resultat.echec('Demande d\'abord un code');
+    }
+    try {
+      final UserCredential credential = await _auth.signInWithCredential(preuve);
+      // Numéro jamais vérifié : Firebase vient de créer un compte vide.
+      // On l'efface : un compte se crée seulement par l'inscription
+      if (credential.additionalUserInfo?.isNewUser ?? false) {
+        await _supprimerCompteIncomplet(credential.user);
+        await _auth.signOut();
+        return const Resultat.echec(UtilisateurRepository.numeroNonVerifie);
+      }
+      return await _chargerProfil(credential.user!);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageAuth(e.code));
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<void>> verifierTelephone(String code) async {
+    final User? compte = _auth.currentUser;
+    if (compte == null) {
+      return const Resultat.echec('Tu n\'es pas connecté');
+    }
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    if (numero == null || _numeroSms != numero) {
+      return const Resultat.echec(
+        'Le code doit être envoyé au numéro de ton profil',
+      );
+    }
+    final PhoneAuthCredential? preuve = _preuveSms(code);
+    if (preuve == null) {
+      return const Resultat.echec('Demande d\'abord un code');
+    }
+    try {
+      // Un autre numéro est encore lié au compte : on le retire d'abord
+      // (un compte Firebase n'a qu'un seul numéro)
+      if (compte.phoneNumber != null) {
+        await compte.unlink(PhoneAuthProvider.PROVIDER_ID);
+      }
+      await compte.linkWithCredential(preuve);
+      return const Resultat.succes(null);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageAuth(e.code));
+    }
+  }
+
+  @override
+  bool telephoneEstVerifie() {
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    final String? numeroLie = _auth.currentUser?.phoneNumber;
+    return numero != null && numeroLie == '+216$numero';
+  }
+
+  /// La preuve à donner à Firebase : l'envoi + les 6 chiffres tapés.
+  /// null : aucun code n'a été demandé.
+  PhoneAuthCredential? _preuveSms(String code) {
+    final String? idVerification = _idVerification;
+    if (idVerification != null) {
+      return PhoneAuthProvider.credential(
+        verificationId: idVerification,
+        smsCode: code.trim(),
+      );
+    }
+    return _preuveAuto;
+  }
+
+  // =====================================================================
   // Utilisateur connecté et profil
   // =====================================================================
 
@@ -406,6 +521,9 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       }
       await lot.commit();
       await _memoriser(modifie);
+      if (nouveauNumero != ancienNumero) {
+        await _oublierNumeroVerifie();
+      }
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -762,6 +880,47 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     return utilisateur.copier(email: email);
   }
 
+  /// Après la connexion à Firebase Auth (mot de passe ou SMS) : charge le
+  /// profil, refuse un compte bloqué, puis le garde en mémoire.
+  Future<Resultat<Utilisateur>> _chargerProfil(User compte) async {
+    final DocumentSnapshot<Map<String, dynamic>> document =
+        await _utilisateurs.doc(compte.uid).get();
+    if (!document.exists) {
+      await _auth.signOut();
+      return const Resultat.echec('Profil introuvable, contacte l\'administrateur');
+    }
+    final Utilisateur utilisateur = await _synchroniserEmail(
+      compte,
+      Utilisateur.fromMap(document.id, document.data()!),
+    );
+    // Compte bloqué : on ne le laisse pas connecté
+    if (utilisateur.statut == StatutUtilisateur.bloque) {
+      await _auth.signOut();
+      return const Resultat.echec(
+        'Ton compte a été bloqué par l\'administrateur',
+      );
+    }
+    await _memoriser(utilisateur);
+    // Comptes créés avant la connexion par numéro : on crée leur fiche
+    await _ajouterFicheTelephone(utilisateur);
+    return Resultat.succes(utilisateur);
+  }
+
+  /// Le numéro du profil a changé : l'ancien, vérifié par SMS, ne doit plus
+  /// ouvrir le compte. Au mieux : si ça échoue, le prochain
+  /// verifierTelephone le remplacera.
+  Future<void> _oublierNumeroVerifie() async {
+    final User? compte = _auth.currentUser;
+    if (compte == null || compte.phoneNumber == null) {
+      return;
+    }
+    try {
+      await compte.unlink(PhoneAuthProvider.PROVIDER_ID);
+    } on FirebaseAuthException {
+      // rien : voir ci-dessus
+    }
+  }
+
   /// La fiche telephones/{numero} existe-t-elle, et est-elle à moi ?
   /// (supprimer une fiche absente ou d'un autre ferait échouer tout le lot)
   Future<bool> _ficheEstAMoi(String numero) async {
@@ -833,6 +992,23 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         return 'Trop de tentatives, réessaie dans quelques minutes';
       case 'network-request-failed':
         return 'Pas de connexion Internet';
+      // ----- Code SMS -----
+      case 'invalid-verification-code':
+        return 'Code incorrect';
+      case 'invalid-verification-id':
+      case 'session-expired':
+        return 'Code expiré : demande un nouveau code';
+      case 'invalid-phone-number':
+        return 'Numéro de téléphone invalide (8 chiffres)';
+      case 'quota-exceeded':
+        return 'Trop de SMS envoyés, réessaie plus tard';
+      case 'credential-already-in-use':
+        return 'Ce numéro est déjà vérifié sur un autre compte';
+      case 'operation-not-allowed':
+        return 'Ce mode de connexion n\'est pas activé';
+      case 'app-not-authorized':
+      case 'missing-client-identifier':
+        return 'Connexion par SMS indisponible sur cet appareil';
       default:
         return 'Une erreur est survenue ($code)';
     }

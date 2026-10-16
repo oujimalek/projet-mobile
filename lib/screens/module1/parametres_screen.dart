@@ -9,6 +9,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import 'conditions_utilisation.dart';
+import 'dialogue_sms.dart';
 import 'widgets_module1.dart';
 
 /// Version affichée dans "À propos" (la même que dans pubspec.yaml).
@@ -17,7 +18,8 @@ const String versionHoumani = '1.0.0';
 /// M1 - Utilisateurs : écran Paramètres.
 ///
 /// Ouvert depuis le profil ou le menu latéral.
-/// - Sécurité : changer le mot de passe, changer l'e-mail, supprimer le
+/// - Sécurité : vérifier son numéro par SMS (pour se connecter par SMS),
+///   changer le mot de passe, changer l'e-mail, supprimer le
 ///   compte. Chaque action ouvre une fenêtre (showDialog) avec un Form ;
 ///   le mot de passe actuel est toujours redemandé (exigé par Firebase).
 /// - Apparence : thème comme le téléphone, clair ou sombre.
@@ -188,11 +190,33 @@ class _ParametresScreenState extends State<ParametresScreen> {
     }
   }
 
+  /// Vérifie le numéro du profil par SMS : il pourra ensuite servir à se
+  /// connecter avec "Se connecter par SMS".
+  Future<void> _verifierNumero() async {
+    final bool verifie = await afficherDialogueSms(
+      context,
+      titre: 'Vérifier mon numéro',
+      numeroFixe: _repository.getUtilisateurConnecte().telephone,
+      valider: _repository.verifierTelephone,
+    );
+    if (!verifie || !mounted) {
+      return;
+    }
+    setState(() {}); // la ligne affiche maintenant "Vérifié"
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Numéro vérifié : tu peux te connecter par SMS'),
+      ),
+    );
+  }
+
   // ----- Affichage -----
 
   @override
   Widget build(BuildContext context) {
     final String email = _repository.emailConnecte();
+    final String telephone = _repository.getUtilisateurConnecte().telephone;
+    final bool telephoneVerifie = _repository.telephoneEstVerifie();
 
     return Scaffold(
       body: Column(
@@ -207,6 +231,21 @@ class _ParametresScreenState extends State<ParametresScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     children: [
+                      // Vérifié : ligne d'information avec une coche verte
+                      _ligne(
+                        icone: Icons.sms_outlined,
+                        titre: telephoneVerifie
+                            ? 'Numéro vérifié'
+                            : 'Vérifier mon numéro',
+                        detail: telephone,
+                        onTap: telephoneVerifie || telephone.isEmpty
+                            ? null
+                            : _verifierNumero,
+                        fin: telephoneVerifie
+                            ? Icon(Icons.verified, color: AppColors.success)
+                            : null,
+                      ),
+                      Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.lock_outline,
                         titre: 'Changer le mot de passe',

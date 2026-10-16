@@ -97,6 +97,11 @@ abstract class UtilisateurRepository {
     return chiffres;
   }
 
+  /// Connexion par SMS avec un numéro qu'aucun compte n'a vérifié.
+  static const String numeroNonVerifie =
+      'Ce numéro n\'est pas encore vérifié : connecte-toi avec ton e-mail, '
+      'puis vérifie-le dans Paramètres';
+
   /// Le texte tapé pour se connecter est-il un numéro (et pas un e-mail) ?
   static bool estUnNumero(String identifiant) {
     return !identifiant.contains('@');
@@ -150,6 +155,28 @@ abstract class UtilisateurRepository {
   Future<Resultat<void>> envoyerLienReinitialisation(String email);
 
   // =====================================================================
+  // Code SMS (Firebase Phone Auth)
+  // =====================================================================
+  // Deux temps : envoyerCodeSms, puis connexionParSms OU verifierTelephone
+  // avec les 6 chiffres reçus. Un numéro sert à se connecter par SMS
+  // seulement après avoir été vérifié dans Paramètres.
+
+  /// Envoie un code à 6 chiffres par SMS à ce numéro (8 chiffres, +216
+  /// accepté).
+  Future<Resultat<void>> envoyerCodeSms(String telephone);
+
+  /// Se connecte avec le code reçu. Refusé si le numéro n'a jamais été
+  /// vérifié dans Paramètres (aucun compte ne lui est lié).
+  Future<Resultat<Utilisateur>> connexionParSms(String code);
+
+  /// L'utilisateur connecté prouve que le numéro de son profil est à lui :
+  /// il pourra ensuite se connecter par SMS.
+  Future<Resultat<void>> verifierTelephone(String code);
+
+  /// Le numéro du profil a-t-il été vérifié par SMS ? (synchrone)
+  bool telephoneEstVerifie();
+
+  // =====================================================================
   // Utilisateur connecté et profil
   // =====================================================================
 
@@ -164,7 +191,8 @@ abstract class UtilisateurRepository {
 
   /// Enregistre les modifications du profil de l'utilisateur connecté.
   /// avatar : identifiant d'un avatar de la galerie, vide = initiales.
-  /// Nouveau numéro : il doit être libre (il sert à se connecter).
+  /// Nouveau numéro : il doit être libre (il sert à se connecter), et il
+  /// faudra le vérifier à nouveau par SMS.
   Future<Resultat<void>> modifierProfil({
     required String nomComplet,
     required String telephone,

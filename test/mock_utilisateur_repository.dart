@@ -346,6 +346,75 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   // =====================================================================
+  // Code SMS
+  // =====================================================================
+
+  /// Le code que "reçoit" chaque numéro (pas de vrai SMS).
+  static const String codeSmsDemo = '123456';
+
+  // Les comptes dont le numéro a été vérifié par SMS (clé = id)
+  final Set<String> _telephonesVerifies = {'u1'};
+
+  // Les 8 chiffres qui ont reçu le dernier code (null : aucun envoi)
+  String? _numeroSms;
+
+  @override
+  Future<Resultat<void>> envoyerCodeSms(String telephone) async {
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
+    _numeroSms = numero;
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<Utilisateur>> connexionParSms(String code) async {
+    final String? numero = _numeroSms;
+    if (numero == null) {
+      return const Resultat.echec('Demande d\'abord un code');
+    }
+    if (code.trim() != codeSmsDemo) {
+      return const Resultat.echec('Code incorrect');
+    }
+    final Utilisateur? titulaire = _titulaireDuNumero(numero);
+    if (titulaire == null || !_telephonesVerifies.contains(titulaire.id)) {
+      return const Resultat.echec(UtilisateurRepository.numeroNonVerifie);
+    }
+    if (titulaire.statut == StatutUtilisateur.bloque) {
+      return const Resultat.echec(
+        'Ton compte a été bloqué par l\'administrateur',
+      );
+    }
+    _connecte = titulaire;
+    return Resultat.succes(titulaire);
+  }
+
+  @override
+  Future<Resultat<void>> verifierTelephone(String code) async {
+    if (_connecte.id.isEmpty) {
+      return const Resultat.echec('Tu n\'es pas connecté');
+    }
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    if (numero == null || _numeroSms != numero) {
+      return const Resultat.echec(
+        'Le code doit être envoyé au numéro de ton profil',
+      );
+    }
+    if (code.trim() != codeSmsDemo) {
+      return const Resultat.echec('Code incorrect');
+    }
+    _telephonesVerifies.add(_connecte.id);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  bool telephoneEstVerifie() {
+    return _telephonesVerifies.contains(_connecte.id);
+  }
+
+  // =====================================================================
   // Utilisateur connecté et profil
   // =====================================================================
 
@@ -370,6 +439,11 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     final Utilisateur? titulaire = _titulaireDuNumero(telephone);
     if (titulaire != null && titulaire.id != _connecte.id) {
       return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
+    }
+    // Comme Firebase : un nouveau numéro doit être vérifié à nouveau
+    if (UtilisateurRepository.normaliserTelephone(telephone) !=
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone)) {
+      _telephonesVerifies.remove(_connecte.id);
     }
     final List<String> mots = nomComplet.trim().split(' ');
     _remplacer(
@@ -435,6 +509,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     _membres.removeWhere((Utilisateur membre) => membre.id == id);
     _motsDePasse.remove(id);
     _emailsVerifies.remove(id);
+    _telephonesVerifies.remove(id);
     _connecte = const Utilisateur(
       id: '',
       prenom: '',
