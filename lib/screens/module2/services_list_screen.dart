@@ -4,6 +4,11 @@ import '../../data/models/service.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
+import 'mes_demandes_screen.dart';
+import 'module2_outils.dart';
+import 'service_detail_screen.dart';
+import 'service_form_screen.dart';
+import 'services_communs_screen.dart';
 
 /// M2 - Services : liste des services entre voisins.
 ///
@@ -110,11 +115,9 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
         ],
       ),
 
-      // Bouton bleu "+" pour publier un service (visuel pour l'instant)
+      // Bouton bleu "+" pour publier un service
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Écran "Publier un service" : à venir
-        },
+        onPressed: _ouvrirPublication,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         shape: const CircleBorder(),
@@ -134,25 +137,78 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            'Services entre voisins',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Services entre voisins',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Entraide dans ta houma',
+                  style: TextStyle(color: AppColors.primaryLight),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: 4),
-          Text(
-            'Entraide dans ta houma',
-            style: TextStyle(color: AppColors.primaryLight),
+          // Accès à "Mes demandes" et au planning des services communs
+          IconButton(
+            tooltip: 'Mes demandes',
+            onPressed: () async {
+              await ouvrirEcran(context, const MesDemandesScreen());
+              if (mounted) {
+                setState(() {});
+              }
+            },
+            icon: const Icon(Icons.inbox_outlined, color: AppColors.card),
+          ),
+          IconButton(
+            tooltip: 'Planning des services communs',
+            onPressed: () async {
+              await ouvrirEcran(context, const ServicesCommunsScreen());
+              if (mounted) {
+                setState(() {});
+              }
+            },
+            icon: const Icon(Icons.calendar_month_outlined, color: AppColors.card),
           ),
         ],
       ),
     );
+  }
+
+  /// Ouvre l'écran "Nouvelle publication". Au retour, on affiche l'onglet
+  /// du service publié pour qu'il apparaisse tout de suite dans la liste.
+  Future<void> _ouvrirPublication() async {
+    final Service? publie = await ouvrirEcran<Service>(
+      context,
+      const ServiceFormScreen(),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (publie != null) {
+        _afficherOffres = publie.estOffre;
+        _categorieChoisie = 'Tous';
+      }
+    });
+  }
+
+  /// Ouvre le détail d'un service, puis rafraîchit la liste au retour.
+  Future<void> _ouvrirDetail(Service service) async {
+    await ouvrirEcran(context, ServiceDetailScreen(serviceId: service.id));
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// Les deux onglets "Offres" / "Demandes".
@@ -273,6 +329,10 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppCard(
+        // Toucher la carte ouvre le détail du service
+        onTap: () {
+          _ouvrirDetail(service);
+        },
         child: Row(
           children: [
             // Avatar rond avec les initiales
