@@ -122,7 +122,8 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
       });
     } else if (resultat.donnee!) {
       // E-mail vérifié : étape suivante, choisir son quartier
-      context.push('/code-quartier');
+      // (go : revenir à la vérification n'aurait plus de sens)
+      context.go('/code-quartier');
     } else {
       setState(() {
         _erreur = 'E-mail pas encore vérifié : clique sur le lien reçu';
@@ -137,7 +138,7 @@ class _VerificationOtpScreenState extends State<VerificationOtpScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: ''),
+          const AppHeader(titre: '', action: BoutonDeconnexion()),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),

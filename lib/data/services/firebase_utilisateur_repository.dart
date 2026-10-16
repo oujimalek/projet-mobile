@@ -79,8 +79,10 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         return const Resultat.echec('Profil introuvable, contacte l\'administrateur');
       }
 
-      final Utilisateur utilisateur =
-          Utilisateur.fromMap(document.id, document.data()!);
+      final Utilisateur utilisateur = await _synchroniserEmail(
+        credential.user!,
+        Utilisateur.fromMap(document.id, document.data()!),
+      );
       // Compte bloqué : on ne le laisse pas connecté
       if (utilisateur.statut == StatutUtilisateur.bloque) {
         await _auth.signOut();
@@ -226,8 +228,10 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         await deconnexion();
         return null;
       }
-      final Utilisateur utilisateur =
-          Utilisateur.fromMap(document.id, document.data()!);
+      final Utilisateur utilisateur = await _synchroniserEmail(
+        compte,
+        Utilisateur.fromMap(document.id, document.data()!),
+      );
       if (utilisateur.statut == StatutUtilisateur.bloque) {
         await deconnexion();
         return null;
@@ -340,6 +344,62 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       });
       await _memoriser(modifie);
       return const Resultat.succes(null);
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  // =====================================================================
+  // Sécurité du compte
+  // =====================================================================
+
+  @override
+  Future<Resultat<void>> changerMotDePasse(String ancien, String nouveau) async {
+    try {
+      final User compte = await _reauthentifier(ancien);
+      await compte.updatePassword(nouveau);
+      return const Resultat.succes(null);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageSecurite(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<void>> changerEmail(
+    String nouvelEmail,
+    String motDePasse,
+  ) async {
+    try {
+      final User compte = await _reauthentifier(motDePasse);
+      // L'e-mail de Firebase Auth change seulement après le clic sur le
+      // lien ; le profil est mis à jour à la connexion suivante
+      // (voir _synchroniserEmail)
+      await compte.verifyBeforeUpdateEmail(nouvelEmail.trim());
+      return const Resultat.succes(null);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageSecurite(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<void>> supprimerCompte(String motDePasse) async {
+    if (_connecte.estAdmin) {
+      return const Resultat.echec(
+        'Un administrateur ne peut pas supprimer son compte : '
+        'contacte l\'équipe Houmani',
+      );
+    }
+    try {
+      final User compte = await _reauthentifier(motDePasse);
+      // D'abord le profil (il faut encore être connecté pour les règles),
+      // ensuite le compte Firebase Auth
+      await _utilisateurs.doc(compte.uid).delete();
+      await compte.delete();
+      _connecte = _invite;
+      await _cache.vider();
+      return const Resultat.succes(null);
+    } on FirebaseAuthException catch (e) {
+      return Resultat.echec(_messageSecurite(e.code));
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
     }
@@ -538,6 +598,38 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
+  /// Firebase exige une connexion récente pour changer le mot de passe,
+  /// l'e-mail ou supprimer le compte : on se reconnecte avec le mot de passe.
+  Future<User> _reauthentifier(String motDePasse) async {
+    final User? compte = _auth.currentUser;
+    final String? email = compte?.email;
+    if (compte == null || email == null) {
+      throw FirebaseAuthException(code: 'no-current-user');
+    }
+    await compte.reauthenticateWithCredential(
+      EmailAuthProvider.credential(email: email, password: motDePasse),
+    );
+    return compte;
+  }
+
+  /// Après un changement d'e-mail (lien cliqué), Firebase Auth a la nouvelle
+  /// adresse mais le profil garde l'ancienne : on la recopie.
+  Future<Utilisateur> _synchroniserEmail(
+    User compte,
+    Utilisateur utilisateur,
+  ) async {
+    final String? email = compte.email;
+    if (email == null || email == utilisateur.email) {
+      return utilisateur;
+    }
+    try {
+      await _utilisateurs.doc(compte.uid).update({'email': email});
+      return utilisateur.copier(email: email);
+    } on FirebaseException {
+      return utilisateur; // on réessaiera à la prochaine connexion
+    }
+  }
+
   Future<void> _supprimerCompteIncomplet(User? compte) async {
     if (compte == null) {
       return;
@@ -581,6 +673,21 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         return 'Pas de connexion Internet';
       default:
         return 'Une erreur est survenue ($code)';
+    }
+  }
+
+  /// Comme _messageAuth, mais ici seul le mot de passe a été saisi.
+  String _messageSecurite(String code) {
+    switch (code) {
+      case 'invalid-credential':
+      case 'wrong-password':
+        return 'Mot de passe actuel incorrect';
+      case 'no-current-user':
+      case 'user-mismatch':
+      case 'requires-recent-login':
+        return 'Reconnecte-toi puis réessaie';
+      default:
+        return _messageAuth(code);
     }
   }
 

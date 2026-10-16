@@ -110,6 +110,24 @@ abstract class UtilisateurRepository {
   });
 
   // =====================================================================
+  // Sécurité du compte (écran Paramètres)
+  // =====================================================================
+  // Firebase exige une connexion récente pour ces opérations : on redemande
+  // donc le mot de passe actuel (preuve que c'est bien le propriétaire).
+
+  /// Remplace le mot de passe (l'ancien est vérifié d'abord).
+  Future<Resultat<void>> changerMotDePasse(String ancien, String nouveau);
+
+  /// Envoie un lien de confirmation à la NOUVELLE adresse. L'e-mail ne
+  /// change qu'après le clic sur ce lien (puis il faut se reconnecter).
+  Future<Resultat<void>> changerEmail(String nouvelEmail, String motDePasse);
+
+  /// Supprime le profil puis le compte, et déconnecte (droit à la
+  /// suppression, loi 2004-63). Refusé pour un administrateur : son
+  /// quartier resterait sans admin.
+  Future<Resultat<void>> supprimerCompte(String motDePasse);
+
+  // =====================================================================
   // Quartiers
   // =====================================================================
 

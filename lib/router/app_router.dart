@@ -9,6 +9,7 @@ import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
 import '../screens/module1/inscription_screen.dart';
 import '../screens/module1/mot_de_passe_oublie_screen.dart';
+import '../screens/module1/parametres_screen.dart';
 import '../screens/module1/profil_edition_screen.dart';
 import '../screens/module1/profil_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
@@ -140,6 +141,12 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/parametres',
+      builder: (context, state) {
+        return const ParametresScreen(); // M1
+      },
+    ),
+    GoRoute(
       path: '/demo',
       builder: (context, state) {
         return const DemoScreen();
@@ -168,16 +175,29 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: cleCoquille, // permet d'ouvrir le menu depuis chaque onglet
-      drawer: AppDrawer(chemin: chemin), // menu latéral (glisser depuis la gauche)
-      body: child,
-      bottomNavigationBar: AppBottomNav(
-        indexActif: _indexActif(),
-        onTap: (index) {
-          // go : remplace l'onglet affiché (pas de flèche retour entre onglets)
-          context.go(cheminsOnglets[index]);
-        },
+    // Bouton retour du téléphone sur un onglet autre que l'Accueil :
+    // on revient à l'Accueil au lieu de quitter l'application
+    final bool surOngletAutreQueAccueil =
+        cheminsOnglets.contains(chemin) && chemin != '/accueil';
+
+    return PopScope(
+      canPop: !surOngletAutreQueAccueil,
+      onPopInvokedWithResult: (bool aQuitte, Object? resultat) {
+        if (!aQuitte) {
+          context.go('/accueil');
+        }
+      },
+      child: Scaffold(
+        key: cleCoquille, // permet d'ouvrir le menu depuis chaque onglet
+        drawer: AppDrawer(chemin: chemin), // menu latéral (glisser depuis la gauche)
+        body: child,
+        bottomNavigationBar: AppBottomNav(
+          indexActif: _indexActif(),
+          onTap: (index) {
+            // go : remplace l'onglet affiché (pas de flèche retour entre onglets)
+            context.go(cheminsOnglets[index]);
+          },
+        ),
       ),
     );
   }

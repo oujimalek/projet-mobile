@@ -109,6 +109,20 @@ service cloud.firestore {
         && monUid() != uid
         && changeSeulement(['statut'])
         && request.resource.data.statut in ['actif', 'bloque', 'refuse'];
+
+      // Après un changement d'e-mail (lien de confirmation cliqué) :
+      // recopier dans le profil l'adresse de Firebase Auth, et rien d'autre.
+      allow update: if connecte()
+        && monUid() == uid
+        && changeSeulement(['email'])
+        && request.resource.data.email == request.auth.token.email;
+
+      // Supprimer son compte (droit à la suppression, loi 2004-63) :
+      // son propre document seulement, et pas l'admin (le quartier
+      // resterait sans administrateur).
+      allow delete: if connecte()
+        && monUid() == uid
+        && resource.data.role != 'admin';
     }
 
     // ===================== M1 · Codes d'invitation =====================

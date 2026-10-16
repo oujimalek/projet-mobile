@@ -133,7 +133,8 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
       return;
     }
     // Étape suivante : vérifier l'adresse e-mail
-    context.push('/verification');
+    // (go : le compte existe déjà, revenir au formulaire n'aurait plus de sens)
+    context.go('/verification');
   }
 
   @override

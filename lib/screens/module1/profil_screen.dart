@@ -287,9 +287,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
       _ligneLien(
         'Paramètres',
         onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Paramètres : bientôt disponible')),
-          );
+          _ouvrirPuisRafraichir('/parametres');
         },
       ),
     );
