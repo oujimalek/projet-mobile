@@ -125,6 +125,13 @@ class _AppDrawerState extends State<AppDrawer> {
     }
     rubriquesCompte.add(
       _rubrique(
+        icone: Icons.settings_outlined,
+        titre: 'Paramètres',
+        onTap: () => _ouvrir('/parametres'),
+      ),
+    );
+    rubriquesCompte.add(
+      _rubrique(
         icone: Icons.apps_outlined,
         titre: 'Démo des modules',
         onTap: () => _ouvrir('/demo'),

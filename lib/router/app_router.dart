@@ -9,6 +9,7 @@ import '../screens/module1/code_quartier_screen.dart';
 import '../screens/module1/connexion_screen.dart';
 import '../screens/module1/inscription_screen.dart';
 import '../screens/module1/mot_de_passe_oublie_screen.dart';
+import '../screens/module1/parametres_screen.dart';
 import '../screens/module1/profil_edition_screen.dart';
 import '../screens/module1/profil_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
@@ -137,6 +138,12 @@ final GoRouter appRouter = GoRouter(
       path: '/modifier-profil',
       builder: (context, state) {
         return const ProfilEditionScreen(); // M1
+      },
+    ),
+    GoRoute(
+      path: '/parametres',
+      builder: (context, state) {
+        return const ParametresScreen(); // M1
       },
     ),
     GoRoute(

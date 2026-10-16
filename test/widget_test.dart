@@ -15,6 +15,7 @@ import 'package:houmani/screens/module1/code_quartier_screen.dart';
 import 'package:houmani/screens/module1/connexion_screen.dart';
 import 'package:houmani/screens/module1/inscription_screen.dart';
 import 'package:houmani/screens/module1/mot_de_passe_oublie_screen.dart';
+import 'package:houmani/screens/module1/parametres_screen.dart';
 import 'package:houmani/screens/module1/profil_edition_screen.dart';
 import 'package:houmani/screens/module1/profil_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
@@ -695,6 +696,87 @@ void main() {
     expect(find.text('Actifs (3)'), findsOneWidget);
     expect(find.text('Bloqués (2)'), findsOneWidget); // 1 au départ + 1
   });
+
+  // -------------------------------------------------------------------
+  // Paramètres (sécurité du compte)
+  // -------------------------------------------------------------------
+
+  testWidgets('Profil : le lien Paramètres ouvre l\'écran Paramètres',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Paramètres'));
+    expect(find.byType(ParametresScreen), findsOneWidget);
+    expect(find.text(MockUtilisateurRepository.emailDemo), findsOneWidget);
+    expect(find.text(versionHoumani), findsOneWidget);
+  });
+
+  testWidgets('Menu : la rubrique Paramètres ouvre l\'écran Paramètres',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await toucherDansMenu(tester, find.text('Paramètres'));
+    expect(find.byType(ParametresScreen), findsOneWidget);
+  });
+
+  testWidgets('Paramètres : changer le mot de passe',
+      (WidgetTester tester) async {
+    appRouter.go('/parametres');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Changer le mot de passe'));
+
+    // La confirmation ne correspond pas : la fenêtre reste ouverte
+    await remplirDialogue(tester, [
+      MockUtilisateurRepository.motDePasseDemo,
+      'nouveau123',
+      'autre1234',
+    ]);
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Les deux mots de passe ne sont pas identiques'),
+      findsOneWidget,
+    );
+
+    // Confirmation corrigée : c'est enregistré
+    await remplirDialogue(tester, [
+      MockUtilisateurRepository.motDePasseDemo,
+      'nouveau123',
+      'nouveau123',
+    ]);
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('Mot de passe modifié'), findsOneWidget);
+  });
+
+  testWidgets('Paramètres : supprimer son compte → retour à la connexion',
+      (WidgetTester tester) async {
+    mock.ajouterCompte(compteDeTest(StatutUtilisateur.actif), 'secret123');
+    await mock.connexion('test@houmani.tn', 'secret123');
+    appRouter.go('/parametres');
+    await lancerApp(tester);
+
+    await toucher(tester, find.text('Supprimer mon compte'));
+    await remplirDialogue(tester, ['secret123']);
+    await tester.tap(find.widgetWithText(TextButton, 'Supprimer'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+    expect(find.text('Ton compte a été supprimé'), findsOneWidget);
+  });
+}
+
+/// Remplit, dans l'ordre, les champs de la fenêtre ouverte.
+Future<void> remplirDialogue(WidgetTester tester, List<String> valeurs) async {
+  final Finder champs = find.descendant(
+    of: find.byType(AlertDialog),
+    matching: find.byType(TextFormField),
+  );
+  for (int i = 0; i < valeurs.length; i++) {
+    await tester.enterText(champs.at(i), valeurs[i]);
+  }
+  await tester.pump();
 }
 
 /// Un compte vérifié ou non, inscrit mais sans quartier.

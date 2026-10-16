@@ -426,6 +426,78 @@ void main() {
       });
     });
 
+    group('sécurité du compte', () {
+      test('changer le mot de passe : l\'ancien est vérifié', () async {
+        final Resultat<void> faux =
+            await repo.changerMotDePasse('mauvais', 'nouveau123');
+        expect(faux.estSucces, false);
+        expect(faux.erreur, 'Mot de passe actuel incorrect');
+
+        final Resultat<void> bon = await repo.changerMotDePasse(
+          MockUtilisateurRepository.motDePasseDemo,
+          'nouveau123',
+        );
+        expect(bon.estSucces, true);
+        // L'ancien ne marche plus, le nouveau oui
+        expect(
+          (await repo.connexion(MockUtilisateurRepository.emailDemo,
+                  MockUtilisateurRepository.motDePasseDemo))
+              .estSucces,
+          false,
+        );
+        expect(
+          (await repo.connexion(MockUtilisateurRepository.emailDemo, 'nouveau123'))
+              .estSucces,
+          true,
+        );
+      });
+
+      test('changer l\'e-mail : mot de passe vérifié, adresse libre', () async {
+        const String motDePasse = MockUtilisateurRepository.motDePasseDemo;
+        expect(
+          (await repo.changerEmail('nouvelle@houmani.tn', 'mauvais')).erreur,
+          'Mot de passe actuel incorrect',
+        );
+        expect(
+          (await repo.changerEmail('youssef@houmani.tn', motDePasse)).erreur,
+          'Un compte existe déjà avec cet e-mail',
+        );
+        final Resultat<void> r =
+            await repo.changerEmail(' nouvelle@houmani.tn ', motDePasse);
+        expect(r.estSucces, true);
+        expect(repo.emailEnAttente, 'nouvelle@houmani.tn');
+        // L'e-mail ne change qu'après le clic sur le lien
+        expect(repo.getUtilisateurConnecte().email,
+            MockUtilisateurRepository.emailDemo);
+      });
+
+      test('supprimer son compte : refusé pour l\'admin', () async {
+        final Resultat<void> r =
+            await repo.supprimerCompte(MockUtilisateurRepository.motDePasseDemo);
+        expect(r.estSucces, false);
+        expect(r.erreur, contains('administrateur'));
+        expect(repo.getUtilisateurConnecte().id, 'u1');
+      });
+
+      test('supprimer son compte : le compte disparaît', () async {
+        await creerCompte();
+        expect(
+          (await repo.supprimerCompte('mauvais')).erreur,
+          'Mot de passe actuel incorrect',
+        );
+        final Resultat<void> r = await repo.supprimerCompte('secret123');
+        expect(r.estSucces, true);
+        expect(repo.getUtilisateurConnecte().id, isEmpty);
+        // Plus de connexion possible, et l'e-mail est de nouveau libre
+        expect(
+          (await repo.connexion('nour@houmani.tn', 'secret123')).estSucces,
+          false,
+        );
+        await creerCompte();
+        expect(repo.getUtilisateurConnecte().email, 'nour@houmani.tn');
+      });
+    });
+
     group('erreurs réseau', () {
       test('getMembres et compterMembres renvoient le message d\'erreur',
           () async {

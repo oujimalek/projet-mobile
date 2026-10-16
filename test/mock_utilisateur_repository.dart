@@ -353,6 +353,68 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   // =====================================================================
+  // Sécurité du compte
+  // =====================================================================
+
+  /// La nouvelle adresse demandée avec changerEmail (Firebase attendrait
+  /// le clic sur le lien ; ici, les tests la regardent).
+  String? emailEnAttente;
+
+  @override
+  Future<Resultat<void>> changerMotDePasse(String ancien, String nouveau) async {
+    if (!_bonMotDePasse(ancien)) {
+      return const Resultat.echec('Mot de passe actuel incorrect');
+    }
+    _motsDePasse[_connecte.id] = nouveau;
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> changerEmail(
+    String nouvelEmail,
+    String motDePasse,
+  ) async {
+    if (!_bonMotDePasse(motDePasse)) {
+      return const Resultat.echec('Mot de passe actuel incorrect');
+    }
+    final String texte = nouvelEmail.trim().toLowerCase();
+    for (final Utilisateur membre in _membres) {
+      if (membre.email.toLowerCase() == texte) {
+        return const Resultat.echec('Un compte existe déjà avec cet e-mail');
+      }
+    }
+    emailEnAttente = nouvelEmail.trim();
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> supprimerCompte(String motDePasse) async {
+    if (_connecte.estAdmin) {
+      return const Resultat.echec(
+        'Un administrateur ne peut pas supprimer son compte : '
+        'contacte l\'équipe Houmani',
+      );
+    }
+    if (!_bonMotDePasse(motDePasse)) {
+      return const Resultat.echec('Mot de passe actuel incorrect');
+    }
+    final String id = _connecte.id;
+    _membres.removeWhere((Utilisateur membre) => membre.id == id);
+    _motsDePasse.remove(id);
+    _emailsVerifies.remove(id);
+    _connecte = const Utilisateur(
+      id: '',
+      prenom: '',
+      nom: '',
+      email: '',
+      telephone: '',
+      quartier: '',
+      residence: '',
+    );
+    return const Resultat.succes(null);
+  }
+
+  // =====================================================================
   // Quartiers
   // =====================================================================
 
@@ -479,6 +541,11 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   // =====================================================================
   // Outils internes
   // =====================================================================
+
+  /// Le mot de passe redemandé est-il celui du compte connecté ?
+  bool _bonMotDePasse(String motDePasse) {
+    return _motsDePasse[_connecte.id] == motDePasse;
+  }
 
   /// Les mots après le premier, recollés : ["Amira", "Ben", "Salah"] → "Ben Salah".
   String _reste(List<String> mots) {

@@ -16,6 +16,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -344,6 +345,56 @@ describe('lire les profils', () => {
   test('requête sans filtre de quartier : refusée', async () => {
     const db = base('admin1');
     await assertFails(getDocs(collection(db, 'utilisateurs')));
+  });
+});
+
+// ---------------------------------------------------------------------
+describe('sécurité du compte (écran Paramètres)', () => {
+  // base(uid) donne le jeton "<uid>@houmani.tn" : c'est l'e-mail de
+  // Firebase Auth après le clic sur le lien de changement
+  test('on recopie dans son profil l\'e-mail de Firebase Auth', async () => {
+    const db = base('actif1');
+    await assertSucceeds(
+      updateDoc(doc(db, 'utilisateurs/actif1'), { email: 'actif1@houmani.tn' }),
+    );
+  });
+
+  test('pas un autre e-mail que celui du jeton', async () => {
+    const db = base('actif1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/actif1'), { email: 'pirate@houmani.tn' }),
+    );
+  });
+
+  test('pas d\'autre champ avec l\'e-mail (ex : le rôle)', async () => {
+    const db = base('attente1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/attente1'), {
+        email: 'attente1@houmani.tn',
+        role: 'admin',
+      }),
+    );
+  });
+
+  test('pas l\'e-mail d\'un autre utilisateur', async () => {
+    const db = base('actif1');
+    await assertFails(
+      updateDoc(doc(db, 'utilisateurs/admin1'), { email: 'actif1@houmani.tn' }),
+    );
+  });
+
+  test('on supprime SON compte (même en attente)', async () => {
+    await assertSucceeds(deleteDoc(doc(base('actif1'), 'utilisateurs/actif1')));
+    await assertSucceeds(deleteDoc(doc(base('attente1'), 'utilisateurs/attente1')));
+  });
+
+  test('pas le compte d\'un autre, même pour l\'admin', async () => {
+    await assertFails(deleteDoc(doc(base('actif1'), 'utilisateurs/attente1')));
+    await assertFails(deleteDoc(doc(base('admin1'), 'utilisateurs/actif1')));
+  });
+
+  test('l\'admin ne supprime pas son propre compte', async () => {
+    await assertFails(deleteDoc(doc(base('admin1'), 'utilisateurs/admin1')));
   });
 });
 

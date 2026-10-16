@@ -86,6 +86,7 @@ class Utilisateur {
   Utilisateur copier({
     String? prenom,
     String? nom,
+    String? email,
     String? telephone,
     String? quartierId,
     String? quartier,
@@ -100,7 +101,7 @@ class Utilisateur {
       id: id,
       prenom: prenom ?? this.prenom,
       nom: nom ?? this.nom,
-      email: email,
+      email: email ?? this.email,
       telephone: telephone ?? this.telephone,
       quartierId: quartierId ?? this.quartierId,
       quartier: quartier ?? this.quartier,
