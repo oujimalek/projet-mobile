@@ -14,7 +14,7 @@ import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 3, connexion.
 ///
-/// Un Form avec deux champs (e-mail, mot de passe).
+/// Un Form avec deux champs (e-mail ou téléphone, mot de passe).
 /// Le bouton "Se connecter" vérifie les champs, puis interroge
 /// UtilisateurRepository (Firebase Auth).
 /// Selon le statut du compte, on ouvre l'accueil, le choix du quartier
@@ -50,13 +50,20 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
     super.dispose();
   }
 
-  /// Validation du champ "E-mail" (on se connecte avec l'e-mail).
-  String? _validerEmail(String? valeur) {
+  /// Validation du champ "E-mail ou téléphone" : avec un @, c'est un
+  /// e-mail ; sinon, un numéro tunisien à 8 chiffres.
+  String? _validerIdentifiant(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
-      return 'Saisis ton e-mail';
+      return 'Saisis ton e-mail ou ton numéro';
     }
     final String texte = valeur.trim();
-    if (!texte.contains('@') || !texte.contains('.')) {
+    if (UtilisateurRepository.estUnNumero(texte)) {
+      if (UtilisateurRepository.normaliserTelephone(texte) == null) {
+        return 'Numéro de téléphone invalide (8 chiffres)';
+      }
+      return null;
+    }
+    if (!texte.contains('.')) {
       return 'Adresse e-mail invalide';
     }
     return null;
@@ -154,11 +161,11 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
             child: Column(
               children: [
                 AppTextField(
-                  label: 'E-mail',
-                  hint: 'exemple@mail.com',
+                  label: 'E-mail ou téléphone',
+                  hint: 'exemple@mail.com ou 22 345 678',
                   controller: _emailController,
                   clavier: TextInputType.emailAddress,
-                  validator: _validerEmail,
+                  validator: _validerIdentifiant,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(

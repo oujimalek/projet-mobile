@@ -396,6 +396,108 @@ void main() {
       });
     });
 
+    group('connexion par téléphone', () {
+      test('réussit avec le numéro seul (8 chiffres)', () async {
+        final Resultat<dynamic> r = await repo.connexion(
+          '22345678',
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect(r.estSucces, true);
+        expect(r.donnee.id, 'u1');
+      });
+
+      test('réussit avec +216 et des espaces', () async {
+        final Resultat<dynamic> r = await repo.connexion(
+          '+216 22 345 678',
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect(r.estSucces, true);
+      });
+
+      test('échoue pour un numéro inconnu', () async {
+        final Resultat<dynamic> r = await repo.connexion(
+          '29999999',
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Numéro ou mot de passe incorrect');
+      });
+
+      test('échoue avec un mauvais mot de passe', () async {
+        final Resultat<dynamic> r = await repo.connexion('22345678', 'faux');
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Numéro ou mot de passe incorrect');
+      });
+
+      test('l\'inscription refuse un numéro déjà pris', () async {
+        final Resultat<dynamic> r = await repo.inscription(
+          nomComplet: 'Autre Personne',
+          telephone: '22 345 678',
+          email: 'autre@houmani.tn',
+          motDePasse: 'abc12345',
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Ce numéro est déjà utilisé par un autre compte');
+      });
+
+      test('l\'inscription refuse un numéro invalide', () async {
+        final Resultat<dynamic> r = await repo.inscription(
+          nomComplet: 'Autre Personne',
+          telephone: '1234',
+          email: 'autre@houmani.tn',
+          motDePasse: 'abc12345',
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Numéro de téléphone invalide (8 chiffres)');
+      });
+
+      test('modifierProfil refuse le numéro d\'un autre membre', () async {
+        await repo.connexion(
+          MockUtilisateurRepository.emailDemo,
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        final Resultat<void> r = await repo.modifierProfil(
+          nomComplet: 'Amira Ben Salah',
+          telephone: '+216 98 765 432',
+          logement: 'Bloc B - Appt 12',
+          competences: const [],
+        );
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Ce numéro est déjà utilisé par un autre compte');
+      });
+
+      test('modifierProfil garde son propre numéro sans erreur', () async {
+        await repo.connexion(
+          MockUtilisateurRepository.emailDemo,
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        final Resultat<void> r = await repo.modifierProfil(
+          nomComplet: 'Amira Ben Salah',
+          telephone: '22 345 678',
+          logement: 'Bloc B - Appt 12',
+          competences: const [],
+        );
+        expect(r.estSucces, true);
+      });
+    });
+
+    group('normaliserTelephone', () {
+      test('accepte 8 chiffres, +216 et 00216', () {
+        expect(UtilisateurRepository.normaliserTelephone('22 345 678'),
+            '22345678');
+        expect(UtilisateurRepository.normaliserTelephone('+216 22345678'),
+            '22345678');
+        expect(UtilisateurRepository.normaliserTelephone('0021622345678'),
+            '22345678');
+      });
+
+      test('refuse les autres longueurs', () {
+        expect(UtilisateurRepository.normaliserTelephone('1234'), null);
+        expect(UtilisateurRepository.normaliserTelephone('223456789'), null);
+        expect(UtilisateurRepository.normaliserTelephone(''), null);
+      });
+    });
+
     group('inscription et vérification de l\'e-mail', () {
       test('refuse un e-mail déjà utilisé', () async {
         final Resultat<dynamic> r = await repo.inscription(

@@ -176,6 +176,32 @@ void main() {
     expect(find.byType(BottomNavigationBar), findsOneWidget);
   });
 
+  testWidgets('Connexion avec le numéro de téléphone : ouvre l\'accueil',
+      (WidgetTester tester) async {
+    appRouter.go('/connexion');
+    await lancerApp(tester);
+
+    // Numéro trop court : refusé par le formulaire
+    await tester.enterText(find.byType(TextFormField).at(0), '1234');
+    await tester.enterText(
+      find.byType(TextFormField).at(1),
+      MockUtilisateurRepository.motDePasseDemo,
+    );
+    await toucher(tester, find.text('Se connecter'));
+    expect(
+      find.text('Numéro de téléphone invalide (8 chiffres)'),
+      findsOneWidget,
+    );
+
+    // Bon numéro (avec +216 et espaces) : accueil
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      '+216 22 345 678',
+    );
+    await toucher(tester, find.text('Se connecter'));
+    expect(find.byType(AccueilScreen), findsOneWidget);
+  });
+
   testWidgets('Profil : l\'admin valide une demande dans la liste des membres',
       (WidgetTester tester) async {
     await lancerApp(tester);

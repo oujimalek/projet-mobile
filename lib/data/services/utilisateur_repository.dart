@@ -75,18 +75,50 @@ abstract class UtilisateurRepository {
     return null;
   }
 
+  /// Le numéro tunisien réduit à ses 8 chiffres : "+216 22 345 678",
+  /// "0021622345678" et "22345678" donnent tous "22345678".
+  /// null : ce n'est pas un numéro à 8 chiffres.
+  /// C'est l'identifiant du document telephones/{numero}.
+  static String? normaliserTelephone(String texte) {
+    String chiffres = '';
+    for (int i = 0; i < texte.length; i++) {
+      if ('0123456789'.contains(texte[i])) {
+        chiffres = chiffres + texte[i];
+      }
+    }
+    if (chiffres.length == 13 && chiffres.startsWith('00216')) {
+      chiffres = chiffres.substring(5);
+    } else if (chiffres.length == 11 && chiffres.startsWith('216')) {
+      chiffres = chiffres.substring(3);
+    }
+    if (chiffres.length != 8) {
+      return null;
+    }
+    return chiffres;
+  }
+
+  /// Le texte tapé pour se connecter est-il un numéro (et pas un e-mail) ?
+  static bool estUnNumero(String identifiant) {
+    return !identifiant.contains('@');
+  }
+
   // =====================================================================
   // Connexion et inscription (Firebase Auth : e-mail + mot de passe)
   // =====================================================================
 
-  /// Vérifie l'e-mail et le mot de passe, puis charge le profil.
+  /// Vérifie l'identifiant et le mot de passe, puis charge le profil.
+  /// [identifiant] : l'e-mail OU le numéro de téléphone du compte (le
+  /// numéro est traduit en e-mail grâce à telephones/{numero}).
   /// Succès : l'utilisateur (l'écran regarde ensuite son statut).
   /// Échec : mauvais identifiants, pas de réseau, compte bloqué...
-  Future<Resultat<Utilisateur>> connexion(String email, String motDePasse);
+  Future<Resultat<Utilisateur>> connexion(
+    String identifiant,
+    String motDePasse,
+  );
 
   /// Crée le compte (statut "en attente", sans quartier), le connecte,
   /// et envoie l'e-mail de vérification.
-  /// Le téléphone est seulement un champ du profil.
+  /// Le numéro doit être libre : il sert aussi à se connecter.
   Future<Resultat<Utilisateur>> inscription({
     required String nomComplet,
     required String telephone,
@@ -132,6 +164,7 @@ abstract class UtilisateurRepository {
 
   /// Enregistre les modifications du profil de l'utilisateur connecté.
   /// avatar : identifiant d'un avatar de la galerie, vide = initiales.
+  /// Nouveau numéro : il doit être libre (il sert à se connecter).
   Future<Resultat<void>> modifierProfil({
     required String nomComplet,
     required String telephone,

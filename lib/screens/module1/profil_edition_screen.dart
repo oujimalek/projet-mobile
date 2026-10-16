@@ -69,14 +69,8 @@ class _ProfilEditionScreenState extends State<ProfilEditionScreen> {
   }
 
   String? _validerTelephone(String? valeur) {
-    int chiffres = 0;
-    final String texte = valeur ?? '';
-    for (int i = 0; i < texte.length; i++) {
-      if ('0123456789'.contains(texte[i])) {
-        chiffres++;
-      }
-    }
-    if (chiffres < 8) {
+    // 8 chiffres, avec ou sans +216 : le numéro sert aussi à se connecter
+    if (UtilisateurRepository.normaliserTelephone(valeur ?? '') == null) {
       return 'Numéro de téléphone invalide (8 chiffres)';
     }
     return null;

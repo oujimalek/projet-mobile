@@ -27,6 +27,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 let env;
@@ -519,5 +520,109 @@ describe('limites du quartier (contour)', () => {
 
   test('l\'admin ne supprime pas son quartier', async () => {
     await assertFails(deleteDoc(doc(base('admin1'), 'quartiers/q1')));
+  });
+});
+
+describe('connexion par téléphone (fiches telephones)', () => {
+  // actif1 a le numéro 22 345 678 ; la fiche de admin1 existe déjà
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (contexte) => {
+      const db = contexte.firestore();
+      await updateDoc(doc(db, 'utilisateurs/actif1'), { telephone: '+216 22 345 678' });
+      await updateDoc(doc(db, 'utilisateurs/admin1'), { telephone: '98 765 432' });
+      await setDoc(doc(db, 'telephones/98765432'), {
+        uid: 'admin1',
+        email: 'admin1@houmani.tn',
+      });
+    });
+  });
+
+  test('sans être connecté, on lit LA fiche d\'un numéro (pour se connecter)', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    await assertSucceeds(getDoc(doc(db, 'telephones/98765432')));
+  });
+
+  test('personne ne liste les numéros', async () => {
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'telephones')));
+    await assertFails(getDocs(collection(base('admin1'), 'telephones')));
+  });
+
+  test('on crée la fiche de SON numéro', async () => {
+    await assertSucceeds(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('inscription : profil + fiche dans le même envoi', async () => {
+    const db = base('nouveau', false);
+    const lot = writeBatch(db);
+    lot.set(doc(db, 'utilisateurs/nouveau'), nouveauProfil('nouveau@houmani.tn'));
+    lot.set(doc(db, 'telephones/20000000'), { uid: 'nouveau', email: 'nouveau@houmani.tn' });
+    await assertSucceeds(lot.commit());
+  });
+
+  test('pas une fiche au nom de quelqu\'un d\'autre', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'admin1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('pas un autre e-mail que celui du compte', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'actif1',
+        email: 'pirate@houmani.tn',
+      }),
+    );
+  });
+
+  test('pas un numéro qui n\'est pas dans son profil', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/29999999'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('pas de champ en plus', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/22345678'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+        role: 'admin',
+      }),
+    );
+  });
+
+  test('on ne prend pas la fiche d\'un autre', async () => {
+    await assertFails(
+      setDoc(doc(base('actif1'), 'telephones/98765432'), {
+        uid: 'actif1',
+        email: 'actif1@houmani.tn',
+      }),
+    );
+  });
+
+  test('on met à jour l\'e-mail de SA fiche, pas l\'uid', async () => {
+    const db = base('admin1');
+    await assertSucceeds(
+      updateDoc(doc(db, 'telephones/98765432'), { email: 'admin1@houmani.tn' }),
+    );
+    await assertFails(updateDoc(doc(db, 'telephones/98765432'), { uid: 'actif1' }));
+    await assertFails(
+      updateDoc(doc(base('actif1'), 'telephones/98765432'), { email: 'actif1@houmani.tn' }),
+    );
+  });
+
+  test('on supprime SA fiche, pas celle d\'un autre', async () => {
+    await assertFails(deleteDoc(doc(base('actif1'), 'telephones/98765432')));
+    await assertSucceeds(deleteDoc(doc(base('admin1'), 'telephones/98765432')));
   });
 });

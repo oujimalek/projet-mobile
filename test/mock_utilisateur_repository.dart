@@ -213,10 +213,24 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<Utilisateur>> connexion(
-    String email,
+    String identifiant,
     String motDePasse,
   ) async {
-    final String texte = email.trim().toLowerCase();
+    // Comme Firebase : un numéro est d'abord traduit en e-mail
+    // (ici : le membre qui a ce numéro)
+    if (UtilisateurRepository.estUnNumero(identifiant)) {
+      final Utilisateur? titulaire = _titulaireDuNumero(identifiant);
+      if (titulaire == null || titulaire.email.isEmpty) {
+        return const Resultat.echec('Numéro ou mot de passe incorrect');
+      }
+      final Resultat<Utilisateur> resultat =
+          await connexion(titulaire.email, motDePasse);
+      if (resultat.erreur == 'E-mail ou mot de passe incorrect') {
+        return const Resultat.echec('Numéro ou mot de passe incorrect');
+      }
+      return resultat;
+    }
+    final String texte = identifiant.trim().toLowerCase();
     for (final Utilisateur membre in _membres) {
       if (membre.email.isNotEmpty &&
           membre.email.toLowerCase() == texte &&
@@ -246,6 +260,12 @@ class MockUtilisateurRepository implements UtilisateurRepository {
           membre.email.toLowerCase() == email.trim().toLowerCase()) {
         return const Resultat.echec('Un compte existe déjà avec cet e-mail');
       }
+    }
+    if (UtilisateurRepository.normaliserTelephone(telephone) == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
+    if (_titulaireDuNumero(telephone) != null) {
+      return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
     }
     // Le nom complet est découpé : premier mot = prénom, le reste = nom
     final List<String> mots = nomComplet.trim().split(' ');
@@ -347,6 +367,10 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     required List<String> competences,
     String avatar = '',
   }) async {
+    final Utilisateur? titulaire = _titulaireDuNumero(telephone);
+    if (titulaire != null && titulaire.id != _connecte.id) {
+      return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
+    }
     final List<String> mots = nomComplet.trim().split(' ');
     _remplacer(
       _connecte.copier(
@@ -596,6 +620,22 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   /// Le mot de passe redemandé est-il celui du compte connecté ?
   bool _bonMotDePasse(String motDePasse) {
     return _motsDePasse[_connecte.id] == motDePasse;
+  }
+
+  /// Le membre qui a ce numéro (null : numéro libre ou invalide).
+  /// Joue le rôle de la collection telephones/{numero} de Firebase.
+  Utilisateur? _titulaireDuNumero(String telephone) {
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return null;
+    }
+    for (final Utilisateur membre in _membres) {
+      if (UtilisateurRepository.normaliserTelephone(membre.telephone) ==
+          numero) {
+        return membre;
+      }
+    }
+    return null;
   }
 
   /// Les mots après le premier, recollés : ["Amira", "Ben", "Salah"] → "Ben Salah".

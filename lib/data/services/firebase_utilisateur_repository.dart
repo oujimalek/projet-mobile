@@ -29,6 +29,9 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       _base.collection('utilisateurs');
   CollectionReference<Map<String, dynamic>> get _quartiers =>
       _base.collection('quartiers');
+  // telephones/{8 chiffres} = {uid, email} : pour se connecter avec son numéro
+  CollectionReference<Map<String, dynamic>> get _telephones =>
+      _base.collection('telephones');
 
   /// Personne de connecté : un utilisateur vide.
   static const Utilisateur _invite = Utilisateur(
@@ -64,12 +67,25 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<Utilisateur>> connexion(
-    String email,
+    String identifiant,
     String motDePasse,
   ) async {
+    final bool parNumero = UtilisateurRepository.estUnNumero(identifiant);
     try {
+      String email = identifiant.trim();
+      if (parNumero) {
+        // Firebase Auth ne connaît que l'e-mail : on le retrouve grâce au numéro
+        final String? numero =
+            UtilisateurRepository.normaliserTelephone(identifiant);
+        final DocumentSnapshot<Map<String, dynamic>>? fiche =
+            numero == null ? null : await _telephones.doc(numero).get();
+        if (fiche == null || !fiche.exists) {
+          return const Resultat.echec('Numéro ou mot de passe incorrect');
+        }
+        email = fiche.data()!['email'] ?? '';
+      }
       final UserCredential credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
+        email: email,
         password: motDePasse,
       );
       final DocumentSnapshot<Map<String, dynamic>> document =
@@ -91,9 +107,15 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         );
       }
       await _memoriser(utilisateur);
+      // Comptes créés avant la connexion par numéro : on crée leur fiche
+      await _ajouterFicheTelephone(utilisateur);
       return Resultat.succes(utilisateur);
     } on FirebaseAuthException catch (e) {
-      return Resultat.echec(_messageAuth(e.code));
+      final String message = _messageAuth(e.code);
+      if (parNumero && message == 'E-mail ou mot de passe incorrect') {
+        return const Resultat.echec('Numéro ou mot de passe incorrect');
+      }
+      return Resultat.echec(message);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
     }
@@ -107,7 +129,16 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     required String motDePasse,
   }) async {
     User? compte;
+    final String? numero = UtilisateurRepository.normaliserTelephone(telephone);
+    if (numero == null) {
+      return const Resultat.echec('Numéro de téléphone invalide (8 chiffres)');
+    }
     try {
+      // 0. Le numéro doit être libre (lecture permise sans être connecté)
+      if ((await _telephones.doc(numero).get()).exists) {
+        return const Resultat.echec('Ce numéro est déjà utilisé par un autre compte');
+      }
+
       // 1. Le compte Firebase Auth (vérifie l'e-mail et le mot de passe)
       final UserCredential credential =
           await _auth.createUserWithEmailAndPassword(
@@ -130,7 +161,14 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         statut: StatutUtilisateur.enAttente,
         role: RoleUtilisateur.resident,
       );
-      await _utilisateurs.doc(compte.uid).set(nouveau.toMap());
+      // WriteBatch : le profil ET la fiche du numéro, tout ou rien
+      final WriteBatch lot = _base.batch();
+      lot.set(_utilisateurs.doc(compte.uid), nouveau.toMap());
+      lot.set(_telephones.doc(numero), {
+        'uid': compte.uid,
+        'email': nouveau.email,
+      });
+      await lot.commit();
 
       await _memoriser(nouveau);
 
@@ -332,9 +370,14 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       competences: competences,
       avatar: avatar,
     );
+    final String? ancienNumero =
+        UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+    final String? nouveauNumero =
+        UtilisateurRepository.normaliserTelephone(modifie.telephone);
     try {
+      final WriteBatch lot = _base.batch();
       // update : seulement ces champs (statut, rôle et quartier ne bougent pas)
-      await _utilisateurs.doc(modifie.id).update({
+      lot.update(_utilisateurs.doc(modifie.id), {
         'prenom': modifie.prenom,
         'nom': modifie.nom,
         'telephone': modifie.telephone,
@@ -342,6 +385,26 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'competences': modifie.competences,
         'avatar': modifie.avatar,
       });
+      // Nouveau numéro : la fiche suit (dans le même lot, tout ou rien)
+      if (nouveauNumero != ancienNumero) {
+        if (nouveauNumero != null) {
+          final DocumentSnapshot<Map<String, dynamic>> fiche =
+              await _telephones.doc(nouveauNumero).get();
+          if (fiche.exists && fiche.data()!['uid'] != modifie.id) {
+            return const Resultat.echec(
+              'Ce numéro est déjà utilisé par un autre compte',
+            );
+          }
+          lot.set(_telephones.doc(nouveauNumero), {
+            'uid': modifie.id,
+            'email': emailConnecte(),
+          });
+        }
+        if (ancienNumero != null && await _ficheEstAMoi(ancienNumero)) {
+          lot.delete(_telephones.doc(ancienNumero));
+        }
+      }
+      await lot.commit();
       await _memoriser(modifie);
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
@@ -391,9 +454,16 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
     try {
       final User compte = await _reauthentifier(motDePasse);
-      // D'abord le profil (il faut encore être connecté pour les règles),
-      // ensuite le compte Firebase Auth
-      await _utilisateurs.doc(compte.uid).delete();
+      // D'abord le profil et la fiche du numéro (il faut encore être
+      // connecté pour les règles), ensuite le compte Firebase Auth
+      final WriteBatch lot = _base.batch();
+      lot.delete(_utilisateurs.doc(compte.uid));
+      final String? numero =
+          UtilisateurRepository.normaliserTelephone(_connecte.telephone);
+      if (numero != null && await _ficheEstAMoi(numero)) {
+        lot.delete(_telephones.doc(numero));
+      }
+      await lot.commit();
       await compte.delete();
       _connecte = _invite;
       await _cache.vider();
@@ -675,9 +745,50 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
     try {
       await _utilisateurs.doc(compte.uid).update({'email': email});
-      return utilisateur.copier(email: email);
     } on FirebaseException {
       return utilisateur; // on réessaiera à la prochaine connexion
+    }
+    // La fiche du numéro doit donner la nouvelle adresse (sinon la
+    // connexion par numéro échouerait)
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(utilisateur.telephone);
+    if (numero != null) {
+      try {
+        await _telephones.doc(numero).update({'email': email});
+      } on FirebaseException {
+        // pas de fiche (ou celle d'un autre) : rien à recopier
+      }
+    }
+    return utilisateur.copier(email: email);
+  }
+
+  /// La fiche telephones/{numero} existe-t-elle, et est-elle à moi ?
+  /// (supprimer une fiche absente ou d'un autre ferait échouer tout le lot)
+  Future<bool> _ficheEstAMoi(String numero) async {
+    final DocumentSnapshot<Map<String, dynamic>> fiche =
+        await _telephones.doc(numero).get();
+    return fiche.exists && fiche.data()!['uid'] == _auth.currentUser?.uid;
+  }
+
+  /// Crée la fiche du numéro si elle manque (comptes créés avant la
+  /// connexion par numéro). Au mieux : en cas d'échec, on réessaiera.
+  Future<void> _ajouterFicheTelephone(Utilisateur utilisateur) async {
+    final String? numero =
+        UtilisateurRepository.normaliserTelephone(utilisateur.telephone);
+    if (numero == null) {
+      return;
+    }
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> fiche =
+          await _telephones.doc(numero).get();
+      if (!fiche.exists) {
+        await _telephones.doc(numero).set({
+          'uid': utilisateur.id,
+          'email': utilisateur.email,
+        });
+      }
+    } on FirebaseException {
+      // rien : la connexion par e-mail marche quand même
     }
   }
 

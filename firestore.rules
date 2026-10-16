@@ -130,6 +130,43 @@ service cloud.firestore {
         && resource.data.role != 'admin';
     }
 
+    // ===================== M1 · Numéros de téléphone =====================
+    // telephones/{8 chiffres} = {uid, email} : se connecter avec son numéro
+    // (Firebase Auth ne connaît que l'e-mail).
+    // get : oui, même SANS être connecté (c'est avant la connexion) ; en
+    // échange la fiche ne contient que l'uid et l'e-mail. list : jamais
+    // (impossible de récupérer tous les numéros).
+    match /telephones/{numero} {
+      // Le numéro de MON profil (après l'écriture : même lot), sans
+      // espaces, avec ou sans +216 / 00216
+      function numeroDeMonProfil() {
+        return getAfter(/databases/$(database)/documents/utilisateurs/$(monUid()))
+          .data.telephone.replace('[^0-9]', '')
+          .matches('^(00216|216)?' + numero + '$');
+      }
+
+      allow get: if true;
+      allow list: if false;
+
+      // Créer : la fiche n'existe pas encore (sinon c'est un update), elle
+      // pointe vers MOI, avec MON e-mail, et c'est le numéro de mon profil
+      allow create: if connecte()
+        && numero.matches('^[0-9]{8}$')
+        && request.resource.data.keys().hasOnly(['uid', 'email'])
+        && request.resource.data.uid == monUid()
+        && request.resource.data.email == request.auth.token.email
+        && numeroDeMonProfil();
+
+      // Après un changement d'e-mail : recopier la nouvelle adresse
+      allow update: if connecte()
+        && resource.data.uid == monUid()
+        && changeSeulement(['email'])
+        && request.resource.data.email == request.auth.token.email;
+
+      // Changer de numéro ou supprimer son compte : SA fiche seulement
+      allow delete: if connecte() && resource.data.uid == monUid();
+    }
+
     // ===================== M1 · Codes d'invitation =====================
     // get (lire LE code tapé) : oui. list (lister tous les codes) : non,
     // sauf l'admin, et seulement les codes de SON quartier (la requête doit

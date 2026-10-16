@@ -33,7 +33,7 @@ document d'une grande collection `services` ?
   le chemin.
 - **Moins d'index** à créer (voir section 7).
 
-Seuls `utilisateurs` et `codesQuartier` restent à la racine. Un compte en attente
+Seuls `utilisateurs`, `codesQuartier` et `telephones` restent à la racine. Un compte en attente
 peut encore changer de quartier, et on cherche un utilisateur par son `uid`.
 
 **Règle n°2 : on identifie les personnes par leur `uid`, pas par leur nom.**
@@ -65,6 +65,7 @@ peut donc confirmer qu'une seule fois.
 ```
 utilisateurs/{uid}                              M1  profil + statut + rôle
 codesQuartier/{code}                            M1  code d'invitation → quartier
+telephones/{numero}                             M1  numéro → e-mail (connexion)
 quartiers/{quartierId}                          M1  nom, localisation
   ├── services/{serviceId}                      M2
   ├── demandes/{demandeId}                      M2
@@ -216,6 +217,32 @@ L'identifiant du document **est** le code (ex. `YAS72B`).
 - **Écrire** : personne depuis l'app (console).
 
 Le code sert de raccourci. La vraie sécurité reste la **validation par l'admin**.
+
+### `telephones/{numero}` (connexion par téléphone)
+
+L'identifiant du document **est** le numéro, en 8 chiffres sans `+216`
+(ex. `22345678`). Firebase Auth ne connaît que l'e-mail : pour « numéro +
+mot de passe », l'app lit cette fiche, trouve l'e-mail, puis se connecte
+avec lui.
+
+| Champ | Type | Remarque |
+|---|---|---|
+| `uid` | string | Le propriétaire du numéro |
+| `email` | string | L'e-mail du compte (recopié, mis à jour s'il change) |
+
+- **Lire une fiche** (`get`) : tout le monde, **même sans être connecté**
+  (on n'est pas encore connecté quand on tape son numéro). Conséquence :
+  qui connaît un numéro peut voir l'e-mail lié. C'est le prix de la
+  connexion par numéro sans serveur.
+- **Lister** (`list`) : personne. On ne peut pas récupérer tous les numéros.
+- **Créer** : seulement pour soi (`uid`, e-mail du jeton) et seulement le
+  numéro écrit dans **son propre profil**. Un numéro déjà pris ne peut pas
+  être repris (la fiche existe déjà).
+- **Modifier** : seulement l'`email` de **sa** fiche. **Supprimer** : sa fiche.
+
+L'app écrit le profil et la fiche **dans le même envoi** (inscription,
+changement de numéro, suppression du compte). Les comptes créés avant
+reçoivent leur fiche à leur prochaine connexion par e-mail.
 
 ## 4. Module 2 · Services
 

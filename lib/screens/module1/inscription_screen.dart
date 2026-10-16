@@ -47,17 +47,6 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     super.dispose();
   }
 
-  /// Compte le nombre de chiffres dans un texte (pour le téléphone).
-  int _compterChiffres(String texte) {
-    int nombre = 0;
-    for (int i = 0; i < texte.length; i++) {
-      if ('0123456789'.contains(texte[i])) {
-        nombre++;
-      }
-    }
-    return nombre;
-  }
-
   String? _validerNom(String? valeur) {
     if (valeur == null || valeur.trim().isEmpty) {
       return 'Saisis ton nom complet';
@@ -72,7 +61,8 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     if (valeur == null || valeur.trim().isEmpty) {
       return 'Saisis ton numéro de téléphone';
     }
-    if (_compterChiffres(valeur) < 8) {
+    // 8 chiffres, avec ou sans +216 : le numéro sert aussi à se connecter
+    if (UtilisateurRepository.normaliserTelephone(valeur) == null) {
       return 'Numéro de téléphone invalide (8 chiffres)';
     }
     return null;
