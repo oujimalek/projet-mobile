@@ -13,6 +13,7 @@ import '../screens/module1/mot_de_passe_oublie_screen.dart';
 import '../screens/module1/parametres_screen.dart';
 import '../screens/module1/profil_edition_screen.dart';
 import '../screens/module1/profil_screen.dart';
+import '../screens/module1/tracer_limites_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
 import '../screens/module2/services_list_screen.dart';
 import '../screens/module3/create_signalement_screen.dart';
@@ -92,6 +93,14 @@ final GoRouter appRouter = GoRouter(
               builder: (context, state) {
                 return const MonQuartierScreen(); // M1
               },
+              routes: [
+                GoRoute(
+                  path: 'limites',
+                  builder: (context, state) {
+                    return const TracerLimitesScreen(); // M1 (admin)
+                  },
+                ),
+              ],
             ),
           ],
         ),

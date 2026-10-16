@@ -12,14 +12,16 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/secondary_button.dart';
+import 'carte_quartier.dart';
 import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : "Mon quartier".
 ///
 /// Nom, localisation et nombre de membres du quartier, sa carte
 /// (OpenStreetMap, si l'admin a saisi la position ou le contour),
-/// le code d'invitation (admin seulement) et le bouton
-/// "Changer de quartier" (résident actif seulement).
+/// le code d'invitation et "Tracer les limites" (admin seulement) et le
+/// bouton "Changer de quartier" (résident actif seulement).
+/// Sur la carte : mon quartier en pointillé rouge, les voisins en gris.
 class MonQuartierScreen extends StatefulWidget {
   const MonQuartierScreen({super.key});
 
@@ -40,6 +42,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
   Quartier? _quartier;
   int? _nbMembres; // null : pas encore chargé (ou échec)
   String? _code; // admin seulement
+  List<Quartier> _tousLesQuartiers = []; // pour dessiner les voisins
 
   @override
   void initState() {
@@ -56,6 +59,9 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
     if (moi.estAdmin) {
       code = await _repository.getCodeInvitation();
     }
+    // Les voisins sont un plus : en cas d'échec, on ne les dessine pas
+    final Resultat<List<Quartier>> quartiers =
+        await _repository.rechercherQuartiers('');
     if (!mounted) {
       return;
     }
@@ -65,7 +71,16 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
       _erreur = quartier.estSucces ? '' : quartier.erreur!;
       _nbMembres = membres.donnee;
       _code = code?.donnee;
+      _tousLesQuartiers = quartiers.donnee ?? [];
     });
+  }
+
+  /// Admin : ouvre l'écran de tracé, puis recharge si c'est enregistré.
+  Future<void> _tracerLimites() async {
+    final bool? enregistre = await context.push<bool>('/profil/quartier/limites');
+    if (enregistre == true && mounted) {
+      await _charger();
+    }
   }
 
   Future<void> _copierCode(String code) async {
@@ -105,6 +120,18 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
         contenu.add(const SizedBox(height: 16));
       }
       contenu.add(_carte(quartier));
+      if (moi.estAdmin) {
+        contenu.add(const SizedBox(height: 16));
+        contenu.add(
+          SecondaryButton(
+            texte: quartier.contour.length >= 3
+                ? 'Modifier les limites'
+                : 'Tracer les limites',
+            icone: Icons.draw_outlined,
+            onPressed: _tracerLimites,
+          ),
+        );
+      }
       // Un admin ne peut pas quitter son quartier (il en est responsable)
       if (!moi.estAdmin && moi.statut == StatutUtilisateur.actif) {
         contenu.add(const SizedBox(height: 24));
@@ -229,22 +256,16 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
       return const SizedBox(key: Key('carteQuartier'), height: 260);
     }
 
-    final List<LatLng> contour = [];
-    for (final PointGps point in quartier.contour) {
-      contour.add(LatLng(point.latitude, point.longitude));
-    }
+    final List<LatLng> contour = versLatLng(quartier.contour);
     // Centre : la position saisie, sinon le milieu du contour
-    LatLng centre;
-    if (quartier.position != null) {
-      centre = LatLng(quartier.position!.latitude, quartier.position!.longitude);
-    } else {
-      double lat = 0;
-      double lng = 0;
-      for (final LatLng point in contour) {
-        lat = lat + point.latitude;
-        lng = lng + point.longitude;
-      }
-      centre = LatLng(lat / contour.length, lng / contour.length);
+    final PointGps milieu = quartier.centre!;
+    final LatLng centre = LatLng(milieu.latitude, milieu.longitude);
+
+    // Les voisins d'abord (en gris), puis mon quartier par-dessus (en rouge)
+    final List<Polygon> polygones =
+        contoursVoisins(_tousLesQuartiers, quartier.id);
+    if (contour.length >= 3) {
+      polygones.add(contourRouge(contour));
     }
 
     return ClipRRect(
@@ -255,35 +276,19 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
         child: FlutterMap(
           options: MapOptions(initialCenter: centre, initialZoom: 15),
           children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              // Demandé par OpenStreetMap pour identifier l'application
-              userAgentPackageName: 'tn.esprit.houmani',
-            ),
-            if (contour.length >= 3)
-              PolygonLayer(
-                polygons: [
-                  Polygon(
-                    points: contour,
-                    color: AppColors.primary.withValues(alpha: 0.2),
-                    borderColor: AppColors.primary,
-                    borderStrokeWidth: 2,
-                  ),
-                ],
-              ),
+            fondOpenStreetMap(),
+            if (polygones.isNotEmpty) PolygonLayer(polygons: polygones),
             MarkerLayer(
               markers: [
                 Marker(
                   point: centre,
                   width: 40,
                   height: 40,
-                  child: Icon(Icons.location_on, color: AppColors.primary, size: 36),
+                  child: const Icon(Icons.location_on, color: rougeLimites, size: 36),
                 ),
               ],
             ),
-            const RichAttributionWidget(
-              attributions: [TextSourceAttribution('OpenStreetMap')],
-            ),
+            attributionOpenStreetMap(),
           ],
         ),
       ),

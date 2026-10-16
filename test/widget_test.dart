@@ -5,8 +5,11 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/cache_local.dart';
+import 'package:houmani/data/services/localisation.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
@@ -22,6 +25,7 @@ import 'package:houmani/screens/module1/mot_de_passe_oublie_screen.dart';
 import 'package:houmani/screens/module1/parametres_screen.dart';
 import 'package:houmani/screens/module1/profil_edition_screen.dart';
 import 'package:houmani/screens/module1/profil_screen.dart';
+import 'package:houmani/screens/module1/tracer_limites_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
 import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/create_signalement_screen.dart';
@@ -30,6 +34,7 @@ import 'package:houmani/screens/splash_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
 import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
+import 'package:houmani/widgets/primary_button.dart';
 
 import 'mock_utilisateur_repository.dart';
 
@@ -900,6 +905,9 @@ void main() {
   // -------------------------------------------------------------------
 
   group('Mon quartier', () {
+    // Le vrai GPS, remis après chaque test qui le remplace
+    final positionParDefaut = Localisation.positionActuelle;
+
     // Pas de vraie carte : elle téléchargerait des images sur Internet
     setUp(() {
       MonQuartierScreen.afficherCarte = false;
@@ -907,6 +915,7 @@ void main() {
 
     tearDown(() {
       MonQuartierScreen.afficherCarte = true;
+      Localisation.positionActuelle = positionParDefaut;
     });
 
     // Connecte un résident actif du quartier El Yasmine
@@ -947,6 +956,90 @@ void main() {
       expect(find.textContaining('membres'), findsOneWidget);
       expect(find.text('YAS72B'), findsNothing);
       expect(find.text('Changer de quartier'), findsOneWidget);
+      // Seul l'admin trace les limites
+      expect(find.text('Modifier les limites'), findsNothing);
+      expect(find.text('Tracer les limites'), findsNothing);
+    });
+
+    testWidgets('Admin : modifier les limites (annuler un coin, enregistrer)',
+        (WidgetTester tester) async {
+      appRouter.go('/profil/quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Modifier les limites'));
+      expect(find.byType(TracerLimitesScreen), findsOneWidget);
+      // On repart du contour actuel (4 coins)
+      expect(find.text('4 coins placés.'), findsOneWidget);
+
+      await toucher(tester, find.text('Annuler le dernier'));
+      expect(find.text('3 coins placés.'), findsOneWidget);
+
+      await toucher(tester, find.text('Enregistrer'));
+      expect(find.byType(MonQuartierScreen), findsOneWidget);
+      expect(find.text('Limites enregistrées'), findsOneWidget);
+      final quartier = (await mock.getQuartierConnecte()).donnee!;
+      expect(quartier.contour.length, 3);
+    });
+
+    testWidgets('Tracer les limites : impossible d\'enregistrer sous 3 coins',
+        (WidgetTester tester) async {
+      appRouter.go('/profil/quartier/limites');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Tout effacer'));
+      expect(find.textContaining('0/3 minimum'), findsOneWidget);
+      final PrimaryButton enregistrer =
+          tester.widget<PrimaryButton>(find.byType(PrimaryButton));
+      expect(enregistrer.onPressed, isNull);
+    });
+
+    testWidgets('Me localiser : sélectionne le quartier qui contient ma position',
+        (WidgetTester tester) async {
+      // Un point à l'intérieur du contour d'El Yasmine
+      Localisation.positionActuelle = () async {
+        return const Resultat.succes(PointGps(36.8625, 10.1700));
+      };
+      mock.ajouterCompte(compteSansQuartier(), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/code-quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Me localiser'));
+      expect(find.text('Tu es dans Résidence El Yasmine'), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+      final PrimaryButton rejoindre =
+          tester.widget<PrimaryButton>(find.byType(PrimaryButton));
+      expect(rejoindre.onPressed, isNotNull);
+    });
+
+    testWidgets('Me localiser : aucun quartier à cette position',
+        (WidgetTester tester) async {
+      Localisation.positionActuelle = () async {
+        return const Resultat.succes(PointGps(48.85, 2.35)); // Paris
+      };
+      mock.ajouterCompte(compteSansQuartier(), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/code-quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Me localiser'));
+      expect(find.textContaining('Aucun quartier trouvé à ta position'),
+          findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_checked), findsNothing);
+    });
+
+    testWidgets('Me localiser : GPS refusé → message',
+        (WidgetTester tester) async {
+      Localisation.positionActuelle = () async {
+        return const Resultat.echec('Autorise Houmani à utiliser ta position');
+      };
+      mock.ajouterCompte(compteSansQuartier(), 'secret123');
+      await mock.connexion('test@houmani.tn', 'secret123');
+      appRouter.go('/code-quartier');
+      await lancerApp(tester);
+
+      await toucher(tester, find.text('Me localiser'));
+      expect(find.text('Autorise Houmani à utiliser ta position'), findsOneWidget);
     });
 
     testWidgets('Quartier sans coordonnées : message à la place de la carte',

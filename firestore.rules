@@ -146,7 +146,16 @@ service cloud.firestore {
     // chercher un quartier AVANT d'être validé. Seuls nom/localisation y sont.
     match /quartiers/{q} {
       allow read: if connecte();
-      allow write: if false;
+      // Créer / supprimer un quartier : à la main dans la console
+      allow create, delete: if false;
+      // M1 : l'admin trace les limites de SON quartier (contour + centre),
+      // rien d'autre (ni le nom, ni la localisation)
+      allow update: if adminDe(q)
+        && changeSeulement(['contour', 'position'])
+        && request.resource.data.contour is list
+        && request.resource.data.contour.size() >= 3
+        && request.resource.data.contour.size() <= 100
+        && request.resource.data.position is latlng;
 
       // ---------- M2 · Services ----------
       match /services/{serviceId} {

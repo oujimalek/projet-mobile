@@ -42,6 +42,60 @@ class Quartier {
     return position != null || contour.isNotEmpty;
   }
 
+  /// Le centre sur la carte : la position saisie, sinon le milieu du
+  /// contour (null : ni l'un ni l'autre).
+  PointGps? get centre {
+    if (position != null) {
+      return position;
+    }
+    return milieu(contour);
+  }
+
+  /// La moyenne des points (null si la liste est vide).
+  static PointGps? milieu(List<PointGps> points) {
+    if (points.isEmpty) {
+      return null;
+    }
+    double lat = 0;
+    double lng = 0;
+    for (final PointGps point in points) {
+      lat = lat + point.latitude;
+      lng = lng + point.longitude;
+    }
+    return PointGps(lat / points.length, lng / points.length);
+  }
+
+  /// Le point est-il à l'intérieur du contour ? (false sans contour)
+  ///
+  /// Méthode du "rayon" : on trace une ligne horizontale depuis le point
+  /// et on compte combien de côtés du contour elle traverse. Impair :
+  /// le point est dedans ; pair : dehors.
+  bool contient(PointGps point) {
+    if (contour.length < 3) {
+      return false;
+    }
+    bool dedans = false;
+    int j = contour.length - 1;
+    for (int i = 0; i < contour.length; i++) {
+      final PointGps a = contour[i];
+      final PointGps b = contour[j];
+      final bool traverse = (a.latitude > point.latitude) !=
+          (b.latitude > point.latitude);
+      if (traverse) {
+        // Longitude où le côté [a, b] coupe la ligne du point
+        final double lngCroisement = a.longitude +
+            (point.latitude - a.latitude) /
+                (b.latitude - a.latitude) *
+                (b.longitude - a.longitude);
+        if (point.longitude < lngCroisement) {
+          dedans = !dedans;
+        }
+      }
+      j = i;
+    }
+    return dedans;
+  }
+
   /// Les champs enregistrés dans Firestore.
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> map = {

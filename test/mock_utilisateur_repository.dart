@@ -34,7 +34,8 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   );
 
   // Les quartiers que l'on peut rejoindre
-  static const List<Quartier> _quartiers = [
+  // Pas const : l'admin peut changer le contour (enregistrerContour)
+  final List<Quartier> _quartiers = [
     Quartier(
       id: 'q1',
       nom: 'Résidence El Yasmine',
@@ -503,6 +504,30 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       }
     }
     return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> enregistrerContour(List<PointGps> contour) async {
+    final String? refus = UtilisateurRepository.refusContour(_connecte, contour);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    for (int i = 0; i < _quartiers.length; i++) {
+      final Quartier ancien = _quartiers[i];
+      if (ancien.nom == _connecte.quartier) {
+        _quartiers[i] = Quartier(
+          id: ancien.id,
+          nom: ancien.nom,
+          localisation: ancien.localisation,
+          codeInvitation: ancien.codeInvitation,
+          nbMembres: ancien.nbMembres,
+          position: Quartier.milieu(contour),
+          contour: List.of(contour),
+        );
+        return const Resultat.succes(null);
+      }
+    }
+    return const Resultat.echec('Quartier introuvable');
   }
 
   // =====================================================================

@@ -193,6 +193,67 @@ void main() {
       expect(q.contour.length, 1);
     });
 
+    // Un carré : latitude 36.0 à 36.2, longitude 10.0 à 10.2
+    const Quartier carre = Quartier(
+      id: 'c1',
+      nom: 'Charguia 1',
+      localisation: 'Ariana',
+      contour: [
+        PointGps(36.0, 10.0),
+        PointGps(36.2, 10.0),
+        PointGps(36.2, 10.2),
+        PointGps(36.0, 10.2),
+      ],
+    );
+
+    test('contient : un point au milieu est dedans', () {
+      expect(carre.contient(const PointGps(36.1, 10.1)), true);
+    });
+
+    test('contient : des points à côté sont dehors', () {
+      expect(carre.contient(const PointGps(36.3, 10.1)), false); // au nord
+      expect(carre.contient(const PointGps(36.1, 10.3)), false); // à l'est
+      expect(carre.contient(const PointGps(35.9, 9.9)), false);
+    });
+
+    test('contient : forme en L (pas seulement des carrés)', () {
+      const Quartier enL = Quartier(
+        id: 'l',
+        nom: 'L',
+        localisation: '',
+        contour: [
+          PointGps(0, 0),
+          PointGps(2, 0),
+          PointGps(2, 1),
+          PointGps(1, 1),
+          PointGps(1, 2),
+          PointGps(0, 2),
+        ],
+      );
+      expect(enL.contient(const PointGps(0.5, 0.5)), true);
+      expect(enL.contient(const PointGps(1.5, 0.5)), true);
+      expect(enL.contient(const PointGps(1.5, 1.5)), false); // le "creux"
+    });
+
+    test('contient : faux sans contour (moins de 3 points)', () {
+      const Quartier sans = Quartier(id: 'x', nom: '', localisation: '');
+      expect(sans.contient(const PointGps(0, 0)), false);
+    });
+
+    test('centre : la position, sinon le milieu du contour', () {
+      expect(carre.centre!.latitude, closeTo(36.1, 1e-9));
+      expect(carre.centre!.longitude, closeTo(10.1, 1e-9));
+      const Quartier avecPosition = Quartier(
+        id: 'p',
+        nom: '',
+        localisation: '',
+        position: PointGps(1, 2),
+      );
+      expect(avecPosition.centre!.latitude, 1);
+      const Quartier rien = Quartier(id: 'r', nom: '', localisation: '');
+      expect(rien.centre, isNull);
+    });
+
     test('un contour seul suffit pour être sur la carte', () {
       const Quartier q = Quartier(
         id: 'q1',
@@ -483,6 +544,35 @@ void main() {
         await creerCompte();
         final Resultat<String?> r = await repo.getCodeInvitation();
         expect(r.estSucces, false);
+        expect(r.erreur, 'Action non autorisée');
+      });
+
+      const List<PointGps> triangle = [
+        PointGps(36.0, 10.0),
+        PointGps(36.3, 10.0),
+        PointGps(36.0, 10.3),
+      ];
+
+      test('enregistrerContour : l\'admin change les limites et le centre',
+          () async {
+        final Resultat<void> r = await repo.enregistrerContour(triangle);
+        expect(r.estSucces, true);
+        final Quartier q = (await repo.getQuartierConnecte()).donnee!;
+        expect(q.contour.length, 3);
+        expect(q.position!.latitude, closeTo(36.1, 1e-9));
+        expect(q.position!.longitude, closeTo(10.1, 1e-9));
+      });
+
+      test('enregistrerContour : au moins 3 points', () async {
+        final Resultat<void> r =
+            await repo.enregistrerContour(triangle.sublist(0, 2));
+        expect(r.estSucces, false);
+        expect(r.erreur, 'Place au moins 3 points sur la carte');
+      });
+
+      test('enregistrerContour est refusé à un résident', () async {
+        await creerCompte();
+        final Resultat<void> r = await repo.enregistrerContour(triangle);
         expect(r.erreur, 'Action non autorisée');
       });
 

@@ -185,7 +185,15 @@ la place de la carte (OpenStreetMap, aucune clé d'API).
 
 - **Lire** : tout compte connecté, même en attente (il faut chercher un
   quartier avant d'être validé). Seuls le nom et la localisation sont visibles.
-- **Écrire** : personne depuis l'app (création à la main, section 8).
+- **Créer / supprimer** : personne depuis l'app (création à la main, section 8).
+- **Modifier** : seulement l'admin du quartier, et seulement `contour`
+  (3 à 100 coins) et `position` (le milieu des coins), depuis l'écran
+  « Tracer les limites ». Le nom et la localisation restent dans la console.
+
+Un quartier = un document. Pour découper une zone (ex. « Charguia 1 » et
+« Charguia 2 »), on crée deux documents, chacun avec son code et son admin,
+qui trace ensuite ses limites. « Me localiser » (écran rejoindre un
+quartier) propose le quartier dont le contour contient la position GPS.
 
 `nbMembres` n'est calculable que par un membre actif. L'écran « rejoindre
 un quartier » affichera donc seulement la localisation (adaptation en phase 5).
@@ -424,7 +432,9 @@ Console → `utilisateurs` → le document de son compte → modifier
 valide ensuite tous les autres voisins depuis l'écran « Membres du quartier ».
 
 **Étape 4 (optionnelle) : placer le quartier sur la carte.**
-Console → `quartiers` → le document du quartier → *Ajouter un champ* :
+Le plus simple : l'admin ouvre « Mon quartier » → « Tracer les limites » et
+touche la carte à chaque coin. Ou à la main, console → `quartiers` → le
+document du quartier → *Ajouter un champ* :
 - `position`, type **geopoint** : latitude puis longitude du centre
   (ex. `36.8625` et `10.17`). Dans Google Maps, un clic droit sur un point
   affiche ses coordonnées.

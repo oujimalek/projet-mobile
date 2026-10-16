@@ -535,6 +535,30 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
+  @override
+  Future<Resultat<void>> enregistrerContour(List<PointGps> contour) async {
+    final String? refus = UtilisateurRepository.refusContour(_connecte, contour);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final List<GeoPoint> points = [];
+    for (final PointGps point in contour) {
+      points.add(GeoPoint(point.latitude, point.longitude));
+    }
+    final PointGps centre = Quartier.milieu(contour)!;
+    try {
+      // firestore.rules : seulement contour et position, par l'admin
+      await _quartiers.doc(_connecte.quartierId).update({
+        'contour': points,
+        'position': GeoPoint(centre.latitude, centre.longitude),
+      });
+      // Le cache sera rafraîchi au prochain getQuartierConnecte
+      return const Resultat.succes(null);
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
   // =====================================================================
   // Administration des membres
   // =====================================================================

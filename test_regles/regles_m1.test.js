@@ -19,6 +19,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  GeoPoint,
   getDocs,
   query,
   serverTimestamp,
@@ -475,5 +476,48 @@ describe('quartiers et codes d\'invitation', () => {
     const db = env.unauthenticatedContext().firestore();
     await assertFails(getDocs(collection(db, 'quartiers')));
     await assertFails(getDoc(doc(db, 'codesQuartier/YAS72B')));
+  });
+});
+
+describe('limites du quartier (contour)', () => {
+  // Un triangle autour de la Charguia
+  const limites = {
+    contour: [
+      new GeoPoint(36.84, 10.2),
+      new GeoPoint(36.85, 10.21),
+      new GeoPoint(36.84, 10.22),
+    ],
+    position: new GeoPoint(36.843, 10.21),
+  };
+
+  test('l\'admin trace les limites de SON quartier', async () => {
+    await assertSucceeds(updateDoc(doc(base('admin1'), 'quartiers/q1'), limites));
+  });
+
+  test('l\'admin ne trace pas les limites d\'un autre quartier', async () => {
+    await assertFails(updateDoc(doc(base('admin2'), 'quartiers/q1'), limites));
+  });
+
+  test('un résident ne trace pas les limites', async () => {
+    await assertFails(updateDoc(doc(base('actif1'), 'quartiers/q1'), limites));
+  });
+
+  test('l\'admin ne change pas le nom du quartier', async () => {
+    await assertFails(
+      updateDoc(doc(base('admin1'), 'quartiers/q1'), { ...limites, nom: 'Autre' }),
+    );
+  });
+
+  test('il faut au moins 3 coins', async () => {
+    await assertFails(
+      updateDoc(doc(base('admin1'), 'quartiers/q1'), {
+        contour: limites.contour.slice(0, 2),
+        position: limites.position,
+      }),
+    );
+  });
+
+  test('l\'admin ne supprime pas son quartier', async () => {
+    await assertFails(deleteDoc(doc(base('admin1'), 'quartiers/q1')));
   });
 });

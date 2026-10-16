@@ -60,6 +60,21 @@ abstract class UtilisateurRepository {
     return null;
   }
 
+  /// Pourquoi [utilisateur] ne peut pas enregistrer ce [contour] (null : il
+  /// peut). Mêmes conditions que firestore.rules.
+  static String? refusContour(Utilisateur utilisateur, List<PointGps> contour) {
+    if (!utilisateur.estAdmin || utilisateur.statut != StatutUtilisateur.actif) {
+      return 'Action non autorisée';
+    }
+    if (contour.length < 3) {
+      return 'Place au moins 3 points sur la carte';
+    }
+    if (contour.length > 100) {
+      return '100 points au maximum';
+    }
+    return null;
+  }
+
   // =====================================================================
   // Connexion et inscription (Firebase Auth : e-mail + mot de passe)
   // =====================================================================
@@ -169,6 +184,10 @@ abstract class UtilisateurRepository {
   /// Le code d'invitation du quartier, pour que l'admin le partage.
   /// Réservé à l'admin (`donnee == null` : aucun code trouvé).
   Future<Resultat<String?>> getCodeInvitation();
+
+  /// L'admin enregistre les limites de son quartier (au moins 3 coins,
+  /// au plus 100). Le centre est recalculé à partir des coins.
+  Future<Resultat<void>> enregistrerContour(List<PointGps> contour);
 
   // =====================================================================
   // Administration des membres

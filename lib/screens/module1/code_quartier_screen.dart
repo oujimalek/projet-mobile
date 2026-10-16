@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/quartier.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
+import '../../data/services/localisation.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
@@ -42,6 +43,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   List<Quartier> _quartiersTrouves = []; // résultat de la recherche
   String _erreurRecherche = ''; // ex : pas de réseau
   bool _enChargement = false; // true pendant l'envoi de la demande
+  bool _localisation = false; // true pendant la recherche GPS
 
   @override
   void initState() {
@@ -93,6 +95,59 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
       _quartierDuCode = quartier;
       _codeInconnu = quartier == null;
     });
+  }
+
+  /// "Me localiser" : sélectionne le quartier dont les limites
+  /// (tracées par son admin) contiennent ma position GPS.
+  Future<void> _meLocaliser() async {
+    setState(() {
+      _localisation = true;
+    });
+    final Resultat<PointGps> position = await Localisation.positionActuelle();
+    Quartier? trouve;
+    String message = '';
+    if (!position.estSucces) {
+      message = position.erreur!;
+    } else {
+      final Resultat<List<Quartier>> quartiers =
+          await _repository.rechercherQuartiers('');
+      if (!quartiers.estSucces) {
+        message = quartiers.erreur!;
+      } else {
+        for (final Quartier quartier in quartiers.donnee!) {
+          if (quartier.contient(position.donnee!)) {
+            trouve = quartier;
+            break;
+          }
+        }
+        if (trouve == null) {
+          message = 'Aucun quartier trouvé à ta position. '
+              'Demande le code à ton administrateur.';
+        } else if (_changement() &&
+            trouve.id == _repository.getUtilisateurConnecte().quartierId) {
+          message = 'Tu es dans ton quartier actuel';
+          trouve = null;
+        } else {
+          message = 'Tu es dans ${trouve.nom}';
+        }
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _localisation = false;
+      if (trouve != null) {
+        _quartierSelectionne = trouve;
+      }
+    });
+    if (trouve != null) {
+      // La liste ne montre plus que ce quartier (sélectionné)
+      _rechercheController.text = trouve.nom;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   /// Le quartier qui sera rejoint : celui du code s'il est complet,
@@ -235,7 +290,17 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                   icone: Icons.search,
                   controller: _rechercheController,
                 ),
-                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.my_location),
+                    label: Text(
+                      _localisation ? 'Localisation...' : 'Me localiser',
+                    ),
+                    onPressed: _localisation ? null : _meLocaliser,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 ..._listeQuartiers(),
                 const SizedBox(height: 24),
 
