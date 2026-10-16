@@ -9,6 +9,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/houmani_logo.dart';
 import '../../widgets/nail_divider.dart';
 import '../../widgets/primary_button.dart';
+import 'conditions_utilisation.dart';
 import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 3, connexion.
@@ -227,6 +228,29 @@ class _ConnexionScreenState extends State<ConnexionScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+
+          // ----- Pied de page : conditions + © -----
+          Center(
+            child: TextButton(
+              onPressed: () {
+                afficherConditions(context, avecAcceptation: false);
+              },
+              child: const Text(
+                'Conditions d\'utilisation',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          const Text(
+            copyrightHoumani,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 16),
         ],

@@ -12,6 +12,7 @@ import '../data/services/utilisateur_repository.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/houmani_logo.dart';
 import 'module1/widgets_module1.dart';
 
 /// Onglet "Accueil" : le tableau de bord du quartier.
@@ -97,6 +98,13 @@ class _AccueilScreenState extends State<AccueilScreen> {
       contenu.add(const SizedBox(height: 20));
     }
 
+    // ----- Profil incomplet : invitation à le compléter -----
+    final int pourcentage = _pourcentageProfil(utilisateur);
+    if (pourcentage < 100) {
+      contenu.add(_carteProfilIncomplet(pourcentage));
+      contenu.add(const SizedBox(height: 20));
+    }
+
     // ----- Raccourcis vers les modules -----
     contenu.add(_titre('Ta houma'));
     contenu.add(
@@ -141,6 +149,10 @@ class _AccueilScreenState extends State<AccueilScreen> {
       contenu.add(_carteService(service));
       contenu.add(const SizedBox(height: 10));
     }
+    contenu.add(const SizedBox(height: 14));
+
+    // ----- Astuce du jour -----
+    contenu.add(_carteAstuce());
 
     return Scaffold(
       body: ListView(
@@ -159,8 +171,65 @@ class _AccueilScreenState extends State<AccueilScreen> {
     );
   }
 
-  /// En-tête bleu cobalt : menu, salutation, quartier et avatar.
+  /// Le profil est-il complet ? 5 points : téléphone, e-mail, logement,
+  /// photo et compétences. Renvoie un pourcentage (0 à 100).
+  int _pourcentageProfil(Utilisateur utilisateur) {
+    int remplis = 0;
+    if (utilisateur.telephone.isNotEmpty) remplis++;
+    if (utilisateur.email.isNotEmpty) remplis++;
+    if (utilisateur.logement.isNotEmpty) remplis++;
+    if (utilisateur.avatar.isNotEmpty) remplis++;
+    if (utilisateur.competences.isNotEmpty) remplis++;
+    return remplis * 100 ~/ 5;
+  }
+
+  /// "Bonjour" en derja selon l'heure : matin, après-midi ou soir.
+  String _salutationDuMoment() {
+    final int heure = DateTime.now().hour;
+    if (heure >= 5 && heure < 12) {
+      return 'Sbah el khir';
+    }
+    if (heure >= 12 && heure < 18) {
+      return 'Nharek zin';
+    }
+    return 'Msa el khir';
+  }
+
+  /// La date du jour en toutes lettres : "vendredi 16 octobre".
+  String _dateDuJour() {
+    const List<String> jours = [
+      'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche',
+    ];
+    const List<String> mois = [
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+      'août', 'septembre', 'octobre', 'novembre', 'décembre',
+    ];
+    final DateTime aujourdhui = DateTime.now();
+    return '${jours[aujourdhui.weekday - 1]} ${aujourdhui.day} '
+        '${mois[aujourdhui.month - 1]}';
+  }
+
+  /// En-tête bleu cobalt : menu, salutation, quartier et avatar,
+  /// avec le logo en filigrane à droite (Stack).
   Widget _enTete(Utilisateur utilisateur) {
+    return Stack(
+      children: [
+        _fondEnTete(utilisateur),
+        const Positioned(
+          right: -24,
+          bottom: -18,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: 0.12,
+              child: HoumaniLogo(taille: 130, avecNom: false, blanc: true),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fondEnTete(Utilisateur utilisateur) {
     return Container(
       padding: EdgeInsets.fromLTRB(
         8,
@@ -201,6 +270,11 @@ class _AccueilScreenState extends State<AccueilScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  '${_salutationDuMoment()} · ${_dateDuJour()}',
+                  style: const TextStyle(color: AppColors.primaryLight),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   'Ahla ${utilisateur.prenom} !',
                   style: const TextStyle(
@@ -292,6 +366,105 @@ class _AccueilScreenState extends State<AccueilScreen> {
             ),
           ),
           const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+        ],
+      ),
+    );
+  }
+
+  /// Carte dorée : "Ton profil est complet à N %" + barre de progression.
+  Widget _carteProfilIncomplet(int pourcentage) {
+    return AppCard(
+      onTap: () async {
+        await context.push('/modifier-profil');
+        if (mounted) {
+          setState(() {}); // le profil a pu changer
+        }
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_outlined, color: AppColors.secondary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Ton profil est complet à $pourcentage %',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Text(
+                'Compléter',
+                style: TextStyle(
+                  color: AppColors.secondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: pourcentage / 100,
+              minHeight: 8,
+              color: AppColors.secondary,
+              backgroundColor: AppColors.secondaryLight,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ajoute ta photo et tes compétences : tes voisins sauront '
+            'qui tu es et comment tu peux les aider.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Une astuce différente chaque jour (choisie selon la date).
+  Widget _carteAstuce() {
+    const List<String> astuces = [
+      'Un voisin a besoin d\'aide ? Réponds à sa demande depuis Services.',
+      'Tu vois un lampadaire en panne ? Un signalement prend 30 secondes.',
+      'Vote au sondage du quartier : ton avis compte !',
+      'Ajoute tes compétences à ton profil pour qu\'on pense à toi.',
+      'Confirme les signalements de tes voisins pour qu\'ils soient traités plus vite.',
+      'Prête tes outils : c\'est le meilleur moyen de faire connaissance.',
+      'Note les services reçus pour aider tout le monde à bien choisir.',
+    ];
+    final DateTime aujourdhui = DateTime.now();
+    final int numero =
+        aujourdhui.difference(DateTime(aujourdhui.year)).inDays % astuces.length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lightbulb_outline, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Astuce du jour',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(astuces[numero], style: const TextStyle(height: 1.4)),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -9,6 +9,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/houmani_logo.dart';
 import '../../widgets/primary_button.dart';
+import 'conditions_utilisation.dart';
 import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 1, création de compte.
@@ -244,6 +245,17 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     );
   }
 
+  /// Ouvre les conditions ; "J'accepte" dans la fenêtre coche la case.
+  Future<void> _lireConditions() async {
+    final bool accepte = await afficherConditions(context);
+    if (accepte && mounted) {
+      setState(() {
+        _conditionsAcceptees = true;
+        _erreurConditions = false;
+      });
+    }
+  }
+
   /// Bloc bleu clair avec la case "J'accepte les conditions d'utilisation".
   Widget _caseConditions() {
     return Column(
@@ -276,21 +288,28 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
                     });
                   },
                 ),
-                const Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      text: 'J\'accepte les ',
-                      style: TextStyle(color: AppColors.textSecondary),
-                      children: [
-                        TextSpan(
-                          text: 'conditions d\'utilisation',
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text(
+                        'J\'accepte les ',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                      // Le lien ouvre les conditions à lire
+                      GestureDetector(
+                        onTap: _lireConditions,
+                        child: const Text(
+                          'conditions d\'utilisation',
                           style: TextStyle(
                             color: AppColors.secondary,
                             fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                            decorationColor: AppColors.secondary,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
