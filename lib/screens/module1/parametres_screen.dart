@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../theme/preference_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
@@ -23,6 +24,7 @@ const String versionHoumani = '1.0.0';
 ///   compte. Chaque action ouvre une fenêtre (showDialog) avec un Form ;
 ///   le mot de passe actuel est toujours redemandé (exigé par Firebase).
 /// - Apparence : thème comme le téléphone, clair ou sombre.
+/// - Langue : français ou derja (textes du module 1, voir tr()).
 /// - À propos : conditions d'utilisation, version, copyright.
 class ParametresScreen extends StatefulWidget {
   const ParametresScreen({super.key});
@@ -43,7 +45,8 @@ class _ParametresScreenState extends State<ParametresScreen> {
 
   static String? _validerMotDePasseActuel(String valeur, List<String> saisies) {
     if (valeur.isEmpty) {
-      return 'Saisis ton mot de passe actuel';
+      return tr('Saisis ton mot de passe actuel',
+          'Ekteb el mot de passe mte3ek tawa');
     }
     return null;
   }
@@ -53,17 +56,19 @@ class _ParametresScreenState extends State<ParametresScreen> {
     List<String> saisies,
   ) {
     if (valeur.length < 8) {
-      return 'Au moins 8 caractères';
+      return tr('Au moins 8 caractères', 'Mouch a9al men 8 7rouf');
     }
     if (valeur == saisies[0]) {
-      return 'Choisis un mot de passe différent de l\'actuel';
+      return tr('Choisis un mot de passe différent de l\'actuel',
+          'Ekhtar mot de passe ghir elli 3andek');
     }
     return null;
   }
 
   static String? _validerConfirmation(String valeur, List<String> saisies) {
     if (valeur != saisies[1]) {
-      return 'Les deux mots de passe ne sont pas identiques';
+      return tr('Les deux mots de passe ne sont pas identiques',
+          'Ezzouz mots de passe mouch kif kif');
     }
     return null;
   }
@@ -71,10 +76,10 @@ class _ParametresScreenState extends State<ParametresScreen> {
   static String? _validerNouvelEmail(String valeur, List<String> saisies) {
     final String texte = valeur.trim();
     if (texte.isEmpty) {
-      return 'Saisis la nouvelle adresse';
+      return tr('Saisis la nouvelle adresse', 'Ekteb el adresse ejdida');
     }
     if (!texte.contains('@') || !texte.contains('.')) {
-      return 'Adresse e-mail invalide';
+      return tr('Adresse e-mail invalide', 'El adresse e-mail ghalta');
     }
     return null;
   }
@@ -110,13 +115,22 @@ class _ParametresScreenState extends State<ParametresScreen> {
     final List<String>? saisies = await showDialog<List<String>>(
       context: context,
       builder: (context) {
-        return const DialogueSecurite(
-          titre: 'Changer le mot de passe',
-          texteBouton: 'Enregistrer',
+        return DialogueSecurite(
+          titre: tr('Changer le mot de passe', 'Badel el mot de passe'),
+          texteBouton: tr('Enregistrer', 'Sajjel'),
           champs: [
-            ChampSecurite('Mot de passe actuel', _validerMotDePasseActuel),
-            ChampSecurite('Nouveau mot de passe', _validerNouveauMotDePasse),
-            ChampSecurite('Confirmer le nouveau', _validerConfirmation),
+            ChampSecurite(
+              tr('Mot de passe actuel', 'El mot de passe tawa'),
+              _validerMotDePasseActuel,
+            ),
+            ChampSecurite(
+              tr('Nouveau mot de passe', 'Mot de passe jdid'),
+              _validerNouveauMotDePasse,
+            ),
+            ChampSecurite(
+              tr('Confirmer le nouveau', 'A3awed ekteb ejdid'),
+              _validerConfirmation,
+            ),
           ],
         );
       },
@@ -126,7 +140,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
     }
     await _executer(
       _repository.changerMotDePasse(saisies[0], saisies[1]),
-      'Mot de passe modifié',
+      tr('Mot de passe modifié', 'El mot de passe tbaddel'),
     );
   }
 
@@ -134,19 +148,26 @@ class _ParametresScreenState extends State<ParametresScreen> {
     final List<String>? saisies = await showDialog<List<String>>(
       context: context,
       builder: (context) {
-        return const DialogueSecurite(
-          titre: 'Changer l\'e-mail',
-          explication: 'Un lien de confirmation sera envoyé à la nouvelle '
-              'adresse. L\'e-mail changera quand tu cliqueras dessus ; '
-              'tu devras alors te reconnecter.',
-          texteBouton: 'Envoyer le lien',
+        return DialogueSecurite(
+          titre: tr('Changer l\'e-mail', 'Badel el e-mail'),
+          explication: tr(
+            'Un lien de confirmation sera envoyé à la nouvelle '
+                'adresse. L\'e-mail changera quand tu cliqueras dessus ; '
+                'tu devras alors te reconnecter.',
+            'Bech nab3thoulek lien 3al adresse ejdida. El e-mail '
+                'yetbaddel ki tenzel 3lih, w ba3d lazem todkhol men jdid.',
+          ),
+          texteBouton: tr('Envoyer le lien', 'Ab3ath el lien'),
           champs: [
             ChampSecurite(
-              'Nouvel e-mail',
+              tr('Nouvel e-mail', 'E-mail jdid'),
               _validerNouvelEmail,
               motDePasse: false,
             ),
-            ChampSecurite('Mot de passe actuel', _validerMotDePasseActuel),
+            ChampSecurite(
+              tr('Mot de passe actuel', 'El mot de passe tawa'),
+              _validerMotDePasseActuel,
+            ),
           ],
         );
       },
@@ -156,7 +177,8 @@ class _ParametresScreenState extends State<ParametresScreen> {
     }
     await _executer(
       _repository.changerEmail(saisies[0], saisies[1]),
-      'Lien envoyé à ${saisies[0].trim()}',
+      tr('Lien envoyé à ${saisies[0].trim()}',
+          'Ba3thna el lien l ${saisies[0].trim()}'),
     );
   }
 
@@ -164,14 +186,21 @@ class _ParametresScreenState extends State<ParametresScreen> {
     final List<String>? saisies = await showDialog<List<String>>(
       context: context,
       builder: (context) {
-        return const DialogueSecurite(
-          titre: 'Supprimer mon compte',
-          explication: 'Ton profil et ton compte seront effacés '
-              'définitivement. Cette action est irréversible.',
-          texteBouton: 'Supprimer',
+        return DialogueSecurite(
+          titre: tr('Supprimer mon compte', 'Fassa5 el compte mte3i'),
+          explication: tr(
+            'Ton profil et ton compte seront effacés '
+                'définitivement. Cette action est irréversible.',
+            'El profil w el compte mte3ek bech yetfass5ou nhar w lil. '
+                'Ma tnajjemch traja3hom.',
+          ),
+          texteBouton: tr('Supprimer', 'Fassa5'),
           danger: true,
           champs: [
-            ChampSecurite('Mot de passe actuel', _validerMotDePasseActuel),
+            ChampSecurite(
+              tr('Mot de passe actuel', 'El mot de passe tawa'),
+              _validerMotDePasseActuel,
+            ),
           ],
         );
       },
@@ -183,7 +212,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
     final GoRouter routeur = GoRouter.of(context);
     final bool supprime = await _executer(
       _repository.supprimerCompte(saisies[0]),
-      'Ton compte a été supprimé',
+      tr('Ton compte a été supprimé', 'El compte mte3ek tfassa5'),
     );
     if (supprime) {
       routeur.go('/connexion'); // go : plus de retour possible
@@ -195,7 +224,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
   Future<void> _verifierNumero() async {
     final bool verifie = await afficherDialogueSms(
       context,
-      titre: 'Vérifier mon numéro',
+      titre: tr('Vérifier mon numéro', 'Thabbet noumrouk'),
       numeroFixe: _repository.getUtilisateurConnecte().telephone,
       valider: _repository.verifierTelephone,
     );
@@ -204,8 +233,9 @@ class _ParametresScreenState extends State<ParametresScreen> {
     }
     setState(() {}); // la ligne affiche maintenant "Vérifié"
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Numéro vérifié : tu peux te connecter par SMS'),
+      SnackBar(
+        content: Text(tr('Numéro vérifié : tu peux te connecter par SMS',
+            'Noumrouk mthabbet : tnajjem todkhol b SMS')),
       ),
     );
   }
@@ -221,12 +251,12 @@ class _ParametresScreenState extends State<ParametresScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Paramètres'),
+          AppHeader(titre: tr('Paramètres', 'El paramètres')),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                _titreSection('SÉCURITÉ'),
+                _titreSection(tr('SÉCURITÉ', 'EL AMEN')),
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
@@ -235,8 +265,8 @@ class _ParametresScreenState extends State<ParametresScreen> {
                       _ligne(
                         icone: Icons.sms_outlined,
                         titre: telephoneVerifie
-                            ? 'Numéro vérifié'
-                            : 'Vérifier mon numéro',
+                            ? tr('Numéro vérifié', 'Noumrouk mthabbet')
+                            : tr('Vérifier mon numéro', 'Thabbet noumrouk'),
                         detail: telephone,
                         onTap: telephoneVerifie || telephone.isEmpty
                             ? null
@@ -248,20 +278,26 @@ class _ParametresScreenState extends State<ParametresScreen> {
                       Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.lock_outline,
-                        titre: 'Changer le mot de passe',
+                        titre: tr(
+                          'Changer le mot de passe',
+                          'Badel el mot de passe',
+                        ),
                         onTap: _changerMotDePasse,
                       ),
                       Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.alternate_email,
-                        titre: 'Changer l\'e-mail',
+                        titre: tr('Changer l\'e-mail', 'Badel el e-mail'),
                         detail: email,
                         onTap: _changerEmail,
                       ),
                       Divider(height: 1, color: AppColors.border),
                       _ligne(
                         icone: Icons.delete_outline,
-                        titre: 'Supprimer mon compte',
+                        titre: tr(
+                          'Supprimer mon compte',
+                          'Fassa5 el compte mte3i',
+                        ),
                         couleur: AppColors.error,
                         onTap: _supprimerCompte,
                       ),
@@ -271,7 +307,7 @@ class _ParametresScreenState extends State<ParametresScreen> {
                 if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 24),
 
-                _titreSection('APPARENCE'),
+                _titreSection(tr('APPARENCE', 'ECHAKL')),
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
@@ -279,33 +315,50 @@ class _ParametresScreenState extends State<ParametresScreen> {
                       _choixTheme(
                         ModeTheme.systeme,
                         Icons.brightness_auto_outlined,
-                        'Comme le téléphone',
+                        tr('Comme le téléphone', 'Kif el téléphone'),
                       ),
                       Divider(height: 1, color: AppColors.border),
                       _choixTheme(
                         ModeTheme.clair,
                         Icons.light_mode_outlined,
-                        'Clair',
+                        tr('Clair', 'Mdhawi'),
                       ),
                       Divider(height: 1, color: AppColors.border),
                       _choixTheme(
                         ModeTheme.sombre,
                         Icons.dark_mode_outlined,
-                        'Sombre',
+                        tr('Sombre', 'Mdhallem'),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                _titreSection('À PROPOS'),
+                _titreSection(tr('LANGUE', 'LOUGHA')),
+                AppCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      // Chaque langue est écrite dans sa propre langue
+                      _choixLangue(Langue.francais, 'Français'),
+                      Divider(height: 1, color: AppColors.border),
+                      _choixLangue(Langue.derja, 'Derja (tounsi)'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                _titreSection(tr('À PROPOS', '3LA EL APPLI')),
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     children: [
                       _ligne(
                         icone: Icons.description_outlined,
-                        titre: 'Conditions d\'utilisation',
+                        titre: tr(
+                          'Conditions d\'utilisation',
+                          'Chourout el isti3mal',
+                        ),
                         onTap: () {
                           afficherConditions(context, avecAcceptation: false);
                         },
@@ -359,6 +412,23 @@ class _ParametresScreenState extends State<ParametresScreen> {
         PreferenceTheme.choisir(mode);
       },
       fin: choisi
+          ? Icon(Icons.check, color: AppColors.secondary)
+          : const SizedBox(width: 24),
+    );
+  }
+
+  /// Une ligne du choix de langue : même présentation que le thème.
+  /// Le changement est immédiat (PreferenceLangue prévient HoumaniApp).
+  Widget _choixLangue(Langue langue, String titre) {
+    final bool choisie = PreferenceLangue.langue.value == langue;
+    return _ligne(
+      icone: Icons.translate,
+      titre: titre,
+      onTap: () {
+        PreferenceLangue.choisir(langue);
+        setState(() {}); // la coche change de ligne tout de suite
+      },
+      fin: choisie
           ? Icon(Icons.check, color: AppColors.secondary)
           : const SizedBox(width: 24),
     );
@@ -534,7 +604,7 @@ class _DialogueSecuriteState extends State<DialogueSecurite> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(tr('Annuler', 'Batel')),
         ),
         TextButton(
           onPressed: _valider,

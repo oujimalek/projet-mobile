@@ -21,6 +21,7 @@ class CacheLocal {
   static const String _cleUtilisateur = 'utilisateur';
   static const String _cleQuartier = 'quartier';
   static const String _cleTheme = 'theme';
+  static const String _cleLangue = 'langue';
 
   /// Dossier des fichiers Hive. null = dossier de l'application (cas normal).
   /// Les tests donnent un dossier temporaire.
@@ -168,11 +169,38 @@ class CacheLocal {
   }
 
   // =====================================================================
+  // Langue (français / derja)
+  // =====================================================================
+
+  /// Enregistre la langue choisie dans Paramètres (ex : "derja").
+  Future<void> enregistrerLangue(String langue) async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      await boite.put(_cleLangue, langue);
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+    }
+  }
+
+  /// La langue enregistrée, ou null s'il n'y en a pas.
+  Future<String?> lireLangue() async {
+    try {
+      final Box<dynamic> boite = await _ouvrir();
+      final dynamic brut = boite.get(_cleLangue);
+      return brut is String ? brut : null;
+    } catch (e) {
+      debugPrint('CacheLocal : $e');
+      return null;
+    }
+  }
+
+  // =====================================================================
   // Nettoyage
   // =====================================================================
 
   /// Efface le profil et le quartier (à la déconnexion : le téléphone peut
-  /// être partagé). Le thème est gardé : c'est un réglage du téléphone.
+  /// être partagé). Le thème et la langue sont gardés : ce sont des
+  /// réglages du téléphone.
   Future<void> vider() async {
     try {
       final Box<dynamic> boite = await _ouvrir();

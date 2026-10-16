@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
+import 'theme/preference_langue.dart';
 import 'theme/preference_theme.dart';
 
 // main est async : on attend que Firebase soit prêt avant d'afficher l'app.
@@ -17,6 +18,8 @@ Future<void> main() async {
   );
   // Le thème choisi la dernière fois (clair, sombre ou système)
   await PreferenceTheme.charger();
+  // La langue choisie la dernière fois (français ou derja)
+  await PreferenceLangue.charger();
   runApp(const HoumaniApp());
 }
 
@@ -42,6 +45,7 @@ class _HoumaniAppState extends State<HoumaniApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this); // écoute le téléphone
     PreferenceTheme.mode.addListener(_appliquerTheme); // écoute Paramètres
+    PreferenceLangue.langue.addListener(_appliquerLangue);
     // Premier affichage : on règle seulement la palette (rien à redessiner)
     AppColors.sombre = _doitEtreSombre();
   }
@@ -50,7 +54,15 @@ class _HoumaniAppState extends State<HoumaniApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     PreferenceTheme.mode.removeListener(_appliquerTheme);
+    PreferenceLangue.langue.removeListener(_appliquerLangue);
     super.dispose();
+  }
+
+  /// Nouvelle langue : les écrans relisent leurs textes avec tr().
+  void _appliquerLangue() {
+    if (mounted) {
+      reconstruireTout(context);
+    }
   }
 
   /// Le téléphone vient de passer en clair ou en sombre.

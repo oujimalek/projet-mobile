@@ -5,6 +5,7 @@ import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_drawer.dart';
 import 'widgets_module1.dart';
@@ -76,11 +77,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 // ----- Statistiques -----
                 Row(
                   children: [
-                    _carteStat('${utilisateur.servicesRendus}', 'Services\nrendus',
+                    _carteStat(
+                        '${utilisateur.servicesRendus}',
+                        tr('Services\nrendus', 'Services\n9adhitha'),
                         AppColors.secondary),
                     const SizedBox(width: 10),
                     _carteStat(utilisateur.noteMoyenne.toStringAsFixed(1),
-                        'Note\nmoyenne', AppColors.primary),
+                        tr('Note\nmoyenne', 'Noqtek\nel moyenne'),
+                        AppColors.primary),
                     const SizedBox(width: 10),
                     _carteStat('${utilisateur.nbSignalements}', 'Signalements\n',
                         AppColors.secondary),
@@ -89,9 +93,12 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(height: 20),
 
                 // ----- Compétences -----
-                const Text(
-                  'Compétences',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                Text(
+                  tr('Compétences', 'Chnowa ta3ref ta3mel'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 _competences(utilisateur),
@@ -113,7 +120,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
   /// En-tête blanc : titre, bouton "Modifier", avatar, nom et résidence.
   Widget _enTete(BuildContext context, Utilisateur utilisateur) {
-    final List<Widget> pastilles = [const Pastille(texte: 'Résident')];
+    final List<Widget> pastilles = [
+      Pastille(texte: tr('Résident', 'Mel houma')),
+    ];
     if (utilisateur.estAdmin) {
       pastilles.add(
         Pastille(
@@ -144,10 +153,13 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 onPressed: ouvrirMenu,
                 icon: const Icon(Icons.menu),
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Mon profil',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  tr('Mon profil', 'El profil mte3i'),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               GestureDetector(
@@ -155,7 +167,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   _ouvrirPuisRafraichir('/modifier-profil');
                 },
                 child: Pastille(
-                  texte: 'Modifier',
+                  texte: tr('Modifier', 'Badel'),
                   couleur: AppColors.secondary,
                   fond: AppColors.secondaryLight,
                 ),
@@ -262,8 +274,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
     if (utilisateur.estAdmin) {
       lignes.add(
         _ligneLien(
-          'Membres du quartier',
-          detail: _enAttente > 0 ? '$_enAttente en attente' : null,
+          tr('Membres du quartier', 'Sokkan el houma'),
+          detail: _enAttente > 0
+              ? tr('$_enAttente en attente', '$_enAttente yestannew')
+              : null,
           onTap: () {
             _ouvrirPuisRafraichir('/profil/membres');
           },
@@ -274,7 +288,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
     lignes.add(
       _ligneLien(
-        'Mon quartier',
+        tr('Mon quartier', 'Houmti'),
         onTap: () {
           _ouvrirPuisRafraichir('/profil/quartier');
         },
@@ -283,7 +297,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
     lignes.add(Divider(height: 1, color: AppColors.border));
     lignes.add(
       _ligneLien(
-        'Annuaire des voisins',
+        tr('Annuaire des voisins', 'Jirani'),
         onTap: () {
           _ouvrirPuisRafraichir('/profil/voisins');
         },
@@ -292,19 +306,30 @@ class _ProfilScreenState extends State<ProfilScreen> {
     lignes.add(Divider(height: 1, color: AppColors.border));
 
     // go : ces liens ouvrent l'onglet du module correspondant
-    lignes.add(_ligneLien('Mes services', onTap: () => context.go('/services')));
-    lignes.add(Divider(height: 1, color: AppColors.border));
     lignes.add(
-      _ligneLien('Mes signalements', onTap: () => context.go('/signalements')),
-    );
-    lignes.add(Divider(height: 1, color: AppColors.border));
-    lignes.add(
-      _ligneLien('Mes événements', onTap: () => context.go('/evenements')),
+      _ligneLien(
+        tr('Mes services', 'Services mte3i'),
+        onTap: () => context.go('/services'),
+      ),
     );
     lignes.add(Divider(height: 1, color: AppColors.border));
     lignes.add(
       _ligneLien(
-        'Paramètres',
+        tr('Mes signalements', 'Signalements mte3i'),
+        onTap: () => context.go('/signalements'),
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+    lignes.add(
+      _ligneLien(
+        tr('Mes événements', 'Événements mte3i'),
+        onTap: () => context.go('/evenements'),
+      ),
+    );
+    lignes.add(Divider(height: 1, color: AppColors.border));
+    lignes.add(
+      _ligneLien(
+        tr('Paramètres', 'El paramètres'),
         onTap: () {
           _ouvrirPuisRafraichir('/parametres');
         },

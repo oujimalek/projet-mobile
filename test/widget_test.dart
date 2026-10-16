@@ -34,6 +34,7 @@ import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
+import 'package:houmani/theme/preference_langue.dart';
 import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
 import 'package:houmani/widgets/primary_button.dart';
@@ -849,6 +850,17 @@ void main() {
     await toucher(tester, find.text('Paramètres'));
     expect(find.byType(ParametresScreen), findsOneWidget);
     expect(find.text(MockUtilisateurRepository.emailDemo), findsOneWidget);
+    // La version est tout en bas (sous la section Langue) : on défile
+    await tester.scrollUntilVisible(
+      find.text(versionHoumani),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text(versionHoumani), findsOneWidget);
   });
 
@@ -1102,12 +1114,66 @@ void main() {
       expect(AppColors.background, isNot(fondClair));
       expect(tester.widget<Divider>(find.byType(Divider).first).color,
           AppColors.border);
-      // La coche est sur "Sombre"
-      expect(find.byIcon(Icons.check), findsOneWidget);
+      // Deux coches : "Sombre" (thème) et "Français" (langue)
+      expect(find.byIcon(Icons.check), findsNWidgets(2));
 
       await toucher(tester, find.text('Clair'));
       expect(AppColors.sombre, isFalse);
       expect(AppColors.background, fondClair);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Langue : français / derja
+  // -------------------------------------------------------------------
+
+  group('Langue', () {
+    late Directory dossier;
+
+    setUp(() {
+      dossier = Directory.systemTemp.createTempSync('houmani_langue_');
+      PreferenceLangue.cache = CacheLocal(dossier: dossier.path);
+    });
+
+    // Réglage global : on remet le français pour les autres tests
+    tearDown(() {
+      PreferenceLangue.langue.value = Langue.francais;
+      PreferenceLangue.cache = CacheLocal();
+    });
+
+    test('tr donne le texte de la langue choisie', () {
+      expect(tr('Bonjour', 'Aslema'), 'Bonjour');
+      PreferenceLangue.langue.value = Langue.derja;
+      expect(tr('Bonjour', 'Aslema'), 'Aslema');
+    });
+
+    testWidgets('Paramètres : choisir Derja traduit l\'écran ouvert',
+        (WidgetTester tester) async {
+      appRouter.go('/parametres');
+      await lancerApp(tester);
+      expect(find.text('Paramètres'), findsOneWidget); // titre en haut
+
+      await toucher(tester, find.text('Derja (tounsi)'));
+      expect(PreferenceLangue.langue.value, Langue.derja);
+      // La liste a défilé jusqu'à la section Langue : on regarde le titre
+      // (toujours visible) et les sections proches
+      expect(find.text('El paramètres'), findsOneWidget);
+      expect(find.text('LOUGHA'), findsOneWidget);
+      expect(find.text('Mdhallem'), findsOneWidget);
+      expect(find.text('LANGUE'), findsNothing);
+
+      await toucher(tester, find.text('Français'));
+      expect(find.text('LANGUE'), findsOneWidget);
+      expect(find.text('Paramètres'), findsOneWidget);
+    });
+
+    testWidgets('Profil : les liens sont en derja', (WidgetTester tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      appRouter.go('/profil');
+      await lancerApp(tester);
+      expect(find.text('El profil mte3i'), findsOneWidget);
+      expect(find.text('Houmti'), findsOneWidget);
+      expect(find.text('Jirani'), findsOneWidget);
     });
   });
 

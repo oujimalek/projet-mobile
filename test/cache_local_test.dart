@@ -169,6 +169,18 @@ void main() {
       expect(await cache.lireTheme(), 'clair');
     });
 
+    test('langue : vide au départ, puis on relit le choix', () async {
+      expect(await cache.lireLangue(), isNull);
+      await cache.enregistrerLangue('derja');
+      expect(await cache.lireLangue(), 'derja');
+    });
+
+    test('vider garde la langue (réglage du téléphone)', () async {
+      await cache.enregistrerLangue('derja');
+      await cache.vider();
+      expect(await cache.lireLangue(), 'derja');
+    });
+
     test('les données restent sur le disque après fermer()', () async {
       await cache.enregistrerUtilisateur(amira);
       await cache.enregistrerQuartier(
