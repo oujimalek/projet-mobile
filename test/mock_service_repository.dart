@@ -56,6 +56,10 @@ class MockServiceRepository implements ServiceRepository {
     String? heureDebut,
     String? heureFin,
     DateTime? date,
+    bool modeRotation = false,
+    List<Utilisateur> participants = const [],
+    DateTime? rotationDepuis,
+    int rotationIndex = 0,
   }) {
     final Service service = Service(
       id: _nouvelId('s'),
@@ -71,10 +75,32 @@ class MockServiceRepository implements ServiceRepository {
       heureFin: heureFin,
       bloc: ServiceRepository.blocDe(auteur),
       datePublication: date ?? DateTime.now(),
+      modeRotation: modeRotation,
+      participantsIds: participants.map((u) => u.id).toList(),
+      participantsNoms: participants.map(ServiceRepository.nomCourt).toList(),
+      rotationDepuis: rotationDepuis,
+      rotationIndex: rotationIndex,
     );
     _services.add(service);
     _prevenir();
     return service;
+  }
+
+  /// Remplace un service (même id) : pour installer un état précis dans un test.
+  void mettreAJourService(Service service) {
+    final int index = _services.indexWhere((s) => s.id == service.id);
+    _services[index] = service;
+    _prevenir();
+  }
+
+  /// Un service par id (null s'il n'existe pas).
+  Service? serviceParId(String id) {
+    for (final Service service in _services) {
+      if (service.id == id) {
+        return service;
+      }
+    }
+    return null;
   }
 
   /// Ajoute directement une demande.
@@ -109,16 +135,22 @@ class MockServiceRepository implements ServiceRepository {
     String heureDebut = '18:00',
     String heureFin = '18:30',
     Utilisateur? inscrit,
+    String? id,
+    bool desiste = false,
+    bool rappelVeille = false,
   }) {
     final CreneauCommun creneau = CreneauCommun(
-      id: _nouvelId('k'),
+      id: id ?? _nouvelId('k'),
       serviceId: serviceId,
       titre: titre,
       date: DateTime(date.year, date.month, date.day),
       heureDebut: heureDebut,
       heureFin: heureFin,
       inscritId: inscrit?.id,
-      inscritNom: inscrit == null ? null : ServiceRepository.nomCourt(inscrit),
+      inscritNom: inscrit == null
+          ? (desiste ? CreneauCommun.marqueDesiste : null)
+          : ServiceRepository.nomCourt(inscrit),
+      rappelVeille: rappelVeille,
     );
     _creneaux.add(creneau);
     _prevenir();
@@ -288,8 +320,12 @@ class MockServiceRepository implements ServiceRepository {
     String? jour,
     String? heureDebut,
     String? heureFin,
+    bool modeRotation = false,
+    List<String> participantsIds = const [],
+    List<String> participantsNoms = const [],
   }) {
     return _ecrire<Service>((moi) async {
+      final bool rotation = estCommun && modeRotation;
       final String? refus = ServiceRepository.refusPublication(
         titre: titre,
         description: description,
@@ -298,13 +334,37 @@ class MockServiceRepository implements ServiceRepository {
         jour: jour,
         heureDebut: heureDebut,
         heureFin: heureFin,
+        modeRotation: rotation,
+        nbParticipants: participantsIds.length,
       );
       if (refus != null) {
         throw _Refus(refus);
       }
+      if (rotation) {
+        final String? refusListe =
+            ServiceRepository.refusParticipants(participantsIds, participantsNoms);
+        if (refusListe != null) {
+          throw _Refus(refusListe);
+        }
+      }
       final String dispo = (disponibilite ?? '').trim();
+      final String idService = _nouvelId('s');
+      final List<CreneauCommun> modeles = estCommun
+          ? ServiceRepository.genererCreneaux(
+              serviceId: idService,
+              titre: titre.trim(),
+              jour: jour!,
+              heureDebut: heureDebut!,
+              heureFin: heureFin!,
+              aujourdhui: DateTime.now(),
+            )
+          : const [];
       final Service service = Service(
-        id: _nouvelId('s'),
+        id: idService,
+        modeRotation: rotation,
+        participantsIds: rotation ? participantsIds : const [],
+        participantsNoms: rotation ? participantsNoms : const [],
+        rotationDepuis: modeles.isEmpty ? null : modeles.first.date,
         titre: titre.trim(),
         description: description.trim(),
         categorie: categorie,
@@ -325,25 +385,105 @@ class MockServiceRepository implements ServiceRepository {
           _services.remove(service); // retour arrière, comme Firebase
           throw _Refus('Une erreur est survenue');
         }
-        for (final CreneauCommun modele in ServiceRepository.genererCreneaux(
-          serviceId: service.id,
-          titre: service.titre,
-          jour: jour!,
-          heureDebut: heureDebut!,
-          heureFin: heureFin!,
-          aujourdhui: DateTime.now(),
-        )) {
-          _creneaux.add(CreneauCommun(
-            id: _nouvelId('k'),
-            serviceId: modele.serviceId,
-            titre: modele.titre,
-            date: modele.date,
-            heureDebut: modele.heureDebut,
-            heureFin: modele.heureFin,
-          ));
-        }
+        _creneaux.addAll(modeles);
       }
       return service;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> modifierParticipants(
+    String serviceId,
+    List<String> ids,
+    List<String> noms,
+  ) {
+    return _ecrire<void>((moi) async {
+      final String? refusListe = ServiceRepository.refusParticipants(ids, noms);
+      if (refusListe != null) {
+        throw _Refus(refusListe);
+      }
+      final Service? service = serviceParId(serviceId);
+      if (service == null) {
+        throw _Refus('Ce service n\'existe plus');
+      }
+      if (service.auteurId != moi.id) {
+        throw _Refus('Seul l\'auteur peut changer les participants');
+      }
+      if (!service.estCommun || !service.modeRotation) {
+        throw _Refus('Ce service n\'est pas en rotation automatique');
+      }
+      final AncreRotation ancre = ServiceRepository.nouvelleAncre(
+        service,
+        ids,
+        _creneaux.where((c) => c.serviceId == serviceId).toList(),
+        DateTime.now(),
+      );
+      mettreAJourService(service.copyWith(
+        participantsIds: ids,
+        participantsNoms: noms,
+        rotationDepuis: ancre.depuis,
+        rotationIndex: ancre.index,
+        toursFiges: ancre.toursFiges,
+      ));
+    });
+  }
+
+  @override
+  Future<Resultat<void>> marquerFait(String creneauId) {
+    return _ecrire<void>((moi) async {
+      final CreneauCommun? creneau = creneauParId(creneauId);
+      if (creneau == null) {
+        throw _Refus('Ce créneau n\'existe plus');
+      }
+      final Service? service = serviceParId(creneau.serviceId);
+      if (service == null) {
+        throw _Refus('Ce service n\'existe plus');
+      }
+      final DateTime maintenant = DateTime.now();
+      final String? refus =
+          ServiceRepository.refusFait(service, creneau, moi.id, maintenant);
+      if (refus != null) {
+        throw _Refus(refus);
+      }
+      final TourRotation? titulaire = ServiceRepository.titulaire(
+        service,
+        creneau,
+        ServiceRepository.calculerTours(
+          service,
+          _creneaux.where((c) => c.serviceId == service.id).toList(),
+        ),
+      );
+      mettreAJourService(service.copyWith(creneauxFaits: {
+        ...service.creneauxFaits,
+        creneauId: FaitCreneau(
+          faitLe: maintenant,
+          parId: titulaire?.id ?? '',
+          parNom: titulaire?.nom ?? '',
+        ),
+      }));
+    });
+  }
+
+  @override
+  Future<Resultat<int>> prolongerPlanning(String serviceId) {
+    return _ecrire<int>((moi) async {
+      final Service? service = serviceParId(serviceId);
+      if (service == null) {
+        throw _Refus('Ce service n\'existe plus');
+      }
+      if (service.auteurId != moi.id) {
+        throw _Refus('Seul l\'auteur peut prolonger le planning');
+      }
+      if (!service.estCommun) {
+        throw _Refus('Ce service n\'est pas un service commun');
+      }
+      final List<CreneauCommun> nouveaux = ServiceRepository.creneauxAProlonger(
+        service: service,
+        existants: _creneaux.where((c) => c.serviceId == serviceId).toList(),
+        aujourdhui: DateTime.now(),
+      );
+      _creneaux.addAll(nouveaux);
+      return nouveaux.length;
     });
   }
 
@@ -393,6 +533,13 @@ class MockServiceRepository implements ServiceRepository {
         disponibilite: dispo.isEmpty ? null : dispo,
         duree: ancien.duree,
         recuperation: ancien.recuperation,
+        modeRotation: ancien.modeRotation,
+        participantsIds: ancien.participantsIds,
+        participantsNoms: ancien.participantsNoms,
+        rotationDepuis: ancien.rotationDepuis,
+        rotationIndex: ancien.rotationIndex,
+        toursFiges: ancien.toursFiges,
+        creneauxFaits: ancien.creneauxFaits,
       );
     });
   }
@@ -591,8 +738,21 @@ class MockServiceRepository implements ServiceRepository {
       if (index == -1) {
         throw _Refus('Ce créneau n\'existe plus');
       }
-      final String? refus =
-          ServiceRepository.refusInscription(_creneaux[index], moi.id);
+      final CreneauCommun courant = _creneaux[index];
+      final Service? service = serviceParId(courant.serviceId);
+      TourRotation? tour;
+      if (service != null && service.modeRotation) {
+        tour = ServiceRepository.calculerTours(
+          service,
+          _creneaux.where((c) => c.serviceId == service.id).toList(),
+        )[courant.id];
+      }
+      final String? refus = ServiceRepository.refusInscription(
+        courant,
+        moi.id,
+        fait: service?.creneauxFaits.containsKey(courant.id) ?? false,
+        tour: tour,
+      );
       if (refus != null) {
         throw _Refus(refus);
       }
@@ -618,12 +778,16 @@ class MockServiceRepository implements ServiceRepository {
       if (index == -1) {
         throw _Refus('Ce créneau n\'existe plus');
       }
-      final String? refus =
-          ServiceRepository.refusDesinscription(_creneaux[index], moi.id);
+      final CreneauCommun ancien = _creneaux[index];
+      final Service? service = serviceParId(ancien.serviceId);
+      final String? refus = ServiceRepository.refusDesinscription(
+        ancien,
+        moi.id,
+        fait: service?.creneauxFaits.containsKey(ancien.id) ?? false,
+      );
       if (refus != null) {
         throw _Refus(refus);
       }
-      final CreneauCommun ancien = _creneaux[index];
       _creneaux[index] = CreneauCommun(
         id: ancien.id,
         serviceId: ancien.serviceId,
@@ -631,6 +795,10 @@ class MockServiceRepository implements ServiceRepository {
         date: ancien.date,
         heureDebut: ancien.heureDebut,
         heureFin: ancien.heureFin,
+        // Comme Firebase : marqueur de désistement dans un service en rotation
+        inscritNom: (service?.modeRotation ?? false)
+            ? CreneauCommun.marqueDesiste
+            : null,
       );
     });
   }

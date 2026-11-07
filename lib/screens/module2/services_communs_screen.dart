@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/creneau_commun.dart';
+import '../../data/models/service.dart';
+import '../../data/resultat.dart';
 import '../../data/services/service_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
+import 'bandeau_rappel.dart';
 import 'inscription_creneau_screen.dart';
 import 'module2_outils.dart';
 import 'module2_widgets.dart';
+import 'tours_en_direct.dart';
 
 /// M2 - Planning des services communs (écran 06).
 ///
 /// Une semaine (du lundi au dimanche) en haut, et en dessous les créneaux
 /// du jour choisi. On peut s'inscrire à un créneau libre.
 class ServicesCommunsScreen extends StatefulWidget {
-  const ServicesCommunsScreen({super.key});
+  /// Le jour affiché au départ (sa semaine est montrée). Par défaut : aujourd'hui.
+  final DateTime? jourInitial;
+
+  const ServicesCommunsScreen({super.key, this.jourInitial});
 
   @override
   State<ServicesCommunsScreen> createState() {
@@ -31,6 +38,11 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
   late final Stream<List<CreneauCommun>> _flux = _repository
       .ecouterCreneauxDeLaSemaine(_lundi);
 
+  // Les services (rotation, créneaux faits), en direct
+  late final Stream<List<Service>> _fluxServices = _repository.ecouterServices();
+
+  bool _enCours = false; // true pendant « Marquer fait »
+
   late final DateTime _aujourdhui; // aujourd'hui, sans l'heure
   late final DateTime _lundi; // premier jour de la semaine affichée
   late DateTime _jourChoisi; // jour dont on affiche les créneaux
@@ -40,17 +52,38 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
     super.initState();
     final DateTime maintenant = DateTime.now();
     _aujourdhui = DateTime(maintenant.year, maintenant.month, maintenant.day);
-    _lundi = DateTime(
-      _aujourdhui.year,
-      _aujourdhui.month,
-      _aujourdhui.day - (_aujourdhui.weekday - 1),
-    );
-    _jourChoisi = _aujourdhui; // aujourd'hui est choisi par défaut
+    final DateTime depart = widget.jourInitial == null
+        ? _aujourdhui
+        : DateTime(
+            widget.jourInitial!.year,
+            widget.jourInitial!.month,
+            widget.jourInitial!.day,
+          );
+    _lundi = DateTime(depart.year, depart.month, depart.day - (depart.weekday - 1));
+    _jourChoisi = depart; // aujourd'hui est choisi par défaut
   }
 
   /// Ouvre l'inscription à un créneau (le planning se met à jour tout seul).
   void _ouvrirInscription(CreneauCommun creneau) {
     ouvrirEcran(context, InscriptionCreneauScreen(creneauId: creneau.id));
+  }
+
+  /// « Marquer fait » (l'auteur du service seulement).
+  Future<void> _marquerFait(CreneauCommun creneau) async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.marquerFait(creneau.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Créneau marqué comme fait' : resultat.erreur!,
+    );
   }
 
   @override
@@ -59,44 +92,141 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
       body: Column(
         children: [
           _enTete(),
+          const BandeauRappel(),
           const SizedBox(height: 16),
           Expanded(
-            child: FluxM2<List<CreneauCommun>>(
-              flux: _flux,
-              construire: (context, semaine) {
-                final List<CreneauCommun> creneaux = [];
-                for (final creneau in semaine) {
-                  if (memeJour(creneau.date, _jourChoisi)) {
-                    creneaux.add(creneau);
-                  }
-                }
-                return Column(
-                  children: [
-                    _bandeauSemaine(semaine),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: creneaux.isEmpty
-                          ? MessageEtat(
-                              texte: semaine.isEmpty
-                                  ? 'Aucun service commun pour l\'instant. '
-                                      'Publie le premier !'
-                                  : 'Aucun créneau ce jour-là',
-                              icone: Icons.calendar_month_outlined,
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                              itemCount: creneaux.length,
-                              itemBuilder: (context, index) {
-                                return _carteCreneau(creneaux[index]);
-                              },
-                            ),
-                    ),
-                  ],
+            child: FluxM2<List<Service>>(
+              flux: _fluxServices,
+              construire: (context, services) {
+                return ToursEnDirect(
+                  services: services,
+                  construire: (context, donnees) {
+                    return FluxM2<List<CreneauCommun>>(
+                      flux: _flux,
+                      construire: (context, semaine) {
+                        return _corps(services, donnees, semaine);
+                      },
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// La semaine, puis les encarts « Prochain tour » et les créneaux du jour.
+  Widget _corps(
+    List<Service> services,
+    DonneesRotation donnees,
+    List<CreneauCommun> semaine,
+  ) {
+    final List<CreneauCommun> creneaux = [];
+    for (final creneau in semaine) {
+      if (memeJour(creneau.date, _jourChoisi)) {
+        creneaux.add(creneau);
+      }
+    }
+    final List<Widget> encarts = [];
+    for (final Service service in services) {
+      if (service.estCommun && service.modeRotation && service.participantsIds.isNotEmpty) {
+        final Widget? encart = _encartProchainsTours(service, donnees);
+        if (encart != null) {
+          encarts.add(encart);
+        }
+      }
+    }
+    return Column(
+      children: [
+        _bandeauSemaine(semaine),
+        const SizedBox(height: 16),
+        Expanded(
+          child: (creneaux.isEmpty && encarts.isEmpty)
+              ? MessageEtat(
+                  texte: semaine.isEmpty
+                      ? 'Aucun service commun pour l\'instant. '
+                          'Publie le premier !'
+                      : 'Aucun créneau ce jour-là',
+                  icone: Icons.calendar_month_outlined,
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    ...encarts,
+                    if (creneaux.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          'Aucun créneau ce jour-là',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                    for (final CreneauCommun creneau in creneaux)
+                      _carteCreneau(creneau, services, donnees),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  /// « Prochain tour de chacun » pour un service en rotation.
+  Widget? _encartProchainsTours(Service service, DonneesRotation donnees) {
+    final List<CreneauCommun>? liste = donnees.creneauxParService[service.id];
+    if (liste == null) {
+      return null; // pas encore chargé
+    }
+    final List<ProchainTour> prochains = ServiceRepository.prochainsTours(
+      service,
+      liste,
+      donnees.tours,
+      DateTime.now(),
+    );
+    final String moi = _repository.getMonId();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Prochain tour de chacun',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              service.titre,
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            for (int i = 0; i < prochains.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${i + 1}. ${prochains[i].participant.nom}'
+                        '${prochains[i].participant.id == moi ? ' (toi)' : ''}',
+                      ),
+                    ),
+                    Text(
+                      prochains[i].creneau == null
+                          ? '—'
+                          : dateCourte(prochains[i].creneau!.date),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -231,28 +361,99 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
     );
   }
 
-  /// La carte d'un créneau : titre, horaire, inscrit ou "Créneau libre".
-  Widget _carteCreneau(CreneauCommun creneau) {
+  /// La carte d'un créneau : titre, horaire, badge d'état, tour, boutons.
+  Widget _carteCreneau(
+    CreneauCommun creneau,
+    List<Service> services,
+    DonneesRotation donnees,
+  ) {
     final String moi = _repository.getMonId();
-    final bool estMoi = creneau.inscritId == moi;
+    final bool estMoi = creneau.inscritId != null && creneau.inscritId == moi;
+
+    Service? service;
+    for (final Service s in services) {
+      if (s.id == creneau.serviceId) {
+        service = s;
+      }
+    }
+    final FaitCreneau? fait = service?.creneauxFaits[creneau.id];
+    final bool estFait = fait != null;
+    final bool estAuteur =
+        service != null && service.auteurId.isNotEmpty && service.auteurId == moi;
+    final TourRotation? tour =
+        (service?.modeRotation ?? false) ? donnees.tours[creneau.id] : null;
+    final bool tourEstMoi = tour != null && tour.id == moi;
 
     // Un créneau d'un jour déjà passé ne se réserve plus
     final bool passe = creneau.date.isBefore(_aujourdhui);
+    // Un tour non confirmé est réservé à son titulaire (sauf désistement)
+    final bool reserve = creneau.estLibre &&
+        !creneau.estDesiste &&
+        tour != null &&
+        !tourEstMoi;
 
-    // Ce qui s'affiche sous l'horaire
+    // Ce qui s'affiche sous l'horaire (le marqueur de désistement ne
+    // s'affiche jamais : creneau.inscrit ne le renvoie pas)
     Widget statut;
-    if (passe) {
-      final String qui = creneau.estLibre ? '' : ' · ${estMoi ? 'Toi' : creneau.inscrit}';
-      statut = Text(
-        'Créneau passé$qui',
-        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+    if (fait != null) {
+      final String par = fait.parNom.isEmpty ? '' : 'par ${fait.parNom}';
+      statut = Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          PastilleTexte(
+            texte: 'Fait ✓',
+            couleur: AppColors.badgeResolu,
+            fond: AppColors.badgeResoluFond,
+          ),
+          if (par.isNotEmpty)
+            Text(
+              par,
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+        ],
+      );
+    } else if (passe) {
+      String qui = '';
+      if (!creneau.estLibre) {
+        qui = ' · ${estMoi ? 'Toi' : creneau.inscrit}';
+      } else if (tour != null && !creneau.estDesiste) {
+        qui = ' · Tour de ${tour.nom}';
+      }
+      statut = Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          PastilleTexte(
+            texte: 'À faire',
+            couleur: AppColors.badgeEnAttente,
+            fond: AppColors.badgeEnAttenteFond,
+          ),
+          Text(
+            'Créneau passé$qui',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ],
       );
     } else if (creneau.estLibre) {
-      statut = PastilleTexte(
-        texte: 'Créneau libre',
-        couleur: AppColors.badgeResolu,
-        fond: AppColors.badgeResoluFond,
-      );
+      if (tourEstMoi && !creneau.estDesiste) {
+        statut = PastilleTexte(
+          texte: 'C\'est ton tour',
+          couleur: AppColors.primary,
+          fond: AppColors.primaryLight,
+        );
+      } else if (reserve) {
+        statut = Text(
+          'Tour de ${tour.nom}',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        );
+      } else {
+        statut = PastilleTexte(
+          texte: 'Créneau libre',
+          couleur: AppColors.badgeResolu,
+          fond: AppColors.badgeResoluFond,
+        );
+      }
     } else if (estMoi) {
       statut = PastilleTexte(
         texte: 'Toi',
@@ -266,24 +467,45 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
       );
     }
 
-    // Le bouton à droite : S'inscrire (libre) ou Gérer (mon créneau)
-    Widget? bouton;
-    if (passe) {
-      bouton = null; // pas de bouton pour un créneau passé
-    } else if (creneau.estLibre) {
-      bouton = PrimaryButton(
-        texte: 'S\'inscrire',
-        onPressed: () {
-          _ouvrirInscription(creneau);
-        },
-      );
-    } else if (estMoi) {
-      bouton = SecondaryButton(
-        texte: 'Gérer',
-        onPressed: () {
-          _ouvrirInscription(creneau);
-        },
-      );
+    // Les boutons à droite : Confirmer / S'inscrire (libre), Gérer (mon
+    // créneau), Marquer fait (l'auteur du service, le jour même ou après)
+    final List<Widget> boutons = [];
+    if (!estFait) {
+      if (!passe) {
+        if (creneau.estLibre) {
+          if (tourEstMoi && !creneau.estDesiste) {
+            boutons.add(PrimaryButton(
+              texte: 'Confirmer',
+              onPressed: () {
+                _ouvrirInscription(creneau);
+              },
+            ));
+          } else if (!reserve) {
+            boutons.add(PrimaryButton(
+              texte: 'S\'inscrire',
+              onPressed: () {
+                _ouvrirInscription(creneau);
+              },
+            ));
+          }
+        } else if (estMoi) {
+          boutons.add(SecondaryButton(
+            texte: 'Gérer',
+            onPressed: () {
+              _ouvrirInscription(creneau);
+            },
+          ));
+        }
+      }
+      if (estAuteur && !creneau.date.isAfter(_aujourdhui)) {
+        if (boutons.isNotEmpty) {
+          boutons.add(const SizedBox(height: 6));
+        }
+        boutons.add(SecondaryButton(
+          texte: 'Marquer fait',
+          onPressed: _enCours ? null : () => _marquerFait(creneau),
+        ));
+      }
     }
 
     return Padding(
@@ -315,9 +537,12 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
                 ],
               ),
             ),
-            if (bouton != null) ...[
+            if (boutons.isNotEmpty) ...[
               const SizedBox(width: 12),
-              SizedBox(width: 120, child: bouton),
+              SizedBox(
+                width: 120,
+                child: Column(mainAxisSize: MainAxisSize.min, children: boutons),
+              ),
             ],
           ],
         ),

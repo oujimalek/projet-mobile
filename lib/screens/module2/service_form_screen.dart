@@ -8,6 +8,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
 import 'module2_widgets.dart';
+import 'participants_rotation_screen.dart';
 
 /// M2 - Nouvelle publication (écran 03) ou modification d'un service.
 ///
@@ -49,6 +50,8 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   TimeOfDay? _heureFin;
   String? _erreurCommun; // message sous la zone du service commun
   bool _enCours = false; // true pendant l'enregistrement
+  bool _rotation = false; // false = inscription libre, true = rotation automatique
+  List<ParticipantRotation> _participants = []; // dans l'ordre de passage
 
   bool get _modification => widget.service != null;
 
@@ -128,6 +131,23 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     });
   }
 
+  /// Ouvre le choix des participants de la rotation (minimum 1).
+  Future<void> _choisirParticipants() async {
+    final List<ParticipantRotation>? choisis =
+        await Navigator.of(context, rootNavigator: true).push<List<ParticipantRotation>>(
+      MaterialPageRoute<List<ParticipantRotation>>(
+        builder: (context) => ParticipantsRotationScreen(initiaux: _participants),
+      ),
+    );
+    if (choisis == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _participants = choisis;
+      _erreurCommun = null;
+    });
+  }
+
   /// Appelé quand on touche "Publier" (ou "Enregistrer").
   Future<void> _publier() async {
     // On vérifie les champs du Form, puis la catégorie et le service commun
@@ -141,6 +161,8 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             jour: _jour,
             heureDebut: _heureDebut == null ? null : _texteHeure(_heureDebut!),
             heureFin: _heureFin == null ? null : _texteHeure(_heureFin!),
+            modeRotation: _rotation,
+            nbParticipants: _participants.length,
           )
         : null;
     setState(() {
@@ -185,6 +207,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         jour: _jour,
         heureDebut: _heureDebut == null ? null : _texteHeure(_heureDebut!),
         heureFin: _heureFin == null ? null : _texteHeure(_heureFin!),
+        modeRotation: _commun && _rotation,
+        participantsIds: [for (final p in _participants) p.id],
+        participantsNoms: [for (final p in _participants) p.nom],
       );
     }
     if (!mounted) {
@@ -322,7 +347,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
       return Text(
         'Service commun : chaque ${service.jour}, '
         '${service.heureDebut ?? '?'} – ${service.heureFin ?? '?'} '
-        '(le jour et les heures ne sont pas modifiables)',
+        '(le jour et les heures ne sont pas modifiables). '
+        'Mode : ${service.modeRotation ? 'rotation automatique' : 'inscription libre'} '
+        '(non modifiable).',
         style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
       );
     }
@@ -394,6 +421,47 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          const _Etiquette('Mode du service commun'),
+          DeuxOnglets(
+            premier: 'Inscription libre',
+            second: 'Rotation automatique',
+            premierActif: !_rotation,
+            onChoix: (estPremier) {
+              setState(() {
+                _rotation = !estPremier;
+                _erreurCommun = null;
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _rotation
+                ? 'Les créneaux sont attribués à tour de rôle aux participants '
+                    'que tu choisis. Le mode ne pourra plus être changé.'
+                : 'Chaque voisin s\'inscrit au créneau de son choix.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          if (_rotation) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _choisirParticipants,
+              icon: const Icon(Icons.groups_outlined),
+              label: Text(
+                _participants.isEmpty
+                    ? 'Choisir les participants'
+                    : 'Participants (${_participants.length})',
+              ),
+            ),
+            for (int i = 0; i < _participants.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${i + 1}. ${_participants[i].nom}',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ),
+          ],
           if (_erreurCommun != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),

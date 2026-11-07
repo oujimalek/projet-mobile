@@ -215,9 +215,13 @@ class FirebaseServiceRepository implements ServiceRepository {
     String? jour,
     String? heureDebut,
     String? heureFin,
+    bool modeRotation = false,
+    List<String> participantsIds = const [],
+    List<String> participantsNoms = const [],
   }) {
     return ContexteM2.executer(() async {
       final Utilisateur utilisateur = ContexteM2.connecte();
+      final bool rotation = estCommun && modeRotation;
       final String? refus = ServiceRepository.refusPublication(
         titre: titre,
         description: description,
@@ -226,14 +230,35 @@ class FirebaseServiceRepository implements ServiceRepository {
         jour: jour,
         heureDebut: heureDebut,
         heureFin: heureFin,
+        modeRotation: rotation,
+        nbParticipants: participantsIds.length,
       );
       if (refus != null) {
         throw RefusM2(refus);
+      }
+      if (rotation) {
+        final String? refusListe =
+            ServiceRepository.refusParticipants(participantsIds, participantsNoms);
+        if (refusListe != null) {
+          throw RefusM2(refusListe);
+        }
       }
 
       final DocumentReference<Map<String, dynamic>> reference =
           ContexteM2.collection('services').doc();
       final String dispo = (disponibilite ?? '').trim();
+      // Les créneaux (ids fixes) sont préparés avant le service : en rotation,
+      // le cycle commence au premier créneau.
+      final List<CreneauCommun> creneaux = estCommun
+          ? ServiceRepository.genererCreneaux(
+              serviceId: reference.id,
+              titre: titre.trim(),
+              jour: jour!,
+              heureDebut: heureDebut!,
+              heureFin: heureFin!,
+              aujourdhui: DateTime.now(),
+            )
+          : const [];
       final Service service = Service(
         id: reference.id,
         titre: titre.trim(),
@@ -249,6 +274,11 @@ class FirebaseServiceRepository implements ServiceRepository {
         bloc: ServiceRepository.blocDe(utilisateur),
         datePublication: DateTime.now(),
         disponibilite: dispo.isEmpty ? null : dispo,
+        modeRotation: rotation,
+        participantsIds: rotation ? participantsIds : const [],
+        participantsNoms: rotation ? participantsNoms : const [],
+        rotationDepuis: creneaux.isEmpty ? null : creneaux.first.date,
+        rotationIndex: 0,
       );
       // 1) le service d'abord : les règles vérifient l'auteur des créneaux
       //    dans le service déjà enregistré
@@ -257,19 +287,11 @@ class FirebaseServiceRepository implements ServiceRepository {
       // 2) les créneaux des 4 prochaines semaines, en un seul batch
       if (estCommun) {
         try {
-          final List<CreneauCommun> creneaux = ServiceRepository.genererCreneaux(
-            serviceId: service.id,
-            titre: service.titre,
-            jour: jour!,
-            heureDebut: heureDebut!,
-            heureFin: heureFin!,
-            aujourdhui: DateTime.now(),
-          );
           final CollectionReference<Map<String, dynamic>> collection =
               ContexteM2.collection('creneaux');
           final WriteBatch batch = FirestoreCommun.base.batch();
           for (final CreneauCommun creneau in creneaux) {
-            batch.set(collection.doc(), creneau.toMap());
+            batch.set(collection.doc(creneau.id), creneau.toMap());
           }
           await batch.commit();
         } catch (_) {
@@ -575,18 +597,179 @@ class FirebaseServiceRepository implements ServiceRepository {
   @override
   Future<Resultat<ResumeAuteur>> getResumeAuteur(String auteurId) {
     return ContexteM2.executer(() async {
-      // average() et count() : Firebase calcule sur le serveur, sans
-      // renvoyer toutes les évaluations
-      final AggregateQuerySnapshot resultat = await ContexteM2.collection('evaluations')
-          .where('evalueId', isEqualTo: auteurId)
-          .aggregate(average('note'), count())
-          .get();
-      final int avis = resultat.count ?? 0;
-      return ResumeAuteur(
-        noteMoyenne: resultat.getAverage('note') ?? 0,
-        nombreAvis: avis,
-        servicesRendus: avis, // un service rendu est un service évalué
+      // Pas d'average()/count() : ils demandent un index composite
+      // (evalueId + note) absent de firestore.indexes.json. On lit les
+      // évaluations reçues (égalité sur un seul champ : index automatique)
+      // et on calcule la moyenne dans l'application.
+      final QuerySnapshot<Map<String, dynamic>> evaluations =
+          await ContexteM2.collection('evaluations')
+              .where('evalueId', isEqualTo: auteurId)
+              .get();
+      final List<num> notes = [];
+      for (final QueryDocumentSnapshot<Map<String, dynamic>> d in evaluations.docs) {
+        final Object? note = d.data()['note'];
+        if (note is num) {
+          notes.add(note);
+        }
+      }
+      return ServiceRepository.resumeDepuisNotes(notes);
+    });
+  }
+
+  // =====================================================================
+  // Rotation, « Fait » et prolongation (services communs)
+  // =====================================================================
+
+  /// Tous les créneaux d'un service (égalité sur serviceId : index automatique).
+  Future<List<CreneauCommun>> _creneauxDuService(String serviceId) async {
+    final QuerySnapshot<Map<String, dynamic>> s = await ContexteM2.collection('creneaux')
+        .where('serviceId', isEqualTo: serviceId)
+        .get();
+    return _lireCreneaux(s);
+  }
+
+  @override
+  Future<Resultat<void>> modifierParticipants(
+    String serviceId,
+    List<String> ids,
+    List<String> noms,
+  ) {
+    return ContexteM2.executer(() async {
+      final Utilisateur utilisateur = ContexteM2.connecte();
+      final String? refusListe = ServiceRepository.refusParticipants(ids, noms);
+      if (refusListe != null) {
+        throw RefusM2(refusListe);
+      }
+      final DocumentReference<Map<String, dynamic>> reference =
+          ContexteM2.collection('services').doc(serviceId);
+      final List<CreneauCommun> creneaux = await _creneauxDuService(serviceId);
+
+      final String? refus = await FirestoreCommun.base.runTransaction<String?>(
+        (transaction) async {
+          final DocumentSnapshot<Map<String, dynamic>> document =
+              await transaction.get(reference);
+          if (!document.exists) {
+            return 'Ce service n\'existe plus';
+          }
+          final Service service = Service.fromMap(document.id, document.data()!);
+          if (service.auteurId != utilisateur.id) {
+            return 'Seul l\'auteur peut changer les participants';
+          }
+          if (!service.estCommun || !service.modeRotation) {
+            return 'Ce service n\'est pas en rotation automatique';
+          }
+          final AncreRotation ancre = ServiceRepository.nouvelleAncre(
+            service,
+            ids,
+            creneaux,
+            DateTime.now(),
+          );
+          transaction.update(reference, {
+            'participantsIds': ids,
+            'participantsNoms': noms,
+            'rotationDepuis': ancre.depuis,
+            'rotationIndex': ancre.index,
+            'toursFiges': {
+              for (final entree in ancre.toursFiges.entries)
+                entree.key: entree.value.toMap(),
+            },
+          });
+          return null;
+        },
       );
+      if (refus != null) {
+        throw RefusM2(refus);
+      }
+    });
+  }
+
+  @override
+  Future<Resultat<void>> marquerFait(String creneauId) {
+    return ContexteM2.executer(() async {
+      final Utilisateur utilisateur = ContexteM2.connecte();
+      final DocumentSnapshot<Map<String, dynamic>> documentCreneau =
+          await ContexteM2.collection('creneaux').doc(creneauId).get();
+      if (!documentCreneau.exists) {
+        throw const RefusM2('Ce créneau n\'existe plus');
+      }
+      final CreneauCommun creneau =
+          CreneauCommun.fromMap(documentCreneau.id, documentCreneau.data()!);
+      final DocumentReference<Map<String, dynamic>> reference =
+          ContexteM2.collection('services').doc(creneau.serviceId);
+      final List<CreneauCommun> creneaux = await _creneauxDuService(creneau.serviceId);
+
+      final String? refus = await FirestoreCommun.base.runTransaction<String?>(
+        (transaction) async {
+          final DocumentSnapshot<Map<String, dynamic>> document =
+              await transaction.get(reference);
+          if (!document.exists) {
+            return 'Ce service n\'existe plus';
+          }
+          final Service service = Service.fromMap(document.id, document.data()!);
+          final DateTime maintenant = DateTime.now();
+          final String? motif =
+              ServiceRepository.refusFait(service, creneau, utilisateur.id, maintenant);
+          if (motif != null) {
+            return motif;
+          }
+          final TourRotation? titulaire = ServiceRepository.titulaire(
+            service,
+            creneau,
+            ServiceRepository.calculerTours(service, creneaux),
+          );
+          // Écrit dans la map creneauxFaits du SERVICE (règle services.update :
+          // l'auteur modifie son service). Le créneau lui-même ne change pas.
+          transaction.update(reference, {
+            'creneauxFaits.$creneauId': FaitCreneau(
+              faitLe: maintenant,
+              parId: titulaire?.id ?? '',
+              parNom: titulaire?.nom ?? '',
+            ).toMap(),
+          });
+          return null;
+        },
+      );
+      if (refus != null) {
+        throw RefusM2(refus);
+      }
+    });
+  }
+
+  @override
+  Future<Resultat<int>> prolongerPlanning(String serviceId) {
+    return ContexteM2.executer(() async {
+      final Utilisateur utilisateur = ContexteM2.connecte();
+      final DocumentSnapshot<Map<String, dynamic>> document =
+          await ContexteM2.collection('services').doc(serviceId).get();
+      if (!document.exists) {
+        throw const RefusM2('Ce service n\'existe plus');
+      }
+      final Service service = Service.fromMap(document.id, document.data()!);
+      if (service.auteurId != utilisateur.id) {
+        throw const RefusM2('Seul l\'auteur peut prolonger le planning');
+      }
+      if (!service.estCommun) {
+        throw const RefusM2('Ce service n\'est pas un service commun');
+      }
+      final List<CreneauCommun> existants = await _creneauxDuService(serviceId);
+      final List<CreneauCommun> nouveaux = ServiceRepository.creneauxAProlonger(
+        service: service,
+        existants: existants,
+        aujourdhui: DateTime.now(),
+      );
+      if (nouveaux.isEmpty) {
+        return 0;
+      }
+      // Ids fixes (serviceId_AAAAMMJJ) : un 2e appui ne crée aucun doublon.
+      // Créneaux libres : la règle creneaux.create l'autorise à l'auteur.
+      final CollectionReference<Map<String, dynamic>> collection =
+          ContexteM2.collection('creneaux');
+      final WriteBatch batch = FirestoreCommun.base.batch();
+      for (final CreneauCommun creneau in nouveaux) {
+        batch.set(collection.doc(creneau.id), creneau.toMap());
+      }
+      await batch.commit();
+      return nouveaux.length;
     });
   }
 
@@ -656,6 +839,25 @@ class FirebaseServiceRepository implements ServiceRepository {
       final DocumentReference<Map<String, dynamic>> reference =
           ContexteM2.collection('creneaux').doc(creneauId);
 
+      // Avant la transaction : le tour calculé (service en rotation) pour
+      // réserver un tour non confirmé à son titulaire.
+      Map<String, TourRotation> tours = const {};
+      final DocumentSnapshot<Map<String, dynamic>> avant = await reference.get();
+      if (avant.exists) {
+        final String serviceId = (avant.data()!['serviceId'] ?? '').toString();
+        final DocumentSnapshot<Map<String, dynamic>> serviceDoc =
+            await ContexteM2.collection('services').doc(serviceId).get();
+        if (serviceDoc.exists) {
+          final Service service = Service.fromMap(serviceDoc.id, serviceDoc.data()!);
+          if (service.modeRotation) {
+            tours = ServiceRepository.calculerTours(
+              service,
+              await _creneauxDuService(serviceId),
+            );
+          }
+        }
+      }
+
       final String? refus = await FirestoreCommun.base.runTransaction<String?>(
         (transaction) async {
           final DocumentSnapshot<Map<String, dynamic>> document =
@@ -665,8 +867,20 @@ class FirebaseServiceRepository implements ServiceRepository {
           }
           final CreneauCommun creneau =
               CreneauCommun.fromMap(document.id, document.data()!);
-          final String? motif =
-              ServiceRepository.refusInscription(creneau, utilisateur.id);
+          final DocumentSnapshot<Map<String, dynamic>> serviceDoc =
+              await transaction.get(
+            ContexteM2.collection('services').doc(creneau.serviceId),
+          );
+          final bool fait = serviceDoc.exists &&
+              Service.fromMap(serviceDoc.id, serviceDoc.data()!)
+                  .creneauxFaits
+                  .containsKey(creneau.id);
+          final String? motif = ServiceRepository.refusInscription(
+            creneau,
+            utilisateur.id,
+            fait: fait,
+            tour: tours[creneau.id],
+          );
           if (motif != null) {
             return motif;
           }
@@ -700,14 +914,29 @@ class FirebaseServiceRepository implements ServiceRepository {
           }
           final CreneauCommun creneau =
               CreneauCommun.fromMap(document.id, document.data()!);
-          final String? motif =
-              ServiceRepository.refusDesinscription(creneau, utilisateur.id);
+          final DocumentSnapshot<Map<String, dynamic>> serviceDoc =
+              await transaction.get(
+            ContexteM2.collection('services').doc(creneau.serviceId),
+          );
+          final Service? service = serviceDoc.exists
+              ? Service.fromMap(serviceDoc.id, serviceDoc.data()!)
+              : null;
+          final String? motif = ServiceRepository.refusDesinscription(
+            creneau,
+            utilisateur.id,
+            fait: service?.creneauxFaits.containsKey(creneau.id) ?? false,
+          );
           if (motif != null) {
             return motif;
           }
+          // Service en rotation : le marqueur dit « libre pour tous, sans tour ».
+          // La règle creneaux.update n'impose rien sur inscritNom quand inscritId
+          // passe à null.
           transaction.update(reference, {
             'inscritId': null,
-            'inscritNom': null,
+            'inscritNom': (service?.modeRotation ?? false)
+                ? CreneauCommun.marqueDesiste
+                : null,
             'rappelVeille': false,
           });
           return null;

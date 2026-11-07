@@ -11,6 +11,7 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import 'module2_outils.dart';
 import 'module2_widgets.dart';
+import 'participants_rotation_screen.dart';
 import 'service_form_screen.dart';
 import 'services_communs_screen.dart';
 
@@ -163,6 +164,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               ),
               const SizedBox(height: 16),
               ..._infos(service),
+              if (service.estCommun) ..._carteParticipants(service),
               _CarteAuteur(
                 key: ValueKey(service.auteurId),
                 service: service,
@@ -222,14 +224,23 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           : '';
       lignes.add(_ligneInfo(Icons.repeat, 'Chaque semaine', '${service.jour}$horaire'));
     }
-    if (service.disponibilite != null) {
-      lignes.add(_ligneInfo(Icons.event_available_outlined, 'Disponibilité', service.disponibilite!));
+    // Une ligne vide (absente, "" ou seulement des espaces) n'est pas affichée
+    if (service.disponibilite?.trim().isNotEmpty ?? false) {
+      lignes.add(_ligneInfo(
+        Icons.event_available_outlined,
+        'Disponibilité',
+        service.disponibilite!.trim(),
+      ));
     }
-    if (service.duree != null) {
-      lignes.add(_ligneInfo(Icons.timer_outlined, 'Durée', service.duree!));
+    if (service.duree?.trim().isNotEmpty ?? false) {
+      lignes.add(_ligneInfo(Icons.timer_outlined, 'Durée', service.duree!.trim()));
     }
-    if (service.recuperation != null) {
-      lignes.add(_ligneInfo(Icons.place_outlined, 'Récupération', service.recuperation!));
+    if (service.recuperation?.trim().isNotEmpty ?? false) {
+      lignes.add(_ligneInfo(
+        Icons.place_outlined,
+        'Récupération',
+        service.recuperation!.trim(),
+      ));
     }
     if (lignes.isEmpty) {
       return [];
@@ -239,6 +250,118 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       AppCard(child: Column(children: lignes)),
       const SizedBox(height: 16),
     ];
+  }
+
+  /// Service commun : le mode (libre ou rotation) et, en rotation, les
+  /// participants dans l'ordre de passage. L'auteur peut les modifier.
+  List<Widget> _carteParticipants(Service service) {
+    final bool estMonService =
+        service.auteurId.isNotEmpty && service.auteurId == _repository.getMonId();
+    if (!service.modeRotation) {
+      return [
+        AppCard(
+          child: _ligneInfo(Icons.event_note_outlined, 'Mode', 'Inscription libre'),
+        ),
+        const SizedBox(height: 16),
+      ];
+    }
+    final List<TourRotation> participants = service.participants;
+    return [
+      AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ligneInfo(Icons.autorenew, 'Mode', 'Rotation automatique'),
+            const SizedBox(height: 6),
+            const Text(
+              'Ordre de passage',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            if (participants.isEmpty)
+              Text(
+                'Aucun participant',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            for (int i = 0; i < participants.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(
+                  '${i + 1}. ${participants[i].nom}',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            if (estMonService) ...[
+              const SizedBox(height: 10),
+              SecondaryButton(
+                texte: 'Modifier les participants',
+                icone: Icons.groups_outlined,
+                onPressed: _enCours ? null : () => _modifierParticipants(service),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  /// L'auteur ajoute, retire ou réordonne les participants.
+  Future<void> _modifierParticipants(Service service) async {
+    final List<ParticipantRotation>? choisis = await ouvrirEcran<List<ParticipantRotation>>(
+      context,
+      ParticipantsRotationScreen(
+        minimum: 0,
+        initiaux: [
+          for (final TourRotation p in service.participants)
+            ParticipantRotation(id: p.id, nom: p.nom),
+        ],
+      ),
+    );
+    if (choisis == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.modifierParticipants(
+      service.id,
+      [for (final p in choisis) p.id],
+      [for (final p in choisis) p.nom],
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Participants enregistrés' : resultat.erreur!,
+    );
+  }
+
+  /// L'auteur prolonge le planning de 4 semaines.
+  Future<void> _prolonger(Service service) async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<int> resultat = await _repository.prolongerPlanning(service.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    String message;
+    if (!resultat.estSucces) {
+      message = resultat.erreur!;
+    } else if (resultat.donnee == 0) {
+      message = 'Le planning est déjà à jour';
+    } else {
+      message = '${resultat.donnee} créneaux ajoutés';
+    }
+    afficherMessage(context, message);
   }
 
   Widget _ligneInfo(IconData icone, String titre, String valeur) {
@@ -299,6 +422,14 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 
     if (service.estCommun) {
       if (contenu.isNotEmpty) {
+        contenu.add(const SizedBox(height: 12));
+      }
+      if (estMonService) {
+        contenu.add(SecondaryButton(
+          texte: 'Prolonger le planning (+4 semaines)',
+          icone: Icons.add_circle_outline,
+          onPressed: _enCours ? null : () => _prolonger(service),
+        ));
         contenu.add(const SizedBox(height: 12));
       }
       contenu.add(PrimaryButton(
@@ -427,13 +558,16 @@ class _CarteAuteurState extends State<_CarteAuteur> {
         final Resultat<ResumeAuteur>? resultat = instantane.data;
         if (resultat != null && resultat.estSucces) {
           final ResumeAuteur resume = resultat.donnee!;
-          final String texteNote = resume.nombreAvis == 0
-              ? 'Pas encore noté'
-              : '${resume.noteMoyenne.toStringAsFixed(1)} (${resume.nombreAvis} avis)';
-          final String texteRendus = resume.servicesRendus <= 1
-              ? '${resume.servicesRendus} service rendu'
-              : '${resume.servicesRendus} services rendus';
-          texte = '$texteNote · $texteRendus';
+          if (resume.nombreAvis == 0) {
+            texte = 'Pas encore d\'avis';
+          } else {
+            final String texteNote =
+                '${resume.noteMoyenne.toStringAsFixed(1)} (${resume.nombreAvis} avis)';
+            final String texteRendus = resume.servicesRendus <= 1
+                ? '${resume.servicesRendus} service rendu'
+                : '${resume.servicesRendus} services rendus';
+            texte = '$texteNote · $texteRendus';
+          }
         } else if (resultat != null || instantane.hasError) {
           texte = 'Note indisponible';
         }

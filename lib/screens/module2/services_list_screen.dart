@@ -4,6 +4,7 @@ import '../../data/models/service.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
+import 'bandeau_rappel.dart';
 import 'mes_demandes_screen.dart';
 import 'module2_outils.dart';
 import 'module2_widgets.dart';
@@ -69,6 +70,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
       body: Column(
         children: [
           _enTete(),
+          const BandeauRappel(),
           const SizedBox(height: 16),
           _ongletsOffresDemandes(),
           const SizedBox(height: 12),

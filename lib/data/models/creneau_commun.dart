@@ -26,12 +26,29 @@ class CreneauCommun {
     this.rappelVeille = false,
   });
 
-  /// Le nom de l'inscrit (ancien nom du champ).
-  String? get inscrit => inscritNom;
+  /// Marqueur écrit dans `inscritNom` quand la personne dont c'était le tour
+  /// se désiste d'un service en rotation (inscritId vaut alors null).
+  /// L'unique endroit où il est défini. Il ne doit JAMAIS s'afficher :
+  /// les écrans lisent [inscrit], qui ne le renvoie jamais.
+  static const String marqueDesiste = '__desiste__';
+
+  /// Le nom de l'inscrit, prêt à afficher. Null si le créneau est libre
+  /// (y compris après un désistement : le marqueur n'est jamais renvoyé).
+  String? get inscrit {
+    if (inscritNom == marqueDesiste) {
+      return null;
+    }
+    return inscritNom;
+  }
 
   /// true si personne n'est inscrit.
   bool get estLibre {
     return inscritId == null;
+  }
+
+  /// true si le créneau est libre parce que son titulaire s'en est désisté.
+  bool get estDesiste {
+    return inscritId == null && inscritNom == marqueDesiste;
   }
 
   /// Les champs enregistrés dans Firestore. inscritId et inscritNom sont
