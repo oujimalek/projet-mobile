@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/service.dart';
+import '../../data/resultat.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
 import 'module2_widgets.dart';
+import 'participants_rotation_screen.dart';
 
-/// M2 - Nouvelle publication (écran 03).
+/// M2 - Nouvelle publication (écran 03) ou modification d'un service.
 ///
 /// Un formulaire pour proposer ou demander un service. Quand on publie,
 /// l'écran se ferme et renvoie le Service créé à la liste.
+///
+/// Avec [service], le formulaire est pré-rempli et enregistre les
+/// modifications. Pour un service commun, le jour et les heures ne changent pas.
 class ServiceFormScreen extends StatefulWidget {
-  const ServiceFormScreen({super.key});
+  final Service? service; // null = nouvelle publication
+
+  const ServiceFormScreen({super.key, this.service});
 
   @override
   State<ServiceFormScreen> createState() {
@@ -37,6 +44,30 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   bool _jePropose = true; // true = "Je propose", false = "Je demande"
   String? _categorie; // null = aucune catégorie choisie
   bool _erreurCategorie = false; // true = afficher "Choisis une catégorie"
+  bool _commun = false; // true = service commun hebdomadaire
+  String? _jour; // jour du service commun
+  TimeOfDay? _heureDebut;
+  TimeOfDay? _heureFin;
+  String? _erreurCommun; // message sous la zone du service commun
+  bool _enCours = false; // true pendant l'enregistrement
+  bool _rotation = false; // false = inscription libre, true = rotation automatique
+  List<ParticipantRotation> _participants = []; // dans l'ordre de passage
+
+  bool get _modification => widget.service != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final Service? service = widget.service;
+    if (service != null) {
+      _titreController.text = service.titre;
+      _descriptionController.text = service.description;
+      _disponibiliteController.text = service.disponibilite ?? '';
+      _jePropose = service.estOffre;
+      _categorie = service.categorie;
+      _commun = service.estCommun;
+    }
+  }
 
   @override
   void dispose() {
@@ -74,30 +105,129 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     return null;
   }
 
-  /// Appelé quand on touche "Publier".
-  void _publier() {
-    // On vérifie les champs du Form, puis la catégorie
+  /// "18:05" pour une heure choisie.
+  String _texteHeure(TimeOfDay heure) {
+    final String h = heure.hour.toString().padLeft(2, '0');
+    final String m = heure.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  Future<void> _choisirHeure(bool debut) async {
+    final TimeOfDay? choisie = await showTimePicker(
+      context: context,
+      initialTime: (debut ? _heureDebut : _heureFin) ??
+          const TimeOfDay(hour: 18, minute: 0),
+    );
+    if (choisie == null || !mounted) {
+      return;
+    }
+    setState(() {
+      if (debut) {
+        _heureDebut = choisie;
+      } else {
+        _heureFin = choisie;
+      }
+      _erreurCommun = null;
+    });
+  }
+
+  /// Ouvre le choix des participants de la rotation (minimum 1).
+  Future<void> _choisirParticipants() async {
+    final List<ParticipantRotation>? choisis =
+        await Navigator.of(context, rootNavigator: true).push<List<ParticipantRotation>>(
+      MaterialPageRoute<List<ParticipantRotation>>(
+        builder: (context) => ParticipantsRotationScreen(initiaux: _participants),
+      ),
+    );
+    if (choisis == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _participants = choisis;
+      _erreurCommun = null;
+    });
+  }
+
+  /// Appelé quand on touche "Publier" (ou "Enregistrer").
+  Future<void> _publier() async {
+    // On vérifie les champs du Form, puis la catégorie et le service commun
     final bool champsValides = _formKey.currentState!.validate();
+    final String? refusCommun = (_commun && !_modification)
+        ? ServiceRepository.refusPublication(
+            titre: 'xxx',
+            description: 'xxxxxxxxxx',
+            categorie: _categorie ?? 'Bricolage',
+            estCommun: true,
+            jour: _jour,
+            heureDebut: _heureDebut == null ? null : _texteHeure(_heureDebut!),
+            heureFin: _heureFin == null ? null : _texteHeure(_heureFin!),
+            modeRotation: _rotation,
+            nbParticipants: _participants.length,
+          )
+        : null;
     setState(() {
       _erreurCategorie = _categorie == null;
+      _erreurCommun = refusCommun;
     });
-    if (!champsValides || _categorie == null) {
+    if (!champsValides || _categorie == null || refusCommun != null) {
       return;
     }
 
+    setState(() {
+      _enCours = true;
+    });
     final String disponibilite = _disponibiliteController.text.trim();
-    final Service service = _repository.ajouterService(
-      titre: _titreController.text.trim(),
-      description: _descriptionController.text.trim(),
-      categorie: _categorie!,
-      estOffre: _jePropose,
-      disponibilite: disponibilite.isEmpty ? null : disponibilite,
+    final Resultat<Service> resultat;
+    if (_modification) {
+      final Resultat<void> modif = await _repository.modifierService(
+        widget.service!.id,
+        titre: _titreController.text.trim(),
+        description: _descriptionController.text.trim(),
+        categorie: _categorie!,
+        estOffre: _jePropose,
+        disponibilite: disponibilite,
+      );
+      resultat = modif.estSucces
+          ? Resultat.succes(widget.service!.copyWith(
+              titre: _titreController.text.trim(),
+              description: _descriptionController.text.trim(),
+              categorie: _categorie,
+              estOffre: _jePropose,
+              disponibilite: disponibilite,
+            ))
+          : Resultat.echec(modif.erreur!);
+    } else {
+      resultat = await _repository.ajouterService(
+        titre: _titreController.text.trim(),
+        description: _descriptionController.text.trim(),
+        categorie: _categorie!,
+        estOffre: _jePropose,
+        disponibilite: disponibilite.isEmpty ? null : disponibilite,
+        estCommun: _commun,
+        jour: _jour,
+        heureDebut: _heureDebut == null ? null : _texteHeure(_heureDebut!),
+        heureFin: _heureFin == null ? null : _texteHeure(_heureFin!),
+        modeRotation: _commun && _rotation,
+        participantsIds: [for (final p in _participants) p.id],
+        participantsNoms: [for (final p in _participants) p.nom],
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    if (!resultat.estSucces) {
+      afficherMessage(context, resultat.erreur!);
+      return;
+    }
+    afficherMessage(
+      context,
+      _modification ? 'Service modifié' : 'Service publié',
     );
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Service publié')));
     // On ferme l'écran et on renvoie le service à la liste
-    Navigator.of(context).pop(service);
+    Navigator.of(context).pop(resultat.donnee);
   }
 
   @override
@@ -105,7 +235,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Nouvelle publication'),
+          AppHeader(
+            titre: _modification ? 'Modifier le service' : 'Nouvelle publication',
+          ),
           Expanded(
             // Le Form est DANS le ListView (comme sur l'écran de connexion) :
             // ainsi les messages d'erreur des champs restent affichés
@@ -125,6 +257,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                         onChoix: (estPremier) {
                           setState(() {
                             _jePropose = estPremier;
+                            if (!estPremier && !_modification) {
+                              _commun = false; // un service commun est une offre
+                            }
                           });
                         },
                       ),
@@ -167,6 +302,10 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                         hint: 'Ex : Ce week-end',
                         controller: _disponibiliteController,
                       ),
+                      if (_jePropose || _modification) ...[
+                        const SizedBox(height: 20),
+                        _zoneServiceCommun(),
+                      ],
                     ],
                   ),
                 ),
@@ -184,11 +323,155 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             ),
             child: SafeArea(
               top: false,
-              child: PrimaryButton(texte: 'Publier', onPressed: _publier),
+              child: PrimaryButton(
+                texte: _modification ? 'Enregistrer' : 'Publier',
+                // null = bouton désactivé pendant l'enregistrement
+                onPressed: _enCours ? null : _publier,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// "Service commun" : un service hebdomadaire (jour, heure de début, heure
+  /// de fin). Les créneaux des 4 prochaines semaines sont créés à la publication.
+  /// En modification, le jour et les heures sont affichés mais ne changent pas.
+  Widget _zoneServiceCommun() {
+    if (_modification) {
+      final Service service = widget.service!;
+      if (!service.estCommun) {
+        return const SizedBox.shrink();
+      }
+      return Text(
+        'Service commun : chaque ${service.jour}, '
+        '${service.heureDebut ?? '?'} – ${service.heureFin ?? '?'} '
+        '(le jour et les heures ne sont pas modifiables). '
+        'Mode : ${service.modeRotation ? 'rotation automatique' : 'inscription libre'} '
+        '(non modifiable).',
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Service commun hebdomadaire',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            'Les créneaux des 4 prochaines semaines sont créés',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          value: _commun,
+          activeTrackColor: AppColors.secondary,
+          activeThumbColor: AppColors.card,
+          onChanged: (valeur) {
+            setState(() {
+              _commun = valeur;
+              _erreurCommun = null;
+            });
+          },
+        ),
+        if (_commun) ...[
+          const _Etiquette('Jour'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final String jour in ServiceRepository.jours)
+                PastilleChoix(
+                  texte: jour,
+                  actif: _jour == jour,
+                  onTap: () {
+                    setState(() {
+                      _jour = jour;
+                      _erreurCommun = null;
+                    });
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _choisirHeure(true),
+                  child: Text(
+                    _heureDebut == null
+                        ? 'Heure de début'
+                        : 'Début ${_texteHeure(_heureDebut!)}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _choisirHeure(false),
+                  child: Text(
+                    _heureFin == null
+                        ? 'Heure de fin'
+                        : 'Fin ${_texteHeure(_heureFin!)}',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const _Etiquette('Mode du service commun'),
+          DeuxOnglets(
+            premier: 'Inscription libre',
+            second: 'Rotation automatique',
+            premierActif: !_rotation,
+            onChoix: (estPremier) {
+              setState(() {
+                _rotation = !estPremier;
+                _erreurCommun = null;
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _rotation
+                ? 'Les créneaux sont attribués à tour de rôle aux participants '
+                    'que tu choisis. Le mode ne pourra plus être changé.'
+                : 'Chaque voisin s\'inscrit au créneau de son choix.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          if (_rotation) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _choisirParticipants,
+              icon: const Icon(Icons.groups_outlined),
+              label: Text(
+                _participants.isEmpty
+                    ? 'Choisir les participants'
+                    : 'Participants (${_participants.length})',
+              ),
+            ),
+            for (int i = 0; i < _participants.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${i + 1}. ${_participants[i].nom}',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ),
+          ],
+          if (_erreurCommun != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _erreurCommun!,
+                style: TextStyle(color: AppColors.error, fontSize: 12),
+              ),
+            ),
+        ],
+      ],
     );
   }
 

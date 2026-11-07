@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/demande_service.dart';
-import '../../data/models/evaluation.dart';
-import '../../data/models/service.dart';
+import '../../data/resultat.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
@@ -29,6 +28,11 @@ class EvaluationScreen extends StatefulWidget {
 
 class _EvaluationScreenState extends State<EvaluationScreen> {
   final ServiceRepository _repository = ServiceRepository();
+
+  // Flux créé UNE fois (voir FluxM2)
+  late final Stream<DemandeService?> _fluxDemande = _repository.ecouterDemande(
+    widget.demandeId,
+  );
   final TextEditingController _messageController = TextEditingController();
 
   // Le texte qui accompagne chaque note (de 1 à 5 étoiles)
@@ -42,6 +46,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
 
   int _note = 0; // 0 = aucune étoile choisie
   final List<String> _tagsChoisis = [];
+  bool _enCours = false; // true pendant l'envoi : bouton désactivé
 
   @override
   void dispose() {
@@ -50,7 +55,7 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   }
 
   /// Appelé quand on touche "Envoyer l'évaluation".
-  void _envoyer(DemandeService demande) {
+  Future<void> _envoyer(DemandeService demande) async {
     // On garde les tags dans l'ordre du repository
     final List<String> tags = [];
     for (final tag in _repository.getTagsEvaluation()) {
@@ -60,44 +65,49 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
     }
     final String message = _messageController.text.trim();
 
-    final bool ok = _repository.evaluer(Evaluation(
-      id: _repository.genererId('ev'),
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.evaluer(
       demandeId: demande.id,
-      serviceId: demande.serviceId,
-      auteurEvalue: _repository.getMonNom(),
       note: _note,
       tags: tags,
       message: message.isEmpty ? null : message,
-      date: DateTime.now(),
-    ));
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? 'Merci pour ton évaluation !' : 'Évaluation impossible'),
-      ),
     );
-    if (ok) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Merci pour ton évaluation !' : resultat.erreur!,
+    );
+    if (resultat.estSucces) {
       Navigator.of(context).pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final DemandeService? demande = _repository.getDemandeParId(widget.demandeId);
-
     return Scaffold(
       body: Column(
         children: [
           const AppHeader(titre: 'Évaluer le service'),
           Expanded(
-            child: demande == null
-                ? Center(
-                    child: Text(
-                      'Cette demande n\'existe plus',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                : _contenu(demande),
+            child: FluxM2<DemandeService?>(
+              flux: _fluxDemande,
+              construire: (context, demande) {
+                if (demande == null) {
+                  return const MessageEtat(
+                    texte: 'Cette demande n\'existe plus',
+                  );
+                }
+                return _contenu(demande);
+              },
+            ),
           ),
         ],
       ),
@@ -105,9 +115,9 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
   }
 
   Widget _contenu(DemandeService demande) {
-    final Service? service = _repository.getServiceParId(demande.serviceId);
-    final String titreService = service != null ? service.titre : 'Service';
-    final String auteur = demande.auteurService;
+    final String titreService =
+        demande.serviceTitre.isNotEmpty ? demande.serviceTitre : 'Service';
+    final String auteur = demande.auteurServiceNom;
 
     return Column(
       children: [
@@ -168,8 +178,8 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
             top: false,
             child: PrimaryButton(
               texte: 'Envoyer l\'évaluation',
-              // null = bouton désactivé tant qu'aucune étoile n'est choisie
-              onPressed: _note == 0
+              // null = bouton désactivé (aucune étoile choisie ou envoi en cours)
+              onPressed: (_note == 0 || _enCours)
                   ? null
                   : () {
                       _envoyer(demande);

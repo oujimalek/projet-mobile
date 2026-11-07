@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/demande_service.dart';
 import '../../data/models/message_chat.dart';
-import '../../data/models/service.dart';
+import '../../data/resultat.dart';
 import '../../data/services/chat_repository.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
@@ -12,7 +12,8 @@ import 'module2_widgets.dart';
 /// M2 - Chat entre le demandeur et l'auteur d'un service.
 ///
 /// Accessible depuis "Mes demandes" (bouton "Contacter") quand la demande
-/// est acceptée ou réalisée. S'ouvre en plein écran.
+/// est acceptée ou réalisée. S'ouvre en plein écran. Les messages arrivent
+/// en direct (Firestore).
 class ChatScreen extends StatefulWidget {
   final String demandeId; // id de la demande dont on affiche la conversation
 
@@ -30,6 +31,14 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _champController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  // Flux créés UNE fois (voir FluxM2)
+  late final Stream<DemandeService?> _fluxDemande = _repository.ecouterDemande(
+    widget.demandeId,
+  );
+  late final Stream<List<MessageChat>> _fluxMessages = _chat.ecouterMessages(
+    widget.demandeId,
+  );
+
   // Les messages rapides proposés au-dessus du champ
   static const List<String> _messagesRapides = [
     'Je suis disponible',
@@ -38,67 +47,59 @@ class _ChatScreenState extends State<ChatScreen> {
     'Merci beaucoup !',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _chat.marquerCommeLus(widget.demandeId);
-    _chat.ajouterEcouteur(_surNouveauMessage);
-    _descendre(animer: false);
-  }
+  bool _enCours = false; // true pendant l'envoi d'un message
+  bool _marquageEnCours = false; // évite de marquer deux fois les mêmes messages
+  int _nombreAffiche = 0; // pour descendre quand un message arrive
 
   @override
   void dispose() {
-    // On se désabonne : la réponse automatique ne touchera plus cet écran
-    _chat.retirerEcouteur(_surNouveauMessage);
     _champController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Appelé quand l'interlocuteur répond (réponse automatique de la démo).
-  void _surNouveauMessage() {
-    if (!mounted) {
-      return;
-    }
-    _chat.marquerCommeLus(widget.demandeId);
-    setState(() {});
-    _descendre();
-  }
-
   /// Fait défiler la liste jusqu'au dernier message (après l'affichage).
-  void _descendre({bool animer = true}) {
+  void _descendre() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) {
         return;
       }
-      final double bas = _scrollController.position.maxScrollExtent;
-      if (animer) {
-        _scrollController.animateTo(
-          bas,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _scrollController.jumpTo(bas);
-      }
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
+  /// Marque comme lus les messages de l'interlocuteur qui viennent d'arriver.
+  void _marquerCommeLus() {
+    if (_marquageEnCours) {
+      return;
+    }
+    _marquageEnCours = true;
+    _chat.marquerCommeLus(widget.demandeId).whenComplete(() {
+      _marquageEnCours = false;
     });
   }
 
   /// Envoie le texte du champ, puis vide le champ.
-  void _envoyer() {
-    final bool ok = _chat.envoyerMessage(
-      widget.demandeId,
+  Future<void> _envoyer(DemandeService demande) async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _chat.envoyerMessage(
+      demande,
       _champController.text,
     );
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message impossible à envoyer')),
-      );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    if (!resultat.estSucces) {
+      afficherMessage(context, resultat.erreur!);
       return;
     }
     _champController.clear();
     setState(() {});
-    _descendre();
   }
 
   /// Un message rapide remplit le champ (on peut le modifier avant d'envoyer).
@@ -110,53 +111,42 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final DemandeService? demande = _repository.getDemandeParId(
-      widget.demandeId,
-    );
-
-    if (demande == null) {
-      return Scaffold(
-        body: Center(
-          child: Text(
-            'Cette demande n\'existe plus',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ),
-      );
-    }
-
-    final bool peutDiscuter = _chat.peutDiscuter(demande);
-    final String interlocuteur = _chat.getInterlocuteur(demande);
-
     return Scaffold(
-      body: Column(
-        children: [
-          _entete(demande, interlocuteur),
-          if (peutDiscuter) ...[
-            Expanded(child: _listeMessages(demande, interlocuteur)),
-            _zoneSaisie(),
-          ] else
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'Le chat est disponible une fois la demande acceptée.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary),
+      body: FluxM2<DemandeService?>(
+        flux: _fluxDemande,
+        construire: (context, demande) {
+          if (demande == null) {
+            return const MessageEtat(texte: 'Cette demande n\'existe plus');
+          }
+          final String moi = _repository.getMonId();
+          final bool peutDiscuter = ChatRepository.peutDiscuter(demande, moi);
+          final String interlocuteur = ChatRepository.interlocuteur(demande, moi);
+
+          return Column(
+            children: [
+              _entete(demande, interlocuteur),
+              if (peutDiscuter) ...[
+                Expanded(child: _listeMessages(interlocuteur)),
+                _zoneSaisie(demande),
+              ] else
+                const Expanded(
+                  child: MessageEtat(
+                    texte: 'Le chat est disponible une fois la demande acceptée.',
+                    icone: Icons.chat_bubble_outline,
                   ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
   /// L'en-tête : retour, avatar, nom, titre du service et statut.
   Widget _entete(DemandeService demande, String interlocuteur) {
-    final Service? service = _repository.getServiceParId(demande.serviceId);
-    final String titre = service != null ? service.titre : 'Service supprimé';
+    final String titre = demande.serviceTitre.isNotEmpty
+        ? demande.serviceTitre
+        : 'Service supprimé';
 
     return Container(
       width: double.infinity,
@@ -218,49 +208,44 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// La liste des messages, avec les séparateurs de date.
-  Widget _listeMessages(DemandeService demande, String interlocuteur) {
-    final List<MessageChat> messages = _chat.getMessages(demande.id);
-    final bool ecrit = _chat.interlocuteurEcrit(demande.id);
+  Widget _listeMessages(String interlocuteur) {
+    return FluxM2<List<MessageChat>>(
+      flux: _fluxMessages,
+      construire: (context, messages) {
+        final String moi = _repository.getMonId();
 
-    if (messages.isEmpty && !ecrit) {
-      return Center(
-        child: Text(
-          'Aucun message. Dis bonjour à ${prenomDe(interlocuteur)} 👋',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-      );
-    }
+        // Nouveau message : on descend, et on marque les messages reçus comme lus
+        if (messages.length != _nombreAffiche) {
+          _nombreAffiche = messages.length;
+          _descendre();
+        }
+        if (ChatRepository.compterNonLus(messages, moi) > 0) {
+          _marquerCommeLus();
+        }
 
-    final String moi = _repository.getMonNom();
-    final List<Widget> elements = [];
-    DateTime? jourPrecedent;
-    for (final message in messages) {
-      if (jourPrecedent == null || !memeJour(jourPrecedent, message.date)) {
-        elements.add(_separateurDate(message.date));
-      }
-      jourPrecedent = message.date;
-      elements.add(_bulle(message, message.auteur == moi));
-    }
-    if (ecrit) {
-      elements.add(
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            '${prenomDe(interlocuteur)} écrit…',
-            style: TextStyle(
-              fontSize: 13,
-              fontStyle: FontStyle.italic,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
-      );
-    }
+        if (messages.isEmpty) {
+          return MessageEtat(
+            texte: 'Aucun message. Dis bonjour à ${prenomDe(interlocuteur)} 👋',
+            icone: Icons.chat_bubble_outline,
+          );
+        }
 
-    return ListView(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      children: elements,
+        final List<Widget> elements = [];
+        DateTime? jourPrecedent;
+        for (final message in messages) {
+          if (jourPrecedent == null || !memeJour(jourPrecedent, message.date)) {
+            elements.add(_separateurDate(message.date));
+          }
+          jourPrecedent = message.date;
+          elements.add(_bulle(message, message.auteurId == moi));
+        }
+
+        return ListView(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          children: elements,
+        );
+      },
     );
   }
 
@@ -347,8 +332,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Messages rapides + champ de saisie + bouton envoyer.
-  Widget _zoneSaisie() {
-    final bool peutEnvoyer = _champController.text.trim().isNotEmpty;
+  Widget _zoneSaisie(DemandeService demande) {
+    final bool peutEnvoyer = _champController.text.trim().isNotEmpty && !_enCours;
 
     return Container(
       color: AppColors.card,
@@ -407,7 +392,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   IconButton.filled(
                     tooltip: 'Envoyer',
-                    onPressed: peutEnvoyer ? _envoyer : null,
+                    // null = bouton désactivé (champ vide ou envoi en cours)
+                    onPressed: peutEnvoyer ? () => _envoyer(demande) : null,
                     icon: const Icon(Icons.send),
                   ),
                 ],

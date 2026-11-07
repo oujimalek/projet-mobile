@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/creneau_commun.dart';
+import '../../data/models/service.dart';
+import '../../data/resultat.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -9,6 +11,7 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import 'module2_outils.dart';
 import 'module2_widgets.dart';
+import 'tours_en_direct.dart';
 
 /// M2 - Inscription à un créneau d'un service commun (écran 07).
 ///
@@ -28,30 +31,52 @@ class InscriptionCreneauScreen extends StatefulWidget {
 class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   final ServiceRepository _repository = ServiceRepository();
 
-  String? _creneauChoisi; // id du créneau sélectionné, null = aucun
-  bool _rappelVeille = false;
+  // Flux créés UNE fois (voir FluxM2) : le créneau touché dans le planning,
+  // puis (quand on connaît son service) tous les créneaux de ce service
+  late final Stream<CreneauCommun?> _fluxDepart = _repository.ecouterCreneau(
+    widget.creneauId,
+  );
+  Stream<List<CreneauCommun>>? _fluxService;
+  Stream<Service?>? _fluxServiceDoc; // le service (créneaux faits, rotation)
 
-  @override
-  void initState() {
-    super.initState();
-    // Le créneau touché dans le planning est sélectionné au départ
-    final CreneauCommun? depart = _repository.getCreneauParId(widget.creneauId);
-    if (depart != null && _peutEtreChoisi(depart)) {
-      _creneauChoisi = depart.id;
+  String? _creneauChoisi; // id du créneau sélectionné, null = aucun
+  bool _choixInitial = false; // le créneau touché est sélectionné une seule fois
+  bool _rappelVeille = false;
+  bool _enCours = false; // true pendant une écriture : boutons désactivés
+
+  /// Le créneau est-il marqué « Fait » ?
+  bool _estFait(CreneauCommun creneau, Service? service) {
+    return service?.creneauxFaits.containsKey(creneau.id) ?? false;
+  }
+
+  /// Le tour (service en rotation) de ce créneau, null sinon.
+  TourRotation? _tour(CreneauCommun creneau, Service? service, DonneesRotation donnees) {
+    if (service == null || !service.modeRotation) {
+      return null;
     }
+    return donnees.tours[creneau.id];
   }
 
   /// On peut choisir un créneau libre ou le sien (pour se désister).
-  bool _peutEtreChoisi(CreneauCommun creneau) {
-    return creneau.estLibre || creneau.inscrit == _repository.getMonNom();
+  /// Un créneau fait ne se choisit plus ; un tour non confirmé est réservé
+  /// à son titulaire (sauf désistement).
+  bool _peutEtreChoisi(CreneauCommun creneau, Service? service, DonneesRotation donnees) {
+    if (_estFait(creneau, service)) {
+      return false;
+    }
+    if (creneau.inscritId != null) {
+      return creneau.inscritId == _repository.getMonId();
+    }
+    final TourRotation? tour = _tour(creneau, service, donnees);
+    return creneau.estDesiste || tour == null || tour.id == _repository.getMonId();
   }
 
   /// Les créneaux du service à partir d'aujourd'hui.
-  List<CreneauCommun> _prochainsCreneaux(String serviceId) {
+  List<CreneauCommun> _prochainsCreneaux(List<CreneauCommun> tous) {
     final DateTime maintenant = DateTime.now();
     final DateTime aujourdhui = DateTime(maintenant.year, maintenant.month, maintenant.day);
     final List<CreneauCommun> resultat = [];
-    for (final creneau in _repository.getCreneauxParService(serviceId)) {
+    for (final creneau in tous) {
       if (!creneau.date.isBefore(aujourdhui)) {
         resultat.add(creneau);
       }
@@ -77,14 +102,25 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   }
 
   /// "Je m'inscris".
-  void _inscrire() {
-    final bool ok = _repository.inscrire(_creneauChoisi!, rappelVeille: _rappelVeille);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? 'Inscription confirmée' : 'Ce créneau est déjà pris'),
-      ),
+  Future<void> _inscrire() async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.inscrire(
+      _creneauChoisi!,
+      rappelVeille: _rappelVeille,
     );
-    if (ok) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Inscription confirmée' : resultat.erreur!,
+    );
+    if (resultat.estSucces) {
       Navigator.of(context).pop(true);
     } else {
       setState(() {
@@ -94,44 +130,86 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   }
 
   /// "Se désister d'un créneau".
-  void _desister() {
-    final bool ok = _repository.desinscrire(_creneauChoisi!);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? 'Désinscription enregistrée' : 'Désinscription impossible'),
-      ),
+  Future<void> _desister() async {
+    setState(() {
+      _enCours = true;
+    });
+    final Resultat<void> resultat = await _repository.desinscrire(_creneauChoisi!);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enCours = false;
+    });
+    afficherMessage(
+      context,
+      resultat.estSucces ? 'Désinscription enregistrée' : resultat.erreur!,
     );
-    if (ok) {
+    if (resultat.estSucces) {
       Navigator.of(context).pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final CreneauCommun? depart = _repository.getCreneauParId(widget.creneauId);
-
     return Scaffold(
       body: Column(
         children: [
           const AppHeader(titre: 'Inscription à un créneau'),
           Expanded(
-            child: depart == null
-                ? Center(
-                    child: Text(
-                      'Ce créneau n\'existe plus',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                : _contenu(depart),
+            child: FluxM2<CreneauCommun?>(
+              flux: _fluxDepart,
+              construire: (context, depart) {
+                if (depart == null) {
+                  return const MessageEtat(texte: 'Ce créneau n\'existe plus');
+                }
+                final Stream<List<CreneauCommun>> flux = _fluxService ??=
+                    _repository.ecouterCreneauxParService(depart.serviceId);
+                final Stream<Service?> fluxService = _fluxServiceDoc ??=
+                    _repository.ecouterService(depart.serviceId);
+                return FluxM2<Service?>(
+                  flux: fluxService,
+                  construire: (context, service) {
+                    return ToursEnDirect(
+                      services: service == null ? const [] : [service],
+                      construire: (context, donnees) {
+                        // Le créneau touché dans le planning est sélectionné au départ
+                        if (!_choixInitial) {
+                          _choixInitial = true;
+                          if (_peutEtreChoisi(depart, service, donnees)) {
+                            _creneauChoisi = depart.id;
+                          }
+                        }
+                        return FluxM2<List<CreneauCommun>>(
+                          flux: flux,
+                          construire: (context, tous) {
+                            return _contenu(
+                              depart,
+                              _prochainsCreneaux(tous),
+                              service,
+                              donnees,
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _contenu(CreneauCommun depart) {
-    final List<CreneauCommun> creneaux = _prochainsCreneaux(depart.serviceId);
-    final String moi = _repository.getMonNom();
+  Widget _contenu(
+    CreneauCommun depart,
+    List<CreneauCommun> creneaux,
+    Service? service,
+    DonneesRotation donnees,
+  ) {
+    final String moi = _repository.getMonId();
 
     // Le créneau sélectionné : libre (on s'inscrit) ou à moi (on se désiste)
     CreneauCommun? choisi;
@@ -140,16 +218,24 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
       if (creneau.id == _creneauChoisi) {
         choisi = creneau;
       }
-      if (creneau.inscrit == moi) {
+      if (creneau.inscritId == moi) {
         jeSuisInscrit = true;
       }
     }
     final bool choisiLibre = choisi != null && choisi.estLibre;
-    final bool choisiEstMoi = choisi != null && choisi.inscrit == moi;
+    final bool choisiEstMoi = choisi != null && choisi.inscritId == moi;
+    final bool choisiFait = choisi != null && _estFait(choisi, service);
+    final TourRotation? tourChoisi =
+        choisi == null ? null : _tour(choisi, service, donnees);
+    final bool choisiMonTour = choisi != null &&
+        choisi.estLibre &&
+        !choisi.estDesiste &&
+        tourChoisi != null &&
+        tourChoisi.id == moi;
 
     final List<Widget> lignes = [];
     for (final creneau in creneaux) {
-      lignes.add(_ligneCreneau(creneau));
+      lignes.add(_ligneCreneau(creneau, service, donnees));
     }
 
     return Column(
@@ -229,14 +315,16 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
               children: [
                 // null = bouton désactivé (aucun créneau libre sélectionné)
                 PrimaryButton(
-                  texte: 'Je m\'inscris',
-                  onPressed: choisiLibre ? _inscrire : null,
+                  texte: choisiMonTour ? 'Confirmer mon tour' : 'Je m\'inscris',
+                  onPressed:
+                      (choisiLibre && !choisiFait && !_enCours) ? _inscrire : null,
                 ),
                 if (jeSuisInscrit) ...[
                   const SizedBox(height: 10),
                   SecondaryButton(
                     texte: 'Se désister d\'un créneau',
-                    onPressed: choisiEstMoi ? _desister : null,
+                    onPressed:
+                        (choisiEstMoi && !choisiFait && !_enCours) ? _desister : null,
                   ),
                   if (!choisiEstMoi)
                     Padding(
@@ -277,19 +365,40 @@ class _InscriptionCreneauScreenState extends State<InscriptionCreneauScreen> {
   }
 
   /// Une ligne de la liste : rond de sélection, date et heure, état.
-  Widget _ligneCreneau(CreneauCommun creneau) {
-    final String moi = _repository.getMonNom();
-    final bool estMoi = creneau.inscrit == moi;
+  Widget _ligneCreneau(CreneauCommun creneau, Service? service, DonneesRotation donnees) {
+    final String moi = _repository.getMonId();
+    final bool estMoi = creneau.inscritId != null && creneau.inscritId == moi;
     final bool choisi = creneau.id == _creneauChoisi;
-    final bool selectionnable = _peutEtreChoisi(creneau);
+    final bool selectionnable = _peutEtreChoisi(creneau, service, donnees);
+    final TourRotation? tour = _tour(creneau, service, donnees);
 
     Widget etat;
-    if (creneau.estLibre) {
+    if (_estFait(creneau, service)) {
       etat = PastilleTexte(
-        texte: 'Libre',
+        texte: 'Fait ✓',
         couleur: AppColors.badgeResolu,
         fond: AppColors.badgeResoluFond,
       );
+    } else if (creneau.estLibre) {
+      if (tour != null && !creneau.estDesiste && tour.id == moi) {
+        etat = PastilleTexte(
+          texte: 'C\'est ton tour',
+          couleur: AppColors.primary,
+          fond: AppColors.primaryLight,
+        );
+      } else if (tour != null && !creneau.estDesiste) {
+        etat = Text(
+          'Tour de ${tour.nom}',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        );
+      } else {
+        // Libre : aussi après un désistement (le marqueur ne s'affiche jamais)
+        etat = PastilleTexte(
+          texte: 'Libre',
+          couleur: AppColors.badgeResolu,
+          fond: AppColors.badgeResoluFond,
+        );
+      }
     } else if (estMoi) {
       etat = PastilleTexte(
         texte: 'Toi',
