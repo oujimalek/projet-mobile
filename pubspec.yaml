@@ -51,6 +51,12 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   geolocator: ^14.1.1
+  # M3 : base SQLite locale (brouillons, envois hors ligne, cache des
+  # signalements), voir lib/data/services/base_locale_m3.dart.
+  sqflite: ^2.4.6
+  path: ^1.9.1
+  # M3 : savoir si le téléphone a du réseau (envoi automatique au retour).
+  connectivity_plus: ^7.3.1
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +68,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  # M3 : SQLite dans les tests (sur l'ordinateur, base en mémoire).
+  sqflite_common_ffi: ^2.4.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
