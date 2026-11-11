@@ -15,8 +15,10 @@ import 'package:houmani/screens/module3/signalement_detail_screen.dart';
 import 'package:houmani/screens/module3/signalements_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
 
+import 'fausse_connexion_m3.dart';
 import 'mock_signalement_repository.dart';
 import 'mock_utilisateur_repository.dart';
+import 'outils_test_m3.dart';
 
 /// Affiche un écran dans une MaterialApp avec le thème Houmani.
 /// Par défaut : largeur d'un téléphone (360), assez haut pour tout voir.
@@ -81,6 +83,7 @@ Signalement exemple({
 void main() {
   late MockUtilisateurRepository utilisateurs;
   late MockSignalementRepository depot;
+  late FausseConnexionM3 connexion; // en ligne par défaut
 
   // Les auteurs des signalements de démo du mock :
   //   r1 (enCours, électricité, danger) : Amira u1, admin, connectée par défaut
@@ -105,6 +108,12 @@ void main() {
     utilisateurs.ajouterCompte(salma, 'pw');
     utilisateurs.ajouterCompte(karim, 'pw');
     utilisateurs.ajouterCompte(youssef, 'pw');
+    // SQLite en mémoire + fausse connexion (voir outils_test_m3.dart)
+    connexion = installerHorsLigneM3();
+  });
+
+  tearDown(() async {
+    await nettoyerHorsLigneM3(connexion);
   });
 
   /// Change l'utilisateur connecté.
