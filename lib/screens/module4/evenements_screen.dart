@@ -9,6 +9,7 @@ import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/arch_date_block.dart';
+import 'election_screen.dart';
 import 'evenement_detail_screen.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
@@ -278,21 +279,35 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
         color: AppColors.primary,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          const Text(
-            'Événements',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Événements',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Ce qui se passe dans ta houma',
+                  style: TextStyle(color: AppColors.primaryLight),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Ce qui se passe dans ta houma',
-            style: TextStyle(color: AppColors.primaryLight),
+          // Élection des leaders (pour tout le monde)
+          IconButton(
+            tooltip: 'Élection des leaders',
+            onPressed: () {
+              ouvrirEcranM4<void>(context, const ElectionScreen());
+            },
+            icon: Icon(Icons.how_to_vote_outlined, color: AppColors.card),
           ),
         ],
       ),
@@ -352,7 +367,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (_erreurEvenements != null) {
       return MessageM4(
         texte: _erreurEvenements!,
-        icone: Icons.wifi_off_outlined,
+        icone: Icons.error_outline,
         reessayer: _chargerEvenements,
       );
     }
@@ -622,7 +637,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (_erreurSondages != null) {
       return MessageM4(
         texte: _erreurSondages!,
-        icone: Icons.wifi_off_outlined,
+        icone: Icons.error_outline,
         reessayer: _chargerSondages,
       );
     }

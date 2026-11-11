@@ -459,6 +459,72 @@ service cloud.firestore {
           allow update, delete: if false;
         }
       }
+
+      // ---------- M4 · Élections des leaders ----------
+      match /elections/{electionId} {
+        function election() {
+          return get(/databases/$(database)/documents/quartiers/$(q)/elections/$(electionId)).data;
+        }
+        function candidatChemin(uidC) {
+          return /databases/$(database)/documents/quartiers/$(q)/elections/$(electionId)/candidats/$(uidC);
+        }
+        function voteChemin(uidV) {
+          return /databases/$(database)/documents/quartiers/$(q)/elections/$(electionId)/votes/$(uidV);
+        }
+
+        allow read: if membreDe(q);
+        // L'admin ouvre l'élection et publie les résultats
+        allow create: if adminDe(q)
+          && request.resource.data.publiee == false;
+        allow update: if adminDe(q)
+          && changeSeulement(['publiee', 'elusIds', 'elusNoms']);
+        allow delete: if adminDe(q);
+
+        // ----- Candidats (id = uid) : nbVoix ne bouge qu'avec un vote -----
+        match /candidats/{uidC} {
+          allow read: if membreDe(q);
+          // Se porter candidat : pendant les candidatures, pas l'admin ;
+          // première élection : tout membre, sinon membre depuis 30 jours
+          allow create: if membreDe(q)
+            && uidC == monUid()
+            && moi().role != 'admin'
+            && request.time < election().finCandidatures
+            && request.resource.data.nbVoix == 0
+            && (election().premiere == true
+                || moi().dateDemande < request.time - duration.value(30, 'd'));
+          // Retirer sa candidature : pendant les candidatures
+          allow delete: if membreDe(q)
+            && uidC == monUid()
+            && request.time < election().finCandidatures;
+          // +1 voix : seulement avec MON vote créé dans le même WriteBatch
+          allow update: if membreDe(q)
+            && changeSeulement(['nbVoix'])
+            && request.resource.data.nbVoix == resource.data.nbVoix + 1
+            && !exists(voteChemin(monUid()))
+            && existsAfter(voteChemin(monUid()))
+            && getAfter(voteChemin(monUid())).data.candidatId == uidC;
+        }
+
+        // ----- Votes (id = uid) : SECRETS, 1 par membre, définitifs -----
+        match /votes/{uidV} {
+          allow read: if membreDe(q) && uidV == monUid();
+          allow create: if membreDe(q)
+            && uidV == monUid()
+            && election().publiee == false
+            && request.time >= election().finCandidatures
+            && request.time < election().finVote
+            && getAfter(candidatChemin(request.resource.data.candidatId)).data.nbVoix
+               == get(candidatChemin(request.resource.data.candidatId)).data.nbVoix + 1;
+          allow update, delete: if false;
+        }
+      }
+
+      // ---------- M4 · Demandes d'élection anticipée (id = uid) ----------
+      match /demandesElection/{uidD} {
+        allow read: if adminDe(q) || (membreDe(q) && uidD == monUid());
+        allow create: if membreDe(q) && uidD == monUid();
+        allow delete: if (membreDe(q) && uidD == monUid()) || adminDe(q);
+      }
     }
   }
 }
