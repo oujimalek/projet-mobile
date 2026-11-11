@@ -50,6 +50,7 @@ class Evenement {
   final bool officiel; // créé par l'admin : badge "Officiel", en tête de liste
   final int placesMax; // 0 = pas de limite
   final int interesses; // "Peut-être" (Firestore : nbInteresses, compteur protégé)
+  final DateTime? dateCreation; // pour le badge « nouveau » (null : ancien événement)
 
   const Evenement({
     required this.id,
@@ -66,6 +67,7 @@ class Evenement {
     this.officiel = false,
     this.placesMax = 0,
     this.interesses = 0,
+    this.dateCreation,
   });
 
   /// true si l'événement est terminé (sa fin, ou son début s'il n'a pas de fin).
@@ -93,6 +95,7 @@ class Evenement {
       'officiel': officiel,
       'placesMax': placesMax,
       'nbInteresses': interesses,
+      'dateCreation': dateCreation ?? DateTime.now(),
     };
   }
 
@@ -116,6 +119,7 @@ class Evenement {
       officiel: map['officiel'] ?? false,
       placesMax: map['placesMax'] ?? 0,
       interesses: map['nbInteresses'] ?? 0,
+      dateCreation: FirestoreCommun.lireDate(map['dateCreation']),
     );
   }
 
@@ -149,6 +153,7 @@ class Evenement {
       officiel: officiel,
       placesMax: placesMax ?? this.placesMax,
       interesses: interesses ?? this.interesses,
+      dateCreation: dateCreation,
     );
   }
 }

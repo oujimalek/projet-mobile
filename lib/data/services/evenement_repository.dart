@@ -102,6 +102,25 @@ abstract class EvenementRepository {
     return null;
   }
 
+  /// Le texte d'un choix de date : "sam. 14/11 · 18:00".
+  static String texteChoixDate(DateTime date) {
+    const List<String> jours = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+    final String jj = date.day.toString().padLeft(2, '0');
+    final String mm = date.month.toString().padLeft(2, '0');
+    final String hh = date.hour.toString().padLeft(2, '0');
+    final String mi = date.minute.toString().padLeft(2, '0');
+    return '${jours[date.weekday - 1]} $jj/$mm · $hh:$mi';
+  }
+
+  /// Les textes des choix d'un sondage de date.
+  static List<String> textesDates(List<DateTime> dates) {
+    final List<String> textes = [];
+    for (final DateTime date in dates) {
+      textes.add(texteChoixDate(date));
+    }
+    return textes;
+  }
+
   /// Pourquoi ce vote est refusé (null : il est accepté).
   /// [monVote] : l'option déjà choisie, null si pas encore voté.
   static String? refusVote(Sondage sondage, int choix, int? monVote) {
@@ -276,6 +295,30 @@ abstract class EvenementRepository {
     return texte.toString();
   }
 
+  /// La liste des participants à partager (organisateur ou admin) :
+  /// "Participants — Fête des voisins (14/11/2026)" puis "1. Salma G."...
+  static String texteListeParticipants(
+    Evenement evenement,
+    List<Participant> participants,
+  ) {
+    final String date =
+        '${evenement.date.day.toString().padLeft(2, '0')}/${evenement.date.month.toString().padLeft(2, '0')}/${evenement.date.year}';
+    final StringBuffer texte = StringBuffer()
+      ..writeln('Participants — ${evenement.titre} ($date)');
+    if (participants.isEmpty) {
+      texte.write('Personne n\'est encore inscrit.');
+      return texte.toString();
+    }
+    for (int i = 0; i < participants.length; i++) {
+      texte.writeln('${i + 1}. ${participants[i].nom}');
+    }
+    texte.write('Total : ${participants.length}');
+    if (evenement.placesMax > 0) {
+      texte.write(' / ${evenement.placesMax} places');
+    }
+    return texte.toString();
+  }
+
   /// true si [utilisateur] peut supprimer ce contenu : son auteur ou l'admin.
   static bool peutSupprimer(Utilisateur utilisateur, String auteurId) {
     return utilisateur.id == auteurId || utilisateur.estAdmin;
@@ -391,11 +434,18 @@ abstract class EvenementRepository {
   Future<Resultat<List<Sondage>>> chargerSondages();
 
   /// Crée un sondage proposé par l'utilisateur connecté.
+  /// [dates] non vide : sondage de date (les choix sont ces dates, [options]
+  /// est ignoré). [evenementId] : sondage rattaché à cet événement.
   Future<Resultat<void>> creerSondage({
     required String question,
     required List<String> options,
     required DateTime dateFin,
+    List<DateTime> dates = const [],
+    String? evenementId,
   });
+
+  /// Les sondages rattachés à un événement, avec leurs votes.
+  Future<Resultat<List<Sondage>>> chargerSondagesDe(String evenementId);
 
   /// L'auteur (ou l'admin) supprime le sondage.
   Future<Resultat<void>> supprimerSondage(String sondageId);

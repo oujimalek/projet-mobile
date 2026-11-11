@@ -11,7 +11,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_badge.dart';
+import 'evenement_form_screen.dart';
 import 'graphique_sondage.dart';
+import 'module4_widgets.dart';
 
 /// M4 - Événements : sondage entre voisins.
 ///
@@ -166,6 +168,41 @@ class _SondageScreenState extends State<SondageScreen> {
       return 'Sondage du quartier · $finTexte';
     }
     return 'Proposé par ${sondage.proposePar} · $finTexte';
+  }
+
+  /// Sondage de date : la date qui a le plus de votes, si l'utilisateur
+  /// peut créer l'événement (auteur ou admin, et leader/admin). Sinon null.
+  DateTime? _dateGagnante(Sondage sondage) {
+    final moi = UtilisateurRepository().getUtilisateurConnecte();
+    if (!sondage.estSondageDeDate ||
+        !EvenementRepository.peutOrganiser(moi) ||
+        !EvenementRepository.peutSupprimer(moi, sondage.proposeParId)) {
+      return null;
+    }
+    // Les votes affichés (à jour en direct)
+    int? gagnant;
+    for (int i = 0; i < _votes.length; i++) {
+      if (_votes[i] > 0 && (gagnant == null || _votes[i] > _votes[gagnant])) {
+        gagnant = i;
+      }
+    }
+    return gagnant == null ? null : sondage.dates[gagnant];
+  }
+
+  Future<void> _creerEvenementGagnant(Sondage sondage) async {
+    final bool? cree = await ouvrirEcranM4<bool>(
+      context,
+      EvenementFormScreen(
+        titreInitial: sondage.question,
+        dateInitiale: _dateGagnante(sondage),
+      ),
+    );
+    if (!mounted || cree != true) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Événement créé à la date gagnante !')),
+    );
   }
 
   /// "1 vote", "3 votes" (0 et 1 : singulier).
@@ -434,6 +471,17 @@ class _SondageScreenState extends State<SondageScreen> {
                   GraphiqueSondage(
                     choix: [for (final option in sondage.options) option.texte],
                     votes: List.of(_votes),
+                  ),
+                ],
+                // Sondage de date : l'auteur (ou l'admin) crée l'événement
+                // à la date qui a le plus de votes
+                if (_dateGagnante(sondage) != null) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => _creerEvenementGagnant(sondage),
+                    icon: const Icon(Icons.event_available_outlined),
+                    label: Text(
+                        'Créer l\'événement le ${EvenementRepository.texteChoixDate(_dateGagnante(sondage)!)}'),
                   ),
                 ],
               ],

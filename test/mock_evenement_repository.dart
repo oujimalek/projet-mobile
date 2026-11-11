@@ -84,9 +84,14 @@ class MockEvenementRepository implements EvenementRepository {
     String question = 'Quelle date pour la réunion ?',
     List<String> options = const ['Mardi', 'Jeudi'],
     DateTime? dateFin,
+    List<DateTime> dates = const [],
+    String? evenementId,
+    DateTime? dateCreation,
   }) {
     final List<OptionSondage> choix = [];
-    for (final String texte in options) {
+    final List<String> textes =
+        dates.isNotEmpty ? EvenementRepository.textesDates(dates) : options;
+    for (final String texte in textes) {
       choix.add(OptionSondage(texte: texte));
     }
     final Sondage sondage = Sondage(
@@ -96,6 +101,9 @@ class MockEvenementRepository implements EvenementRepository {
       dateFin: dateFin ?? DateTime.now().add(const Duration(days: 2)),
       proposeParId: auteur.id,
       proposePar: EvenementRepository.nomCourt(auteur),
+      dates: dates,
+      evenementId: evenementId,
+      dateCreation: dateCreation ?? DateTime.now(),
     );
     _sondages.add(sondage);
     _votes[sondage.id] = {};
@@ -131,6 +139,9 @@ class MockEvenementRepository implements EvenementRepository {
       proposeParId: sondage.proposeParId,
       proposePar: sondage.proposePar,
       nombreMembres: nombreMembres,
+      dates: sondage.dates,
+      evenementId: sondage.evenementId,
+      dateCreation: sondage.dateCreation,
     );
   }
 
@@ -432,9 +443,14 @@ class MockEvenementRepository implements EvenementRepository {
     required String question,
     required List<String> options,
     required DateTime dateFin,
+    List<DateTime> dates = const [],
+    String? evenementId,
   }) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
+    }
+    if (dates.isNotEmpty) {
+      options = EvenementRepository.textesDates(dates);
     }
     final String? refus = EvenementRepository.refusSondage(
       question: question,
@@ -458,8 +474,24 @@ class MockEvenementRepository implements EvenementRepository {
       question: question.trim(),
       options: remplies,
       dateFin: dateFin,
+      dates: dates,
+      evenementId: evenementId,
     );
     return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<List<Sondage>>> chargerSondagesDe(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    final List<Sondage> liste = [];
+    for (final Sondage sondage in _sondages) {
+      if (sondage.evenementId == evenementId) {
+        liste.add(_avecVotes(sondage));
+      }
+    }
+    return Resultat.succes(liste);
   }
 
   @override

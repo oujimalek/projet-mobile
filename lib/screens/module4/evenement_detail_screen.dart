@@ -1,3 +1,4 @@
+import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -220,6 +221,12 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
               _modifier();
             } else if (choix == 'annuler') {
               _annuler(evenement, !evenement.annule);
+            } else if (choix == 'exporter') {
+              // Partager la liste des participants (WhatsApp, e-mail...)
+              SharePlus.instance.share(ShareParams(
+                text: EvenementRepository.texteListeParticipants(
+                    evenement, _participants),
+              ));
             } else {
               _supprimer();
             }
@@ -234,6 +241,9 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                   child: Text(evenement.annule
                       ? 'Rétablir l\'événement'
                       : 'Annuler l\'événement')));
+              choix.add(const PopupMenuItem(
+                  value: 'exporter',
+                  child: Text('Exporter la liste des participants')));
             }
             if (peutSupprimer) {
               choix.add(const PopupMenuItem(
@@ -268,6 +278,13 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Ajouter à l'agenda du téléphone
+                      IconButton(
+                        tooltip: 'Ajouter à mon agenda',
+                        icon: Icon(Icons.event_available_outlined,
+                            color: AppColors.primary),
+                        onPressed: () => _ajouterAuCalendrier(evenement),
+                      ),
                       // Partager l'invitation (WhatsApp, SMS...)
                       IconButton(
                         tooltip: 'Partager',
@@ -352,6 +369,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         const SizedBox(height: 20),
         _blocParticipants(evenement),
         // Qui apporte quoi ? · Questions · Avis (après l'événement)
+        SectionSondagesEvenement(evenement: evenement),
         SectionObjets(evenement: evenement),
         SectionAvis(evenement: evenement, participe: _inscrit),
         SectionQuestions(evenement: evenement),
@@ -453,6 +471,27 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: enfants,
       ),
+    );
+  }
+
+  /// Ouvre l'agenda du téléphone avec l'événement pré-rempli (package
+  /// add_2_calendar) : l'utilisateur n'a plus qu'à enregistrer.
+  Future<void> _ajouterAuCalendrier(Evenement evenement) async {
+    final bool ouvert = await Add2Calendar.addEvent2Cal(
+      Event(
+        title: evenement.titre,
+        description: evenement.description,
+        location: evenement.lieu,
+        startDate: evenement.date,
+        // Sans heure de fin : 2 heures par défaut
+        endDate: evenement.dateFin ?? evenement.date.add(const Duration(hours: 2)),
+      ),
+    );
+    if (!mounted || ouvert) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Aucune application d\'agenda trouvée')),
     );
   }
 

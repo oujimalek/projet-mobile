@@ -14,6 +14,7 @@ import 'election_screen.dart';
 import 'evenement_detail_screen.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
+import 'nouveautes_m4.dart';
 import 'sondage_form_screen.dart';
 import 'sondage_screen.dart';
 
@@ -57,6 +58,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
   @override
   void initState() {
     super.initState();
+    NouveautesM4.marquerVu(); // le point « nouveau » disparaît
     _chargerEvenements();
     _chargerSondages();
   }

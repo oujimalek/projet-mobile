@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../screens/module4/nouveautes_m4.dart';
+
 /// Barre de navigation du bas, commune à toute l'application.
 /// Les couleurs viennent du thème (onglet actif en doré).
 ///
@@ -37,7 +39,8 @@ class AppBottomNav extends StatelessWidget {
           label: 'Signalements',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.event_outlined),
+          // M4 : un point s'il y a des nouveautés depuis la dernière visite
+          icon: _IconeEvenements(Icons.event_outlined),
           activeIcon: Icon(Icons.event),
           label: 'Événements',
         ),
@@ -47,6 +50,28 @@ class AppBottomNav extends StatelessWidget {
           label: 'Profil',
         ),
       ],
+    );
+  }
+}
+
+/// M4 - L'icône de l'onglet Événements, avec un point rouge et le nombre de
+/// nouveautés (NouveautesM4.nombre) quand il y en a.
+class _IconeEvenements extends StatelessWidget {
+  final IconData icone;
+
+  const _IconeEvenements(this.icone);
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: NouveautesM4.nombre,
+      builder: (context, nombre, enfant) {
+        return Badge(
+          isLabelVisible: nombre > 0,
+          label: Text('$nombre'),
+          child: Icon(icone),
+        );
+      },
     );
   }
 }

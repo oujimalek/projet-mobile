@@ -571,8 +571,14 @@ class FirebaseEvenementRepository implements EvenementRepository {
     required String question,
     required List<String> options,
     required DateTime dateFin,
+    List<DateTime> dates = const [],
+    String? evenementId,
   }) {
     return _executer(() async {
+      // Sondage de date : les choix sont les dates
+      if (dates.isNotEmpty) {
+        options = EvenementRepository.textesDates(dates);
+      }
       final String? refus = EvenementRepository.refusSondage(
         question: question,
         options: options,
@@ -598,8 +604,27 @@ class FirebaseEvenementRepository implements EvenementRepository {
         dateFin: dateFin,
         proposeParId: moi.id,
         proposePar: EvenementRepository.nomCourt(moi),
+        dates: dates,
+        evenementId: evenementId,
       );
       await _collectionSondages.add(sondage.toMap());
+    });
+  }
+
+  @override
+  Future<Resultat<List<Sondage>>> chargerSondagesDe(String evenementId) {
+    return _executer(() async {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _collectionSondages
+          .where('evenementId', isEqualTo: evenementId)
+          .get();
+      final Resultat<int> membres = await UtilisateurRepository()
+          .compterMembres(StatutUtilisateur.actif);
+      final List<Sondage> liste = [];
+      for (final document in snapshot.docs) {
+        liste.add(await _avecVotes(
+            document.id, document.data(), membres.donnee ?? 0));
+      }
+      return liste;
     });
   }
 

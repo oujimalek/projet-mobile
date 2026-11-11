@@ -6,6 +6,7 @@ import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
 import 'evenement_detail_screen.dart';
 import 'module4_widgets.dart';
+import 'nouveautes_m4.dart';
 
 /// M4 - Bandeau « Rappel : demain à 18:00, Fête des voisins (Jardin) »
 /// (dans l'application, sans notification système), comme le bandeau du
@@ -34,6 +35,8 @@ class _BandeauRappelM4State extends State<BandeauRappelM4> {
   }
 
   Future<void> _charger() async {
+    // Le point « nouveau » de l'onglet Événements
+    NouveautesM4.calculer();
     final Resultat<List<Evenement>> resultat = await _depot.chargerEvenements();
     if (!resultat.estSucces) {
       return; // pas de bandeau si la lecture échoue

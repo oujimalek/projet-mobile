@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/evenement.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
@@ -10,9 +11,14 @@ import 'module4_widgets.dart';
 
 /// M4 - Formulaire d'un nouveau sondage : une question, 2 à 6 choix et
 /// une date de fin. Un sondage ne se modifie plus ensuite (règles).
+/// « Sondage de date » : les choix sont des dates (on pourra créer
+/// l'événement à la date gagnante). [evenement] : sondage rattaché à cet
+/// événement (affiché dans son détail).
 /// Renvoie `true` (Navigator.pop) une fois créé.
 class SondageFormScreen extends StatefulWidget {
-  const SondageFormScreen({super.key});
+  final Evenement? evenement;
+
+  const SondageFormScreen({super.key, this.evenement});
 
   @override
   State<SondageFormScreen> createState() {
@@ -31,10 +37,39 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
     TextEditingController(),
   ];
 
+  // Sondage de date : les dates proposées (au lieu des champs texte)
+  bool _deDate = false;
+  final List<DateTime> _dates = [];
+
   // Fin par défaut : dans 3 jours, à 23:59
   late DateTime _fin = _finDuJour(DateTime.now().add(const Duration(days: 3)));
   bool _enChargement = false;
   String? _message;
+
+  /// Ajoute une date proposée : le jour, puis l'heure.
+  Future<void> _ajouterDate() async {
+    final DateTime maintenant = DateTime.now();
+    final DateTime? jour = await showDatePicker(
+      context: context,
+      initialDate: maintenant.add(const Duration(days: 7)),
+      firstDate: maintenant,
+      lastDate: maintenant.add(const Duration(days: 365)),
+    );
+    if (jour == null || !mounted) {
+      return;
+    }
+    final TimeOfDay? heure = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 18, minute: 0),
+    );
+    if (heure == null) {
+      return;
+    }
+    setState(() {
+      _dates.add(DateTime(jour.year, jour.month, jour.day, heure.hour, heure.minute));
+      _dates.sort();
+    });
+  }
 
   @override
   void dispose() {
@@ -81,8 +116,12 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
       return;
     }
     final List<String> textes = [];
-    for (final TextEditingController champ in _choix) {
-      textes.add(champ.text);
+    if (_deDate) {
+      textes.addAll(EvenementRepository.textesDates(_dates));
+    } else {
+      for (final TextEditingController champ in _choix) {
+        textes.add(champ.text);
+      }
     }
     final String? refus = EvenementRepository.refusSondage(
       question: _question.text,
@@ -104,6 +143,8 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
       question: _question.text,
       options: textes,
       dateFin: _fin,
+      dates: _deDate ? List.of(_dates) : const [],
+      evenementId: widget.evenement?.id,
     );
     if (!mounted) {
       return;
@@ -158,7 +199,11 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Nouveau sondage'),
+          AppHeader(
+            titre: widget.evenement == null
+                ? 'Nouveau sondage'
+                : 'Sondage · ${widget.evenement!.titre}',
+          ),
           Expanded(
             child: Form(
               key: _formulaire,
@@ -177,14 +222,55 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
+                  // Sondage de date : les choix sont des dates
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Sondage de date'),
+                    subtitle: const Text(
+                        'Les voisins choisissent une date ; ensuite tu crées l\'événement à la date gagnante'),
+                    value: _deDate,
+                    onChanged: (valeur) {
+                      setState(() {
+                        _deDate = valeur;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   Text(
                     'Les choix (${EvenementRepository.optionsMin} à ${EvenementRepository.optionsMax})',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
-                  ...champsChoix,
-                  if (_choix.length < EvenementRepository.optionsMax)
+                  if (_deDate) ...[
+                    for (int i = 0; i < _dates.length; i++)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.event, color: AppColors.primary),
+                        title: Text(EvenementRepository.texteChoixDate(_dates[i])),
+                        trailing: IconButton(
+                          tooltip: 'Retirer cette date',
+                          icon: Icon(Icons.remove_circle_outline,
+                              color: AppColors.error),
+                          onPressed: () {
+                            setState(() {
+                              _dates.removeAt(i);
+                            });
+                          },
+                        ),
+                      ),
+                    if (_dates.length < EvenementRepository.optionsMax)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: _ajouterDate,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Ajouter une date'),
+                        ),
+                      ),
+                  ],
+                  if (!_deDate) ...champsChoix,
+                  if (!_deDate && _choix.length < EvenementRepository.optionsMax)
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/evenement.dart';
+import '../../data/models/sondage.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/models/vie_evenement.dart';
 import '../../data/resultat.dart';
@@ -8,6 +9,9 @@ import '../../data/services/evenement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
+import 'module4_widgets.dart';
+import 'sondage_form_screen.dart';
+import 'sondage_screen.dart';
 
 /// M4 - Les sections du bas du détail d'un événement :
 /// « Qui apporte quoi ? », « Questions » et « Avis ».
@@ -525,6 +529,119 @@ class _SectionAvisState extends State<SectionAvis> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _titreSection(Icons.star_border_rounded, 'Avis'),
+            ...lignes,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// Sondages rattachés à l'événement
+// =========================================================================
+
+class SectionSondagesEvenement extends StatefulWidget {
+  final Evenement evenement;
+
+  const SectionSondagesEvenement({super.key, required this.evenement});
+
+  @override
+  State<SectionSondagesEvenement> createState() {
+    return _SectionSondagesEvenementState();
+  }
+}
+
+class _SectionSondagesEvenementState extends State<SectionSondagesEvenement> {
+  final EvenementRepository _depot = EvenementRepository();
+  List<Sondage> _sondages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    final Resultat<List<Sondage>> resultat =
+        await _depot.chargerSondagesDe(widget.evenement.id);
+    if (!mounted || !resultat.estSucces) {
+      return;
+    }
+    setState(() {
+      _sondages = resultat.donnee!;
+    });
+  }
+
+  Future<void> _ouvrir(Widget ecran) async {
+    await ouvrirEcranM4<void>(context, ecran);
+    if (mounted) {
+      _charger();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // L'organisateur (leader ou admin) peut ajouter un sondage
+    final bool peutAjouter =
+        EvenementRepository.peutModifier(_moi(), widget.evenement) &&
+            EvenementRepository.peutOrganiser(_moi()) &&
+            !widget.evenement.estPasse;
+    if (_sondages.isEmpty && !peutAjouter) {
+      return const SizedBox.shrink();
+    }
+    final List<Widget> lignes = [];
+    for (final Sondage sondage in _sondages) {
+      lignes.add(
+        InkWell(
+          onTap: () => _ouvrir(SondageScreen(sondageId: sondage.id)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.poll_outlined, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(sondage.question,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        '${sondage.totalVotes} vote${sondage.totalVotes > 1 ? 's' : ''} · ${texteFin(sondage.dateFin)}',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (peutAjouter) {
+      lignes.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () =>
+                _ouvrir(SondageFormScreen(evenement: widget.evenement)),
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter un sondage'),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _titreSection(Icons.poll_outlined, 'Sondages de l\'événement'),
             ...lignes,
           ],
         ),

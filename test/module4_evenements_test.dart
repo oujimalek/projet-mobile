@@ -13,6 +13,7 @@ import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module4/calendrier_screen.dart';
 import 'package:houmani/screens/module4/evenement_detail_screen.dart';
 import 'package:houmani/screens/module4/graphique_sondage.dart';
+import 'package:houmani/screens/module4/nouveautes_m4.dart';
 import 'package:houmani/screens/module4/evenement_form_screen.dart';
 import 'package:houmani/screens/module4/evenements_screen.dart';
 import 'package:houmani/screens/module4/sondage_form_screen.dart';
@@ -821,6 +822,105 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Boissons'), findsOneWidget);
       expect(find.text('Je l\'apporte'), findsOneWidget);
+    });
+  });
+
+  group('Lot 4 : export, sondages de date, sondages d\'événement, nouveautés', () {
+    test('export : la liste des participants en texte', () {
+      final Evenement fete = Evenement(
+        id: 'e', titre: 'Fête', description: '', lieu: 'Jardin',
+        date: DateTime(2026, 11, 14, 18), organisateur: 'X', placesMax: 10,
+      );
+      final String texte = EvenementRepository.texteListeParticipants(fete, const [
+        Participant(id: 'a', nom: 'Salma G.'),
+        Participant(id: 'b', nom: 'Youssef T.'),
+      ]);
+      expect(texte, contains('Participants — Fête (14/11/2026)'));
+      expect(texte, contains('1. Salma G.'));
+      expect(texte, contains('2. Youssef T.'));
+      expect(texte, contains('Total : 2 / 10 places'));
+    });
+
+    test('sondage de date : choix = dates, date gagnante', () async {
+      final DateTime samedi = DateTime(2026, 11, 21, 18, 0);
+      final DateTime dimanche = DateTime(2026, 11, 22, 10, 30);
+      expect(EvenementRepository.texteChoixDate(samedi), 'sam. 21/11 · 18:00');
+
+      await depot.creerSondage(
+        question: 'Quelle date pour la fête ?',
+        options: const [],
+        dateFin: demain,
+        dates: [samedi, dimanche],
+      );
+      final Sondage cree = depot.sondages.single;
+      expect(cree.estSondageDeDate, isTrue);
+      expect(cree.options.map((o) => o.texte),
+          ['sam. 21/11 · 18:00', 'dim. 22/11 · 10:30']);
+
+      depot.ajouterVoteDe(sarra, cree, 1);
+      final Sondage relu = (await depot.chargerSondages()).donnee!.single;
+      expect(relu.indexGagnant, 1);
+      expect(relu.dates[relu.indexGagnant!], dimanche);
+    });
+
+    test('sondage rattaché à un événement', () async {
+      final Evenement fete = depot.ajouterEvenementDe(amira);
+      await depot.creerSondage(
+        question: 'Quelle musique ?',
+        options: ['Malouf', 'Mezoued'],
+        dateFin: demain,
+        evenementId: fete.id,
+      );
+      await depot.creerSondage(
+        question: 'Autre sondage',
+        options: ['A', 'B'],
+        dateFin: demain,
+      );
+      final List<Sondage> deLaFete = (await depot.chargerSondagesDe(fete.id)).donnee!;
+      expect(deLaFete.map((s) => s.question), ['Quelle musique ?']);
+    });
+
+    test('nouveautés : publiés par d\'autres après ma dernière visite', () {
+      final DateTime visite = DateTime(2026, 11, 10);
+      final List<Evenement> evenements = [
+        Evenement(id: 'a', titre: 'Nouveau', description: '', lieu: '',
+            date: demain, organisateur: 'X', organisateurId: 'u30',
+            dateCreation: DateTime(2026, 11, 11)),
+        Evenement(id: 'b', titre: 'Ancien', description: '', lieu: '',
+            date: demain, organisateur: 'X', organisateurId: 'u30',
+            dateCreation: DateTime(2026, 11, 9)),
+        Evenement(id: 'c', titre: 'Le mien', description: '', lieu: '',
+            date: demain, organisateur: 'Moi', organisateurId: 'u1',
+            dateCreation: DateTime(2026, 11, 11)),
+        Evenement(id: 'd', titre: 'Sans date', description: '', lieu: '',
+            date: demain, organisateur: 'X'),
+      ];
+      final List<Sondage> sondages = [
+        Sondage(id: 'p', question: 'Q', options: const [], dateFin: demain,
+            proposeParId: 'u31', dateCreation: DateTime(2026, 11, 12)),
+      ];
+      expect(NouveautesM4.compter(evenements, sondages, visite, 'u1'), 2);
+    });
+
+    testWidgets('sondage de date : l\'auteur crée l\'événement à la date gagnante',
+        (tester) async {
+      final Sondage sondage = depot.ajouterSondageDe(
+        amira, // admin : peut organiser
+        question: 'Quelle date ?',
+        dates: [DateTime(2026, 12, 5, 19, 0), DateTime(2026, 12, 6, 19, 0)],
+      );
+      depot.ajouterVoteDe(sarra, sondage, 0);
+      await afficher(tester, SondageScreen(sondageId: sondage.id));
+      expect(find.text('Créer l\'événement le sam. 05/12 · 19:00'), findsOneWidget);
+    });
+
+    testWidgets('formulaire : interrupteur « Sondage de date »', (tester) async {
+      await afficher(tester, const SondageFormScreen());
+      expect(find.text('Ajouter une date'), findsNothing);
+      await tester.tap(find.text('Sondage de date'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ajouter une date'), findsOneWidget);
+      expect(find.text('Choix 1'), findsNothing);
     });
   });
 

@@ -21,6 +21,9 @@ class Sondage {
   final String proposeParId; // uid de l'auteur (règles de sécurité)
   final String proposePar; // ex : "Salma G.", vide si inconnu (Firestore : proposeParNom)
   final int nombreMembres; // nombre de membres qui peuvent voter (non stocké)
+  final List<DateTime> dates; // sondage de date : une date par choix (sinon vide)
+  final String? evenementId; // sondage rattaché à un événement (sinon null)
+  final DateTime? dateCreation; // pour le badge « nouveau » (null : ancien sondage)
 
   const Sondage({
     required this.id,
@@ -30,7 +33,26 @@ class Sondage {
     this.proposeParId = '',
     this.proposePar = '',
     this.nombreMembres = 0,
+    this.dates = const [],
+    this.evenementId,
+    this.dateCreation,
   });
+
+  /// true si les choix sont des dates (on peut créer l'événement à la date gagnante).
+  bool get estSondageDeDate => dates.isNotEmpty && dates.length == options.length;
+
+  /// L'index du choix qui a le plus de votes (null : aucun vote).
+  /// Égalité : le premier des choix à égalité.
+  int? get indexGagnant {
+    int? meilleur;
+    for (int i = 0; i < options.length; i++) {
+      if (options[i].votes > 0 &&
+          (meilleur == null || options[i].votes > options[meilleur].votes)) {
+        meilleur = i;
+      }
+    }
+    return meilleur;
+  }
 
   /// Nombre total de votes, utile pour calculer les pourcentages.
   int get totalVotes {
@@ -56,6 +78,9 @@ class Sondage {
       'dateFin': dateFin,
       'proposeParId': proposeParId,
       'proposeParNom': proposePar,
+      'dates': dates, // DateTime → Timestamp (vide si sondage ordinaire)
+      'evenementId': evenementId,
+      'dateCreation': dateCreation ?? DateTime.now(), // pour le badge « nouveau »
     };
   }
 
@@ -77,6 +102,13 @@ class Sondage {
         ),
       );
     }
+    final List<DateTime> dates = [];
+    for (final Object? valeur in (map['dates'] as List<dynamic>? ?? [])) {
+      final DateTime? date = FirestoreCommun.lireDate(valeur);
+      if (date != null) {
+        dates.add(date);
+      }
+    }
     return Sondage(
       id: id,
       question: map['question'] ?? '',
@@ -85,6 +117,9 @@ class Sondage {
       proposeParId: map['proposeParId'] ?? '',
       proposePar: map['proposeParNom'] ?? '',
       nombreMembres: nombreMembres,
+      dates: dates,
+      evenementId: map['evenementId'],
+      dateCreation: FirestoreCommun.lireDate(map['dateCreation']),
     );
   }
 }
