@@ -59,6 +59,8 @@ dependencies:
   timezone: ^0.10.0
   image_picker: ^1.2.4
   http: ^1.6.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.5.0
 
 dev_dependencies:
   flutter_test:

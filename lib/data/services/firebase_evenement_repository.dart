@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/evenement.dart';
@@ -564,6 +566,97 @@ class FirebaseEvenementRepository implements EvenementRepository {
         commentaire: commentaire.trim(),
       );
       await _sous(evenement.id, 'avis').doc(moi.id).set(avis.toMap());
+    });
+  }
+
+  // ----- Présence par QR code (A21) -----
+
+  /// Un code au hasard, difficile à deviner (10 lettres et chiffres).
+  String _nouveauCode() {
+    const String lettres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final Random hasard = Random.secure();
+    String code = '';
+    for (int i = 0; i < 10; i++) {
+      code = code + lettres[hasard.nextInt(lettres.length)];
+    }
+    return code;
+  }
+
+  @override
+  Future<Resultat<String>> getCodePresence(Evenement evenement) {
+    return _executer(() async {
+      // prive/presence : lisible seulement par l'organisateur et l'admin
+      final DocumentReference<Map<String, dynamic>> document =
+          _sous(evenement.id, 'prive').doc('presence');
+      final DocumentSnapshot<Map<String, dynamic>> lu = await document.get();
+      final String? existant = lu.data()?['code'] as String?;
+      if (existant != null && existant.isNotEmpty) {
+        return existant;
+      }
+      final String code = _nouveauCode();
+      await document.set({'code': code});
+      return code;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> marquerPresent(Evenement evenement, String texteQr) {
+    return _executer(() async {
+      final List<String>? qr = EvenementRepository.lireQrPresence(texteQr);
+      if (qr == null) {
+        throw const RefusM4('Ce QR code n\'est pas un QR de présence Houmani');
+      }
+      final Utilisateur moi = _moi();
+      final bool participe = (await _sous(evenement.id, 'participants')
+              .doc(moi.id)
+              .get())
+          .exists;
+      final bool deja =
+          (await _sous(evenement.id, 'presences').doc(moi.id).get()).exists;
+      final String? refus = EvenementRepository.refusPresence(
+        evenement,
+        qr[0],
+        participe: participe,
+        dejaPresent: deja,
+        maintenant: DateTime.now(),
+      );
+      if (refus != null) {
+        throw RefusM4(refus);
+      }
+      // Les règles comparent ce code avec le code secret de l'événement
+      try {
+        await _sous(evenement.id, 'presences').doc(moi.id).set({
+          'code': qr[1],
+          'nom': EvenementRepository.nomCourt(moi),
+          'date': FieldValue.serverTimestamp(),
+        });
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied') {
+          throw const RefusM4('Ce QR code n\'est plus valable');
+        }
+        rethrow;
+      }
+    });
+  }
+
+  @override
+  Future<Resultat<bool>> estPresent(String evenementId) {
+    return _executer(() async {
+      return (await _sous(evenementId, 'presences').doc(_moi().id).get())
+          .exists;
+    });
+  }
+
+  @override
+  Future<Resultat<List<String>>> getPresents(String evenementId) {
+    return _executer(() async {
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await _sous(evenementId, 'presences').get();
+      final List<String> ids = [];
+      for (final document in snapshot.docs) {
+        ids.add(document.id);
+      }
+      return ids;
     });
   }
 

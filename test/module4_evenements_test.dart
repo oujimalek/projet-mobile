@@ -1242,4 +1242,63 @@ void main() {
       expect(depot.sondages.single.options.length, 2); // le choix vide est ignoré
     });
   });
+
+  group('A21 : présence par QR code', () {
+    test('texte du QR : écrit puis relu ; un autre QR est refusé', () {
+      final String texte = EvenementRepository.texteQrPresence('e1', 'ABC123');
+      expect(EvenementRepository.lireQrPresence(texte), ['e1', 'ABC123']);
+      expect(EvenementRepository.lireQrPresence('https://example.com'), isNull);
+      expect(EvenementRepository.lireQrPresence('houmani-presence:e1:'), isNull);
+    });
+
+    test('pointage : de 2 h avant à 12 h après le début', () {
+      final DateTime debut = DateTime(2026, 11, 15, 18);
+      final Evenement match = Evenement(
+        id: 'e', titre: 'Match', description: '', lieu: '', date: debut,
+        organisateur: 'X',
+      );
+      expect(EvenementRepository.pointageOuvert(match, DateTime(2026, 11, 15, 15)),
+          isFalse);
+      expect(EvenementRepository.pointageOuvert(match, DateTime(2026, 11, 15, 17)),
+          isTrue);
+      expect(EvenementRepository.pointageOuvert(match, DateTime(2026, 11, 16, 5)),
+          isTrue);
+      expect(EvenementRepository.pointageOuvert(match, DateTime(2026, 11, 16, 7)),
+          isFalse);
+      expect(
+          EvenementRepository.refusPresence(match, 'autre',
+              participe: true, dejaPresent: false,
+              maintenant: DateTime(2026, 11, 15, 18)),
+          contains('autre événement'));
+    });
+
+    test('scan : seulement un inscrit, avec le bon code, une fois', () async {
+      final DateTime bientot = DateTime.now().add(const Duration(hours: 1));
+      final Evenement match = depot.ajouterEvenementDe(nizar, date: bientot);
+
+      // Un voisin ne peut pas lire le code secret ; l'organisateur oui
+      await devenir(sarra);
+      expect((await depot.getCodePresence(match)).estSucces, isFalse);
+      await devenir(nizar);
+      final String code = (await depot.getCodePresence(match)).donnee!;
+      final String qr = EvenementRepository.texteQrPresence(match.id, code);
+
+      // Sarra n'est pas inscrite : refusé
+      await devenir(sarra);
+      expect((await depot.marquerPresent(match, qr)).estSucces, isFalse);
+
+      // Inscrite, mais un faux code : refusé
+      expect((await depot.participer(match.id)).estSucces, isTrue);
+      final String faux = EvenementRepository.texteQrPresence(match.id, 'FAUX');
+      expect((await depot.marquerPresent(match, faux)).estSucces, isFalse);
+
+      // Le bon QR : présente, une seule fois
+      expect((await depot.marquerPresent(match, qr)).estSucces, isTrue);
+      expect((await depot.estPresent(match.id)).donnee, isTrue);
+      expect((await depot.marquerPresent(match, qr)).estSucces, isFalse);
+
+      await devenir(nizar);
+      expect((await depot.getPresents(match.id)).donnee, [sarra.id]);
+    });
+  });
 }

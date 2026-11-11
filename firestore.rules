@@ -535,6 +535,31 @@ service cloud.firestore {
             && request.resource.data.note <= 5;
           allow update, delete: if false;
         }
+
+        // ----- Présence par QR code (A21) -----
+        // prive/presence = { code } : le code secret du QR. Seuls
+        // l'organisateur et l'admin le lisent ou le créent.
+        match /prive/{docPrive} {
+          allow read, create: if membreDe(q) && organisateurOuAdmin();
+          allow update, delete: if false;
+        }
+
+        // presences/{uid} : je me pointe présent en scannant le QR, si je
+        // suis inscrit, de 2 h avant à 12 h après le début, avec le BON code.
+        // Lisible par moi-même, l'organisateur et l'admin (le code y est).
+        match /presences/{uidPresence} {
+          allow read: if membreDe(q)
+            && (uidPresence == monUid() || organisateurOuAdmin());
+          allow create: if membreDe(q)
+            && uidPresence == monUid()
+            && exists(/databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid()))
+            && get(chemin()).data.get('annule', false) == false
+            && request.time > get(chemin()).data.date - duration.value(2, 'h')
+            && request.time < get(chemin()).data.date + duration.value(12, 'h')
+            && request.resource.data.code
+               == get(/databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/prive/presence).data.code;
+          allow update, delete: if false;
+        }
       }
 
       // ---------- M4 · Sondages ----------

@@ -280,6 +280,63 @@ abstract class EvenementRepository {
     return null;
   }
 
+  // ----- Présence par QR code (A21) -----
+
+  /// Le début du QR de présence (pour reconnaître NOTRE QR).
+  static const String prefixeQr = 'houmani-presence';
+
+  /// Le texte caché dans le QR : "houmani-presence:{evenementId}:{code}".
+  static String texteQrPresence(String evenementId, String code) {
+    return '$prefixeQr:$evenementId:$code';
+  }
+
+  /// Lit un QR scanné : [evenementId, code], ou null si ce n'est pas un QR
+  /// de présence Houmani.
+  static List<String>? lireQrPresence(String texte) {
+    final List<String> morceaux = texte.trim().split(':');
+    if (morceaux.length != 3 || morceaux[0] != prefixeQr) {
+      return null;
+    }
+    if (morceaux[1].isEmpty || morceaux[2].isEmpty) {
+      return null;
+    }
+    return [morceaux[1], morceaux[2]];
+  }
+
+  /// Le pointage est ouvert de 2 h avant le début à 12 h après
+  /// (mêmes heures que les règles Firestore).
+  static bool pointageOuvert(Evenement evenement, DateTime maintenant) {
+    final DateTime debut = evenement.date.subtract(const Duration(hours: 2));
+    final DateTime fin = evenement.date.add(const Duration(hours: 12));
+    return maintenant.isAfter(debut) && maintenant.isBefore(fin);
+  }
+
+  /// Pourquoi ce pointage est refusé (null : accepté).
+  static String? refusPresence(
+    Evenement evenement,
+    String evenementIdDuQr, {
+    required bool participe,
+    required bool dejaPresent,
+    required DateTime maintenant,
+  }) {
+    if (evenementIdDuQr != evenement.id) {
+      return 'Ce QR code est celui d\'un autre événement';
+    }
+    if (evenement.annule) {
+      return 'Cet événement est annulé';
+    }
+    if (!participe) {
+      return 'Inscris-toi d\'abord à l\'événement';
+    }
+    if (dejaPresent) {
+      return 'Ta présence est déjà enregistrée';
+    }
+    if (!pointageOuvert(evenement, maintenant)) {
+      return 'Le pointage ouvre 2 h avant le début de l\'événement';
+    }
+    return null;
+  }
+
   /// La moyenne des notes (null : aucun avis).
   static double? moyenne(List<AvisEvenement> avis) {
     if (avis.isEmpty) {
@@ -475,6 +532,21 @@ abstract class EvenementRepository {
   /// Un participant note l'événement terminé (1 à 5), une seule fois.
   Future<Resultat<void>> donnerAvis(
       Evenement evenement, int note, String commentaire);
+
+  // ----- Présence par QR code (A21) -----
+
+  /// Le code secret du QR (créé la première fois). Seuls l'organisateur
+  /// et l'admin peuvent le lire.
+  Future<Resultat<String>> getCodePresence(Evenement evenement);
+
+  /// Le participant connecté a scanné le QR [texteQr] : il est présent.
+  Future<Resultat<void>> marquerPresent(Evenement evenement, String texteQr);
+
+  /// L'utilisateur connecté est-il déjà pointé présent ?
+  Future<Resultat<bool>> estPresent(String evenementId);
+
+  /// Les identifiants des présents (organisateur et admin seulement).
+  Future<Resultat<List<String>>> getPresents(String evenementId);
 
   // =====================================================================
   // Sondages

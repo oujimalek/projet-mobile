@@ -725,6 +725,70 @@ class MockEvenementRepository implements EvenementRepository {
     return const Resultat.succes(null);
   }
 
+  // ----- Présence par QR code (A21) -----
+
+  final Map<String, String> _codesPresence = {};
+  final Map<String, Set<String>> _presences = {};
+
+  @override
+  Future<Resultat<String>> getCodePresence(Evenement evenement) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    final Utilisateur moi = _moi();
+    if (!EvenementRepository.peutModifier(moi, evenement)) {
+      return const Resultat.echec('Action non autorisée');
+    }
+    return Resultat.succes(
+        _codesPresence.putIfAbsent(evenement.id, () => 'CODE${evenement.id}'));
+  }
+
+  @override
+  Future<Resultat<void>> marquerPresent(
+      Evenement evenement, String texteQr) async {
+    final List<String>? qr = EvenementRepository.lireQrPresence(texteQr);
+    if (qr == null) {
+      return const Resultat.echec(
+          'Ce QR code n\'est pas un QR de présence Houmani');
+    }
+    final Utilisateur moi = _moi();
+    final Set<String> presents =
+        _presences.putIfAbsent(evenement.id, () => <String>{});
+    final String? refus = EvenementRepository.refusPresence(
+      _parId(evenement.id) ?? evenement,
+      qr[0],
+      participe: _participants[evenement.id]?.containsKey(moi.id) ?? false,
+      dejaPresent: presents.contains(moi.id),
+      maintenant: DateTime.now(),
+    );
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    // Comme les règles : le code doit être le code secret de l'événement
+    if (_codesPresence[evenement.id] != qr[1]) {
+      return const Resultat.echec('Ce QR code n\'est plus valable');
+    }
+    presents.add(moi.id);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<bool>> estPresent(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    return Resultat.succes(
+        _presences[evenementId]?.contains(_moi().id) ?? false);
+  }
+
+  @override
+  Future<Resultat<List<String>>> getPresents(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    return Resultat.succes(List.of(_presences[evenementId] ?? <String>{}));
+  }
+
   // =====================================================================
   // Liste d'attente
   // =====================================================================

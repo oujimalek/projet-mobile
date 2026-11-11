@@ -19,6 +19,7 @@ import 'carte_evenement.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
 import 'notifications_m4.dart';
+import 'presence_qr.dart';
 import 'vie_evenement_widgets.dart';
 
 /// M4 - Détail d'un événement : infos, participants, et le bouton
@@ -47,6 +48,8 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
   bool _interesse = false; // "Peut-être"
   List<Participant> _attente = []; // liste d'attente, dans l'ordre
   List<Participant> _participants = []; // organisateur et admin seulement
+  bool _present = false; // (A21) j'ai scanné le QR de présence
+  List<String> _presents = []; // (A21) organisateur et admin seulement
   bool _enChargement = true;
   bool _envoiEnCours = false; // participer / se retirer / supprimer
   String? _erreur;
@@ -83,10 +86,18 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     final Resultat<List<Participant>> attente =
         await _depot.getAttente(evenement.id);
     List<Participant> noms = [];
+    List<String> presentsIds = [];
     if (EvenementRepository.peutVoirParticipants(_moi, evenement)) {
       final Resultat<List<Participant>> participants =
           await _depot.getParticipants(evenement.id);
       noms = participants.donnee ?? [];
+      final Resultat<List<String>> presents =
+          await _depot.getPresents(evenement.id);
+      presentsIds = presents.donnee ?? [];
+    }
+    bool present = false;
+    if (inscrit.donnee == true) {
+      present = (await _depot.estPresent(evenement.id)).donnee ?? false;
     }
     if (!mounted) {
       return;
@@ -98,7 +109,40 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       _interesse = interesse.donnee ?? false;
       _attente = attente.donnee ?? [];
       _participants = noms;
+      _presents = presentsIds;
+      _present = present;
     });
+  }
+
+  /// (A21) Ouvre la caméra, puis enregistre la présence avec le QR lu.
+  Future<void> _scannerPresence(Evenement evenement) async {
+    final String? texte =
+        await ouvrirEcranM4<String>(context, const ScannerPresenceScreen());
+    if (texte == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat =
+        await _depot.marquerPresent(evenement, texte);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+      if (resultat.estSucces) {
+        _present = true;
+      }
+    });
+    if (resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr('Bienvenue ! Ta présence est enregistrée',
+            'Mar7ba ! El 7odhour mte3ek tsajjel'))),
+      );
+    } else {
+      _afficherErreur(resultat);
+    }
   }
 
   /// Affiche le message d'erreur d'un Resultat en échec.
@@ -281,6 +325,9 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
               _modifier();
             } else if (choix == 'annuler') {
               _annuler(evenement, !evenement.annule);
+            } else if (choix == 'qr') {
+              ouvrirEcranM4(context, QrPresenceScreen(evenement: evenement))
+                  .then((_) => _charger());
             } else if (choix == 'exporter') {
               // Partager la liste des participants (WhatsApp, e-mail...)
               SharePlus.instance.share(ShareParams(
@@ -301,6 +348,9 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                   child: Text(evenement.annule
                       ? tr('Rétablir l\'événement', 'Rajja3 l\'événement')
                       : tr('Annuler l\'événement', 'Batel l\'événement'))));
+              choix.add(PopupMenuItem(
+                  value: 'qr',
+                  child: Text(tr('QR de présence', 'QR mta3 el 7odhour'))));
               choix.add(PopupMenuItem(
                   value: 'exporter',
                   child: Text(tr('Exporter la liste des participants', 'Ab3ath liste mta3 el jeyin'))));
@@ -533,7 +583,10 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                 fond: AppColors.primaryLight,
               ),
               const SizedBox(width: 10),
-              Text(participant.nom),
+              Expanded(child: Text(participant.nom)),
+              // (A21) présent : il a scanné le QR
+              if (_presents.contains(participant.id))
+                Icon(Icons.how_to_reg, color: AppColors.success, size: 20),
             ],
           ),
         );
@@ -687,6 +740,32 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         refus,
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textSecondary),
+      );
+    } else if (_inscrit &&
+        !evenement.annule &&
+        EvenementRepository.pointageOuvert(evenement, DateTime.now())) {
+      // (A21) Le jour J : je pointe ma présence en scannant le QR
+      bouton = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_present)
+            Text(
+              tr('Présence enregistrée ✓', 'El 7odhour mte3ek tsajjel ✓'),
+              style: TextStyle(
+                  color: AppColors.success, fontWeight: FontWeight.w600),
+            )
+          else
+            PrimaryButton(
+              texte: tr('Je suis là : scanner le QR', 'Ena houni : scanni el QR'),
+              icone: Icons.qr_code_scanner,
+              onPressed: _envoiEnCours ? null : () => _scannerPresence(evenement),
+            ),
+          if (!evenement.estPasse)
+            TextButton(
+              onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
+              child: Text(tr('Me retirer', 'Mouch jey')),
+            ),
+        ],
       );
     } else if (evenement.estPasse) {
       bouton = Text(

@@ -580,7 +580,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${evenement.participants} participants',
+                  '${evenement.participants} participant${evenement.participants > 1 ? 's' : ''}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
