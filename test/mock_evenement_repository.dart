@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:houmani/data/models/evenement.dart';
+import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/sondage.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/models/vie_evenement.dart';
@@ -57,6 +58,7 @@ class MockEvenementRepository implements EvenementRepository {
     bool annule = false,
     bool? officiel, // par défaut : officiel si l'organisateur est admin
     int placesMax = 0,
+    PointGps? position,
   }) {
     final Evenement evenement = Evenement(
       id: _nouvelId('e'),
@@ -71,6 +73,7 @@ class MockEvenementRepository implements EvenementRepository {
       annule: annule,
       officiel: officiel ?? organisateur.estAdmin,
       placesMax: placesMax,
+      position: position,
     );
     _evenements.add(evenement);
     _participants[evenement.id] = {};
@@ -192,6 +195,7 @@ class MockEvenementRepository implements EvenementRepository {
     required String lieu,
     required CategorieEvenement categorie,
     int placesMax = 0,
+    PointGps? position,
   }) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
@@ -219,6 +223,7 @@ class MockEvenementRepository implements EvenementRepository {
       dateFin: dateFin,
       categorie: categorie,
       placesMax: placesMax,
+      position: position,
     );
     return const Resultat.succes(null);
   }
@@ -258,6 +263,8 @@ class MockEvenementRepository implements EvenementRepository {
       sansFin: evenement.dateFin == null,
       categorie: evenement.categorie,
       placesMax: evenement.placesMax,
+      position: evenement.position,
+      sansPosition: evenement.position == null,
     );
     return const Resultat.succes(null);
   }
@@ -753,4 +760,8 @@ class MockEvenementRepository implements EvenementRepository {
     _attente[evenementId]?.remove(_moi().id);
     return const Resultat.succes(null);
   }
+
+  /// Simule l'absence d'Internet (les données viennent de la copie locale).
+  @override
+  bool horsLigne = false;
 }

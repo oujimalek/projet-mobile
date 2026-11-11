@@ -8,13 +8,16 @@ import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../module1/widgets_module1.dart';
+import 'carte_evenement.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
+import 'notifications_m4.dart';
 import 'vie_evenement_widgets.dart';
 
 /// M4 - Détail d'un événement : infos, participants, et le bouton
@@ -188,11 +191,20 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       _afficherErreur(resultat);
       return;
     }
+    // Rappels sur le téléphone : la veille et 1 h avant (ou on les annule)
+    final Evenement? evenement = _evenement;
+    if (evenement != null) {
+      if (_inscrit) {
+        NotificationsM4.annuler(evenement.id);
+      } else {
+        NotificationsM4.programmer(evenement);
+      }
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(_inscrit
             ? 'Tu ne participes plus à cet événement'
-            : 'Yaatik saha, tu participes !'),
+            : 'Yaatik saha, tu participes ! On te le rappellera la veille.'),
       ),
     );
     _charger(); // nouveau nombre de participants
@@ -219,11 +231,11 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuler'),
+              child: Text(tr('Annuler', 'Batel')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Supprimer', style: TextStyle(color: AppColors.error)),
+              child: Text(tr('Supprimer', 'Fasakh'), style: TextStyle(color: AppColors.error)),
             ),
           ],
         );
@@ -281,20 +293,20 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           itemBuilder: (context) {
             final List<PopupMenuEntry<String>> choix = [];
             if (peutModifier) {
-              choix.add(const PopupMenuItem(
-                  value: 'modifier', child: Text('Modifier')));
+              choix.add(PopupMenuItem(
+                  value: 'modifier', child: Text(tr('Modifier', 'Badel'))));
               choix.add(PopupMenuItem(
                   value: 'annuler',
                   child: Text(evenement.annule
-                      ? 'Rétablir l\'événement'
-                      : 'Annuler l\'événement')));
-              choix.add(const PopupMenuItem(
+                      ? tr('Rétablir l\'événement', 'Rajja3 l\'événement')
+                      : tr('Annuler l\'événement', 'Batel l\'événement'))));
+              choix.add(PopupMenuItem(
                   value: 'exporter',
-                  child: Text('Exporter la liste des participants')));
+                  child: Text(tr('Exporter la liste des participants', 'Ab3ath liste mta3 el jeyin'))));
             }
             if (peutSupprimer) {
-              choix.add(const PopupMenuItem(
-                  value: 'supprimer', child: Text('Supprimer')));
+              choix.add(PopupMenuItem(
+                  value: 'supprimer', child: Text(tr('Supprimer', 'Fasakh'))));
             }
             return choix;
           },
@@ -319,7 +331,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       body: Column(
         children: [
           AppHeader(
-            titre: 'Événement',
+            titre: tr('Événement', 'Événement'),
             action: evenement == null
                 ? null
                 : Row(
@@ -366,31 +378,31 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
             PastilleCategorie(categorie: evenement.categorie),
             if (evenement.officiel)
               BadgeM4(
-                texte: 'Officiel',
+                texte: tr('Officiel', 'Rasmi'),
                 couleur: AppColors.primary,
                 fond: AppColors.primaryLight,
               ),
             if (evenement.estComplet && !evenement.annule)
               BadgeM4(
-                texte: 'Complet',
+                texte: tr('Complet', 'Kemel'),
                 couleur: AppColors.error,
                 fond: AppColors.badgeRefuseFond,
               ),
             if (evenement.annule)
               BadgeM4(
-                texte: 'Annulé',
+                texte: tr('Annulé', 'Tbattel'),
                 couleur: AppColors.error,
                 fond: AppColors.badgeRefuseFond,
               ),
             if (evenement.estPasse)
               BadgeM4(
-                texte: 'Terminé',
+                texte: tr('Terminé', 'Kmel'),
                 couleur: AppColors.textSecondary,
                 fond: AppColors.backgroundSecondary,
               ),
             if (_inscrit)
               BadgeM4(
-                texte: 'Je participe',
+                texte: tr('Je participe', 'Ena jey'),
                 couleur: AppColors.success,
                 fond: AppColors.badgeResoluFond,
               ),
@@ -405,6 +417,12 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         _ligneInfo(Icons.calendar_today_outlined,
             '${texteDate(evenement.date)} · ${texteHoraire(evenement)}'),
         _ligneInfo(Icons.place_outlined, evenement.lieu),
+        // Le lieu exact sur la carte, si l'organisateur l'a placé
+        if (evenement.position != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: MiniCarteEvenement(position: evenement.position!),
+          ),
         _ligneInfo(Icons.person_outline, 'Organisé par ${evenement.organisateur}'),
         if (evenement.description.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -482,7 +500,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       if (_participants.isEmpty) {
         enfants.add(const SizedBox(height: 8));
         enfants.add(Text(
-          'Personne n\'est encore inscrit',
+          tr('Personne n\'est encore inscrit', '7atta 7ad ma tsajjel'),
           style: TextStyle(color: AppColors.textSecondary),
         ));
       }
@@ -619,7 +637,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           ),
           TextButton(
             onPressed: _envoiEnCours ? null : _quitterAttente,
-            child: const Text('Quitter la liste d\'attente'),
+            child: Text(tr('Quitter la liste d\'attente', 'O5rej mel liste d\'attente')),
           ),
         ],
       );
@@ -638,12 +656,12 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Une place s\'est libérée pour toi !',
+            tr('Une place s\'est libérée pour toi !', 'Famma blassa fer8et lik !'),
             style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           PrimaryButton(
-            texte: 'Je participe',
+            texte: tr('Je participe', 'Ena jey'),
             icone: Icons.check,
             onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
           ),
@@ -657,13 +675,13 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       );
     } else if (evenement.estPasse) {
       bouton = Text(
-        'Cet événement est terminé',
+        tr('Cet événement est terminé', 'L\'événement kmel'),
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textSecondary),
       );
     } else if (_inscrit) {
       bouton = SecondaryButton(
-        texte: 'Me retirer',
+        texte: tr('Me retirer', 'Mouch jey'),
         onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
       );
     } else {
@@ -672,7 +690,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           PrimaryButton(
-            texte: 'Je participe',
+            texte: tr('Je participe', 'Ena jey'),
             icone: Icons.check,
             onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
           ),
@@ -680,7 +698,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
             onPressed: _envoiEnCours ? null : _changerInteret,
             icon: Icon(_interesse ? Icons.star : Icons.star_border),
             label: Text(
-              _interesse ? 'Je ne suis plus intéressé' : 'Peut-être',
+              _interesse ? tr('Je ne suis plus intéressé', 'Ma3adech yhemni') : tr('Peut-être', 'Yemken'),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),

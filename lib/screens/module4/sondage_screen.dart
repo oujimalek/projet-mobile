@@ -8,6 +8,7 @@ import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_badge.dart';
@@ -341,7 +342,7 @@ class _SondageScreenState extends State<SondageScreen> {
       );
     } else if (sondage == null) {
       message = Text(
-        'Aucun sondage en cours dans ta houma',
+        tr('Aucun sondage en cours dans ta houma', 'Ma famma 7atta sondage fi houmtek'),
         style: TextStyle(color: AppColors.textSecondary),
       );
     }
@@ -349,7 +350,7 @@ class _SondageScreenState extends State<SondageScreen> {
       return Scaffold(
         body: Column(
           children: [
-            const AppHeader(titre: 'Sondage'),
+            AppHeader(titre: tr('Sondage', 'Sondage')),
             Expanded(
               child: Center(
                 child: Padding(
@@ -387,7 +388,7 @@ class _SondageScreenState extends State<SondageScreen> {
           // En-tête blanc arrondi, comme sur la maquette ; l'auteur et
           // l'admin peuvent supprimer le sondage
           AppHeader(
-            titre: 'Sondage',
+            titre: tr('Sondage', 'Sondage'),
             action: EvenementRepository.peutSupprimer(
                     UtilisateurRepository().getUtilisateurConnecte(),
                     sondage.proposeParId)
@@ -451,7 +452,7 @@ class _SondageScreenState extends State<SondageScreen> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
-                      'Vote pour voir les résultats',
+                      tr('Vote pour voir les résultats', 'Sawwet bech tchouf el natija'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textSecondary,
@@ -494,7 +495,7 @@ class _SondageScreenState extends State<SondageScreen> {
             child: Column(
               children: [
                 Text(
-                  _aVote ? 'Yaatik saha, ton vote est enregistré !' : '',
+                  _aVote ? tr('Yaatik saha, ton vote est enregistré !', 'Ya3tik sa77a, sawtek tsajjel !') : '',
                   style: TextStyle(
                     color: AppColors.success,
                     fontWeight: FontWeight.w600,
@@ -503,8 +504,8 @@ class _SondageScreenState extends State<SondageScreen> {
                 const SizedBox(height: 8),
                 PrimaryButton(
                   texte: !sondage.estOuvert && !_aVote
-                      ? 'Sondage terminé'
-                      : (_aVote ? 'Vote enregistré' : 'Confirmer mon vote'),
+                      ? tr('Sondage terminé', 'Sondage kmel')
+                      : (_aVote ? tr('Vote enregistré', 'Sawtek tsajjel') : tr('Confirmer mon vote', 'Akked sawtek')),
                   onPressed: actionBouton,
                 ),
               ],

@@ -408,7 +408,10 @@ service cloud.firestore {
         allow update: if membreDe(q)
           && (resource.data.organisateurId == monUid() || adminDe(q))
           && changeSeulement(['titre', 'description', 'date', 'dateFin',
-                              'lieu', 'categorie', 'annule', 'placesMax'])
+                              'lieu', 'categorie', 'annule', 'placesMax',
+                              'position'])
+          && (request.resource.data.get('position', null) == null
+              || request.resource.data.position is latlng)
           && (request.resource.data.get('placesMax', 0) == 0
               || request.resource.data.placesMax >= resource.data.nbParticipants);
 

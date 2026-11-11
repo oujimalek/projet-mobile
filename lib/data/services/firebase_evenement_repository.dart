@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/evenement.dart';
+import '../models/quartier.dart';
 import '../models/sondage.dart';
 import '../models/utilisateur.dart';
 import '../models/vie_evenement.dart';
@@ -89,11 +90,18 @@ class FirebaseEvenementRepository implements EvenementRepository {
     return aVenir;
   }
 
+  bool _horsLigne = false; // le dernier chargement vient de la copie locale
+
+  @override
+  bool get horsLigne => _horsLigne;
+
   @override
   Future<Resultat<List<Evenement>>> chargerEvenements() async {
     final Resultat<List<Evenement>> resultat = await _executer(() async {
       final QuerySnapshot<Map<String, dynamic>> snapshot =
           await _collectionEvenements.orderBy('date').get();
+      // Sans Internet, Firestore répond avec sa copie locale
+      _horsLigne = snapshot.metadata.isFromCache;
       final List<Evenement> liste = [];
       for (final document in snapshot.docs) {
         liste.add(Evenement.fromMap(document.id, document.data()));
@@ -127,6 +135,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
     required String lieu,
     required CategorieEvenement categorie,
     int placesMax = 0,
+    PointGps? position,
   }) {
     return _executer(() async {
       final String? refus = EvenementRepository.refusEvenement(
@@ -157,6 +166,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
         participants: 0, // les règles exigent 0 à la création
         officiel: moi.estAdmin, // les événements de l'admin sont officiels
         placesMax: placesMax,
+        position: position,
       );
       await _collectionEvenements.add(evenement.toMap());
     });
@@ -202,6 +212,9 @@ class FirebaseEvenementRepository implements EvenementRepository {
         'lieu': evenement.lieu.trim(),
         'categorie': evenement.categorie.name,
         'placesMax': evenement.placesMax,
+        'position': evenement.position == null
+            ? null
+            : GeoPoint(evenement.position!.latitude, evenement.position!.longitude),
       });
     });
   }

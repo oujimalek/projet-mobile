@@ -14,12 +14,14 @@ import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module4/calendrier_screen.dart';
 import 'package:houmani/screens/module4/evenement_detail_screen.dart';
 import 'package:houmani/screens/module4/graphique_sondage.dart';
+import 'package:houmani/screens/module4/notifications_m4.dart';
 import 'package:houmani/screens/module4/nouveautes_m4.dart';
 import 'package:houmani/screens/module4/evenement_form_screen.dart';
 import 'package:houmani/screens/module4/evenements_screen.dart';
 import 'package:houmani/screens/module4/sondage_form_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
+import 'package:houmani/theme/preference_langue.dart';
 
 import 'mock_evenement_repository.dart';
 import 'mock_utilisateur_repository.dart';
@@ -1015,6 +1017,46 @@ void main() {
       await devenir(sarra);
       await afficher(tester, const EvenementsScreen());
       expect(find.byTooltip('Statistiques'), findsNothing);
+    });
+  });
+
+  group('Lot 6 : carte, rappels du téléphone, hors ligne, derja', () {
+    test('position : relue depuis un GeoPoint, retirée avec sansPosition', () {
+      final Evenement relu = Evenement.fromMap('e', {
+        'position': const GeoPoint(36.85, 10.19),
+      });
+      expect(relu.position!.latitude, 36.85);
+      expect(relu.toMap()['position'], isA<GeoPoint>());
+      expect(relu.copyWith(sansPosition: true).position, isNull);
+      expect(Evenement.fromMap('e', {}).position, isNull);
+    });
+
+    test('rappels : la veille et 1 h avant, seulement dans le futur', () {
+      final DateTime debut = DateTime(2026, 11, 14, 18, 0);
+      expect(NotificationsM4.momentsRappel(debut, DateTime(2026, 11, 12)), [
+        DateTime(2026, 11, 13, 18, 0),
+        DateTime(2026, 11, 14, 17, 0),
+      ]);
+      // Le lendemain matin : il ne reste que le rappel de 17 h
+      expect(NotificationsM4.momentsRappel(debut, DateTime(2026, 11, 14, 9)),
+          [DateTime(2026, 11, 14, 17, 0)]);
+      expect(NotificationsM4.momentsRappel(debut, DateTime(2026, 11, 14, 17, 30)),
+          isEmpty);
+    });
+
+    testWidgets('hors ligne : un bandeau prévient', (tester) async {
+      depot.ajouterEvenementDe(nizar, titre: 'Fête');
+      depot.horsLigne = true;
+      await afficher(tester, const EvenementsScreen());
+      expect(find.textContaining('Hors ligne'), findsOneWidget);
+    });
+
+    testWidgets('derja : l\'onglet Événements change de langue', (tester) async {
+      PreferenceLangue.langue.value = Langue.derja;
+      addTearDown(() => PreferenceLangue.langue.value = Langue.francais);
+      await afficher(tester, const EvenementsScreen());
+      expect(find.text('Chnowa sayer fi houmtek'), findsOneWidget);
+      expect(find.text('El jem3a hedhi'), findsOneWidget);
     });
   });
 

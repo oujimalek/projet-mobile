@@ -8,6 +8,7 @@ import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import 'module4_widgets.dart';
 import 'sondage_form_screen.dart';
@@ -140,7 +141,7 @@ class _SectionObjetsState extends State<SectionObjets> {
                     ? null
                     : () => _faire(() => _depot.prendreObjet(
                         widget.evenement.id, objet, !moi)),
-                child: Text(moi ? 'Je ne l\'apporte plus' : 'Je l\'apporte'),
+                child: Text(moi ? tr('Je ne l\'apporte plus', 'Ma3adech njibou') : tr('Je l\'apporte', 'Ena njibou')),
               ),
             if (organise)
               IconButton(
@@ -190,7 +191,7 @@ class _SectionObjetsState extends State<SectionObjets> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _titreSection(Icons.shopping_basket_outlined, 'Qui apporte quoi ?'),
+            _titreSection(Icons.shopping_basket_outlined, tr('Qui apporte quoi ?', 'Chkoun yjib chnowa ?')),
             ...lignes,
           ],
         ),
@@ -280,7 +281,7 @@ class _SectionQuestionsState extends State<SectionQuestions> {
   Widget build(BuildContext context) {
     final List<Widget> lignes = [];
     if (_commentaires.isEmpty) {
-      lignes.add(Text('Pas encore de question. Pose la première !',
+      lignes.add(Text(tr('Pas encore de question. Pose la première !', 'Mazel 7atta sou2el. Is2el enti el lowel !'),
           style: TextStyle(color: AppColors.textSecondary)));
     }
     for (final Commentaire commentaire in _commentaires) {
@@ -341,8 +342,8 @@ class _SectionQuestionsState extends State<SectionQuestions> {
             child: TextField(
               controller: _texte,
               maxLength: EvenementRepository.commentaireMax,
-              decoration: const InputDecoration(
-                hintText: 'Pose une question...',
+              decoration: InputDecoration(
+                hintText: tr('Pose une question...', 'Is2el sou2el...'),
                 isDense: true,
                 counterText: '',
               ),
@@ -514,7 +515,7 @@ class _SectionAvisState extends State<SectionAvis> {
         alignment: Alignment.centerRight,
         child: TextButton(
           onPressed: _note == 0 || _envoi ? null : _envoyer,
-          child: const Text('Envoyer mon avis'),
+          child: Text(tr('Envoyer mon avis', 'Ab3ath ra2yek')),
         ),
       ));
     } else if (_avis.isEmpty) {
@@ -528,7 +529,7 @@ class _SectionAvisState extends State<SectionAvis> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _titreSection(Icons.star_border_rounded, 'Avis'),
+            _titreSection(Icons.star_border_rounded, tr('Avis', 'Ara2')),
             ...lignes,
           ],
         ),
@@ -630,7 +631,7 @@ class _SectionSondagesEvenementState extends State<SectionSondagesEvenement> {
             onPressed: () =>
                 _ouvrir(SondageFormScreen(evenement: widget.evenement)),
             icon: const Icon(Icons.add),
-            label: const Text('Ajouter un sondage'),
+            label: Text(tr('Ajouter un sondage', 'Zid sondage')),
           ),
         ),
       );

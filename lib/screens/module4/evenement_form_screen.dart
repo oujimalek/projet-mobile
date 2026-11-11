@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/evenement.dart';
+import '../../data/models/quartier.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
+import 'carte_evenement.dart';
 import 'module4_widgets.dart';
 
 /// M4 - Formulaire d'un événement : création, ou modification si
@@ -42,6 +44,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   DateTime? _jour; // la date choisie (sans l'heure)
   TimeOfDay? _heureDebut;
   TimeOfDay? _heureFin; // optionnelle
+  PointGps? _position; // le lieu sur la carte (optionnel)
   bool _enChargement = false;
   String? _message; // erreur affichée au-dessus du bouton
 
@@ -63,6 +66,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       _titre.text = existant.titre;
       _description.text = existant.description;
       _lieu.text = existant.lieu;
+      _position = existant.position;
       if (existant.placesMax > 0) {
         _places.text = '${existant.placesMax}';
       }
@@ -175,6 +179,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         lieu: _lieu.text,
         categorie: _categorie,
         placesMax: places,
+        position: _position,
       );
     } else {
       resultat = await _depot.modifierEvenement(
@@ -187,6 +192,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           lieu: _lieu.text,
           categorie: _categorie,
           placesMax: places,
+          position: _position,
+          sansPosition: _position == null,
         ),
       );
     }
@@ -293,6 +300,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  // M4 : le lieu exact sur la carte (optionnel)
+                  _choixCarte(),
+                  const SizedBox(height: 16),
                   AppTextField(
                     label: 'Nombre de places (vide = sans limite)',
                     hint: 'Ex : 30',
@@ -351,6 +361,44 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Le bouton « Placer sur la carte » (ou le lieu déjà choisi).
+  Widget _choixCarte() {
+    final PointGps? position = _position;
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final PointGps? choisi = await ouvrirEcranM4<PointGps>(
+                context,
+                ChoisirLieuScreen(initial: _position),
+              );
+              if (choisi != null && mounted) {
+                setState(() {
+                  _position = choisi;
+                });
+              }
+            },
+            icon: Icon(position == null ? Icons.add_location_alt_outlined : Icons.location_on),
+            label: Text(position == null
+                ? 'Placer sur la carte (optionnel)'
+                : 'Lieu placé sur la carte ✓'),
+          ),
+        ),
+        if (position != null)
+          IconButton(
+            tooltip: 'Retirer le lieu',
+            icon: Icon(Icons.close, color: AppColors.textSecondary),
+            onPressed: () {
+              setState(() {
+                _position = null;
+              });
+            },
+          ),
+      ],
     );
   }
 

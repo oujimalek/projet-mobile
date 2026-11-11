@@ -7,6 +7,7 @@ import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/arch_date_block.dart';
 import 'calendrier_screen.dart';
@@ -179,7 +180,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
             children: [
               ListTile(
                 leading: Icon(Icons.event_outlined, color: AppColors.primary),
-                title: const Text('Nouvel événement'),
+                title: Text(tr('Nouvel événement', 'Événement jdid')),
                 onTap: () {
                   Navigator.pop(context);
                   _nouvelEvenement();
@@ -187,7 +188,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
               ),
               ListTile(
                 leading: Icon(Icons.poll_outlined, color: AppColors.primary),
-                title: const Text('Nouveau sondage'),
+                title: Text(tr('Nouveau sondage', 'Sondage jdid')),
                 onTap: () {
                   Navigator.pop(context);
                   _nouveauSondage();
@@ -299,7 +300,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Ce qui se passe dans ta houma',
+                  tr('Ce qui se passe dans ta houma', 'Chnowa sayer fi houmtek'),
                   style: TextStyle(color: AppColors.primaryLight),
                 ),
               ],
@@ -426,6 +427,26 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     final List<Evenement> passesRecents = passes.reversed.toList();
 
     final List<Widget> contenu = [
+      // Sans Internet : la copie gardée sur le téléphone
+      if (_depot.horsLigne)
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundSecondary,
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, color: AppColors.textSecondary),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Hors ligne : voici les derniers événements chargés. '
+                    'Tire vers le bas pour actualiser.'),
+              ),
+            ],
+          ),
+        ),
       _champRecherche(),
       const SizedBox(height: 10),
       _filtresRapides(),
@@ -441,20 +462,20 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
               ? (EvenementRepository.peutOrganiser(_moi)
                   ? 'Aucun événement pour l\'instant.\nOrganise le premier avec le bouton + !'
                   : 'Aucun événement pour l\'instant.\nLes leaders de ta houma les annonceront ici.')
-              : 'Aucun événement ne correspond à ta recherche',
+              : tr('Aucun événement ne correspond à ta recherche', 'Ma l9ina 7atta événement'),
           icone: Icons.event_busy_outlined,
         ),
       );
     }
     if (aVenir.isNotEmpty) {
-      contenu.add(_titreSection('À venir'));
+      contenu.add(_titreSection(tr('À venir', 'Jeyin')));
       for (final Evenement evenement in aVenir) {
         contenu.add(_carteEvenement(evenement));
       }
     }
     if (passesRecents.isNotEmpty) {
       contenu.add(const SizedBox(height: 8));
-      contenu.add(_titreSection('Passés'));
+      contenu.add(_titreSection(tr('Passés', 'Fetou')));
       for (final Evenement evenement in passesRecents) {
         contenu.add(_carteEvenement(evenement));
       }
@@ -476,7 +497,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
         setState(() {}); // la liste se filtre à chaque lettre
       },
       decoration: InputDecoration(
-        hintText: 'Rechercher un événement, un lieu...',
+        hintText: tr('Rechercher un événement, un lieu...', 'Lawej 3la événement, blassa...'),
         prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
         suffixIcon: _recherche.text.isEmpty
             ? null
@@ -506,10 +527,10 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
   /// Tous · Cette semaine · J'organise · Je participe
   Widget _filtresRapides() {
     final Map<FiltreEvenements, String> textes = {
-      FiltreEvenements.tous: 'Tous',
-      FiltreEvenements.semaine: 'Cette semaine',
-      FiltreEvenements.jOrganise: 'J\'organise',
-      FiltreEvenements.jeParticipe: 'Je participe',
+      FiltreEvenements.tous: tr('Tous', 'Kol chay'),
+      FiltreEvenements.semaine: tr('Cette semaine', 'El jem3a hedhi'),
+      FiltreEvenements.jOrganise: tr('J\'organise', 'Ena nnadhem'),
+      FiltreEvenements.jeParticipe: tr('Je participe', 'Ena jey'),
     };
     final List<Widget> puces = [];
     for (final FiltreEvenements filtre in FiltreEvenements.values) {
@@ -598,7 +619,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (evenement.officiel) {
       badges.add(
         BadgeM4(
-          texte: 'Officiel',
+          texte: tr('Officiel', 'Rasmi'),
           couleur: AppColors.primary,
           fond: AppColors.primaryLight,
         ),
@@ -607,7 +628,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (evenement.estComplet && !evenement.annule) {
       badges.add(
         BadgeM4(
-          texte: 'Complet',
+          texte: tr('Complet', 'Kemel'),
           couleur: AppColors.error,
           fond: AppColors.badgeRefuseFond,
         ),
@@ -616,7 +637,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (evenement.annule) {
       badges.add(
         BadgeM4(
-          texte: 'Annulé',
+          texte: tr('Annulé', 'Tbattel'),
           couleur: AppColors.error,
           fond: AppColors.badgeRefuseFond,
         ),
@@ -625,7 +646,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (_mesParticipations.contains(evenement.id)) {
       badges.add(
         BadgeM4(
-          texte: 'Je participe',
+          texte: tr('Je participe', 'Ena jey'),
           couleur: AppColors.success,
           fond: AppColors.badgeResoluFond,
         ),
@@ -634,7 +655,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     if (evenement.organisateurId == _moi.id) {
       badges.add(
         BadgeM4(
-          texte: 'J\'organise',
+          texte: tr('J\'organise', 'Ena nnadhem'),
           couleur: AppColors.primary,
           fond: AppColors.primaryLight,
         ),
@@ -728,13 +749,13 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
 
     final List<Widget> contenu = [];
     bool titreTermines = false;
-    contenu.add(_titreSection('En cours'));
+    contenu.add(_titreSection(tr('En cours', 'Mazelou')));
     if (!_sondages.first.estOuvert) {
       contenu.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
-            'Aucun sondage en cours',
+            tr('Aucun sondage en cours', 'Ma famma 7atta sondage tawa'),
             style: TextStyle(color: AppColors.textSecondary),
           ),
         ),
@@ -745,7 +766,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
       if (!sondage.estOuvert && !titreTermines) {
         titreTermines = true;
         contenu.add(const SizedBox(height: 8));
-        contenu.add(_titreSection('Terminés'));
+        contenu.add(_titreSection(tr('Terminés', 'Kemlou')));
       }
       contenu.add(_carteSondage(sondage));
     }
