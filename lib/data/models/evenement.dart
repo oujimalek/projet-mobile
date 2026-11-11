@@ -55,6 +55,7 @@ class Evenement {
   final int interesses; // "Peut-être" (Firestore : nbInteresses, compteur protégé)
   final DateTime? dateCreation; // pour le badge « nouveau » (null : ancien événement)
   final PointGps? position; // le lieu exact sur la carte (optionnel)
+  final String? photoUrl; // la photo de l'événement (Cloudinary), optionnelle
 
   const Evenement({
     required this.id,
@@ -73,6 +74,7 @@ class Evenement {
     this.interesses = 0,
     this.dateCreation,
     this.position,
+    this.photoUrl,
   });
 
   /// true si l'événement est terminé (sa fin, ou son début s'il n'a pas de fin).
@@ -105,6 +107,7 @@ class Evenement {
       'position': position == null
           ? null
           : GeoPoint(position!.latitude, position!.longitude),
+      'photoUrl': photoUrl,
     };
   }
 
@@ -130,6 +133,7 @@ class Evenement {
       interesses: map['nbInteresses'] ?? 0,
       dateCreation: FirestoreCommun.lireDate(map['dateCreation']),
       position: Quartier.lirePoint(map['position']),
+      photoUrl: map['photoUrl'],
     );
   }
 
@@ -150,6 +154,8 @@ class Evenement {
     int? interesses,
     PointGps? position,
     bool sansPosition = false,
+    String? photoUrl,
+    bool sansPhoto = false,
   }) {
     return Evenement(
       id: id,
@@ -168,6 +174,7 @@ class Evenement {
       interesses: interesses ?? this.interesses,
       dateCreation: dateCreation,
       position: sansPosition ? null : (position ?? this.position),
+      photoUrl: sansPhoto ? null : (photoUrl ?? this.photoUrl),
     );
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/evenement.dart';
 import '../../data/models/quartier.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
+import '../../data/services/photos_m4.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
@@ -45,6 +47,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   TimeOfDay? _heureDebut;
   TimeOfDay? _heureFin; // optionnelle
   PointGps? _position; // le lieu sur la carte (optionnel)
+  String? _photoUrl; // la photo (Cloudinary), optionnelle
+  bool _envoiPhoto = false; // photo en cours d'envoi
   bool _enChargement = false;
   String? _message; // erreur affichée au-dessus du bouton
 
@@ -67,6 +71,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       _description.text = existant.description;
       _lieu.text = existant.lieu;
       _position = existant.position;
+      _photoUrl = existant.photoUrl;
       if (existant.placesMax > 0) {
         _places.text = '${existant.placesMax}';
       }
@@ -180,6 +185,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         categorie: _categorie,
         placesMax: places,
         position: _position,
+        photoUrl: _photoUrl,
       );
     } else {
       resultat = await _depot.modifierEvenement(
@@ -194,6 +200,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           placesMax: places,
           position: _position,
           sansPosition: _position == null,
+          photoUrl: _photoUrl,
+          sansPhoto: _photoUrl == null,
         ),
       );
     }
@@ -302,6 +310,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
                   const SizedBox(height: 16),
                   // M4 : le lieu exact sur la carte (optionnel)
                   _choixCarte(),
+                  const SizedBox(height: 12),
+                  _choixPhoto(),
                   const SizedBox(height: 16),
                   AppTextField(
                     label: 'Nombre de places (vide = sans limite)',
@@ -361,6 +371,121 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Choisit une photo (galerie ou appareil photo) puis l'envoie tout de
+  /// suite à Cloudinary : on garde seulement son adresse.
+  Future<void> _ajouterPhoto() async {
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.card,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library_outlined, color: AppColors.primary),
+                title: const Text('Choisir dans la galerie'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_camera_outlined, color: AppColors.primary),
+                title: const Text('Prendre une photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (source == null) {
+      return;
+    }
+    // Photo réduite avant l'envoi : plus rapide, et moins de données mobiles
+    final XFile? image = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 1600,
+      imageQuality: 80,
+    );
+    if (image == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _envoiPhoto = true;
+    });
+    final Resultat<String> resultat =
+        await PhotosM4.envoyer(await image.readAsBytes(), image.name);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiPhoto = false;
+      if (resultat.estSucces) {
+        _photoUrl = resultat.donnee;
+      } else {
+        _message = resultat.erreur;
+      }
+    });
+  }
+
+  /// La photo de l'événement : aperçu, ou bouton « Ajouter une photo ».
+  Widget _choixPhoto() {
+    final String? photo = _photoUrl;
+    if (_envoiPhoto) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Row(
+          children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12),
+            Text('Envoi de la photo...'),
+          ],
+        ),
+      );
+    }
+    if (photo == null) {
+      return OutlinedButton.icon(
+        onPressed: _ajouterPhoto,
+        icon: const Icon(Icons.add_a_photo_outlined),
+        label: const Text('Ajouter une photo (optionnel)'),
+      );
+    }
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          child: Image.network(
+            PhotosM4.miniature(photo),
+            height: 160,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          right: 6,
+          top: 6,
+          child: Row(
+            children: [
+              IconButton.filledTonal(
+                tooltip: 'Changer la photo',
+                onPressed: _ajouterPhoto,
+                icon: const Icon(Icons.edit),
+              ),
+              IconButton.filledTonal(
+                tooltip: 'Retirer la photo',
+                onPressed: () {
+                  setState(() {
+                    _photoUrl = null;
+                  });
+                },
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

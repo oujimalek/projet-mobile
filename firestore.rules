@@ -401,7 +401,9 @@ service cloud.firestore {
           && request.resource.data.nbParticipants == 0
           && request.resource.data.get('nbInteresses', 0) == 0
           && (request.resource.data.get('officiel', false) == false || adminDe(q))
-          && request.resource.data.get('annule', false) == false;
+          && request.resource.data.get('annule', false) == false
+          && (request.resource.data.get('photoUrl', null) == null
+              || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/pu3lxdrf/.*'));
 
         // L'organisateur (ou l'admin) modifie ou annule l'événement
         // (pas le compteur, ni "officiel").
@@ -409,9 +411,12 @@ service cloud.firestore {
           && (resource.data.organisateurId == monUid() || adminDe(q))
           && changeSeulement(['titre', 'description', 'date', 'dateFin',
                               'lieu', 'categorie', 'annule', 'placesMax',
-                              'position'])
+                              'position', 'photoUrl'])
           && (request.resource.data.get('position', null) == null
               || request.resource.data.position is latlng)
+          // Photo : seulement une adresse de NOTRE compte Cloudinary
+          && (request.resource.data.get('photoUrl', null) == null
+              || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/pu3lxdrf/.*'))
           && (request.resource.data.get('placesMax', 0) == 0
               || request.resource.data.placesMax >= resource.data.nbParticipants);
 

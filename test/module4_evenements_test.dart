@@ -9,6 +9,7 @@ import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/models/vie_evenement.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/evenement_repository.dart';
+import 'package:houmani/data/services/photos_m4.dart';
 import 'package:houmani/data/services/statistiques_m4.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module4/calendrier_screen.dart';
@@ -1057,6 +1058,34 @@ void main() {
       await afficher(tester, const EvenementsScreen());
       expect(find.text('Chnowa sayer fi houmtek'), findsOneWidget);
       expect(find.text('El jem3a hedhi'), findsOneWidget);
+    });
+  });
+
+  group('Photos (Cloudinary)', () {
+    const String url =
+        'https://res.cloudinary.com/pu3lxdrf/image/upload/v1731/houmani/evenements/abc.jpg';
+
+    test('seules les photos de notre compte sont acceptées', () {
+      expect(PhotosM4.estPhotoValide(url), isTrue);
+      expect(PhotosM4.estPhotoValide('https://exemple.com/photo.jpg'), isFalse);
+      expect(PhotosM4.estPhotoValide('https://res.cloudinary.com/autre/image/upload/x.jpg'),
+          isFalse);
+    });
+
+    test('miniature : transformation Cloudinary insérée après /image/upload/', () {
+      expect(
+        PhotosM4.miniature(url, largeur: 150, hauteur: 150),
+        'https://res.cloudinary.com/pu3lxdrf/image/upload/'
+        'c_fill,w_150,h_150,q_auto,f_auto/v1731/houmani/evenements/abc.jpg',
+      );
+      expect(PhotosM4.miniature('https://autre.com/x.jpg'), 'https://autre.com/x.jpg');
+    });
+
+    test('photoUrl : enregistrée, relue, retirée', () {
+      final Evenement relu = Evenement.fromMap('e', {'photoUrl': url});
+      expect(relu.photoUrl, url);
+      expect(relu.toMap()['photoUrl'], url);
+      expect(relu.copyWith(sansPhoto: true).photoUrl, isNull);
     });
   });
 

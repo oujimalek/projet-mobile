@@ -400,6 +400,7 @@ abstract class EvenementRepository {
     required CategorieEvenement categorie,
     int placesMax = 0,
     PointGps? position,
+    String? photoUrl,
   });
 
   /// L'organisateur (ou l'admin) modifie titre, description, dates, lieu,

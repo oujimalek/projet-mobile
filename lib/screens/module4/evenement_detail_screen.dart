@@ -6,6 +6,7 @@ import '../../data/models/evenement.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
+import '../../data/services/photos_m4.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -369,7 +370,21 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        IllustrationCategorie(categorie: evenement.categorie),
+        // La photo de l'événement (Cloudinary), sinon l'illustration de sa catégorie
+        if (evenement.photoUrl != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            child: Image.network(
+              PhotosM4.miniature(evenement.photoUrl!),
+              height: 190,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, erreur, pile) =>
+                  IllustrationCategorie(categorie: evenement.categorie),
+            ),
+          )
+        else
+          IllustrationCategorie(categorie: evenement.categorie),
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,

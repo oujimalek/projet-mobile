@@ -59,6 +59,7 @@ class MockEvenementRepository implements EvenementRepository {
     bool? officiel, // par défaut : officiel si l'organisateur est admin
     int placesMax = 0,
     PointGps? position,
+    String? photoUrl,
   }) {
     final Evenement evenement = Evenement(
       id: _nouvelId('e'),
@@ -74,6 +75,7 @@ class MockEvenementRepository implements EvenementRepository {
       officiel: officiel ?? organisateur.estAdmin,
       placesMax: placesMax,
       position: position,
+      photoUrl: photoUrl,
     );
     _evenements.add(evenement);
     _participants[evenement.id] = {};
@@ -196,6 +198,7 @@ class MockEvenementRepository implements EvenementRepository {
     required CategorieEvenement categorie,
     int placesMax = 0,
     PointGps? position,
+    String? photoUrl,
   }) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
@@ -224,6 +227,7 @@ class MockEvenementRepository implements EvenementRepository {
       categorie: categorie,
       placesMax: placesMax,
       position: position,
+      photoUrl: photoUrl,
     );
     return const Resultat.succes(null);
   }
@@ -265,6 +269,8 @@ class MockEvenementRepository implements EvenementRepository {
       placesMax: evenement.placesMax,
       position: evenement.position,
       sansPosition: evenement.position == null,
+      photoUrl: evenement.photoUrl,
+      sansPhoto: evenement.photoUrl == null,
     );
     return const Resultat.succes(null);
   }

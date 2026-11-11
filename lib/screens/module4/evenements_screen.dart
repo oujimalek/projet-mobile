@@ -5,6 +5,7 @@ import '../../data/models/sondage.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
+import '../../data/services/photos_m4.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -674,7 +675,25 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ArchDateBlock(date: evenement.date),
+              // La photo (petite), sinon la date en arc
+              if (evenement.photoUrl != null)
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        PhotosM4.miniature(evenement.photoUrl!, largeur: 150, hauteur: 150),
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, erreur, pile) =>
+                            ArchDateBlock(date: evenement.date),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                ArchDateBlock(date: evenement.date),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

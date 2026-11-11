@@ -136,6 +136,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
     required CategorieEvenement categorie,
     int placesMax = 0,
     PointGps? position,
+    String? photoUrl,
   }) {
     return _executer(() async {
       final String? refus = EvenementRepository.refusEvenement(
@@ -167,6 +168,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
         officiel: moi.estAdmin, // les événements de l'admin sont officiels
         placesMax: placesMax,
         position: position,
+        photoUrl: photoUrl,
       );
       await _collectionEvenements.add(evenement.toMap());
     });
@@ -215,6 +217,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
         'position': evenement.position == null
             ? null
             : GeoPoint(evenement.position!.latitude, evenement.position!.longitude),
+        'photoUrl': evenement.photoUrl,
       });
     });
   }
