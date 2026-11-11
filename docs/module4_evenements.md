@@ -2,100 +2,120 @@
 
 Branche : `feature/module4-evenements` (hamza).
 Format des données : [`schema_firestore.md`](schema_firestore.md) §6.
-Règles de sécurité : [`firestore.rules`](../firestore.rules), partie « M4 ».
+Règles de sécurité : [`firestore.rules`](../firestore.rules), parties « M4 ».
 
 ## 1. Ce que fait le module
 
 Les voisins d'une même houma :
-- **organisent des événements** (fête, réunion, nettoyage, sport, culture...) ;
-- **s'inscrivent** à un événement ;
-- **créent des sondages** et **votent** (un vote par membre, définitif).
+- **organisent des événements** (fête, réunion, nettoyage, sport, culture...),
+  s'y **inscrivent**, posent des questions, disent qui apporte quoi, notent
+  l'événement après coup et **pointent leur présence par QR code** ;
+- **créent des sondages** et **votent** (vote secret, un vote par membre,
+  définitif) ;
+- **élisent leurs leaders** (rôle Leader, élection tous les 6 mois).
 
-Le module écrit dans `quartiers/{q}/evenements` (+ `participants`) et
-`quartiers/{q}/sondages` (+ `votes`). Il lit l'utilisateur connecté du
-module 1 (`UtilisateurRepository().getUtilisateurConnecte()`).
+Le module écrit dans `quartiers/{q}/evenements`, `sondages`, `elections` et
+`demandesElection`. Il lit l'utilisateur connecté du module 1
+(`UtilisateurRepository().getUtilisateurConnecte()`).
 
 ## 2. Qui peut faire quoi
 
-Seul un membre **actif** du quartier voit le module (règle n°3).
+Seul un membre **actif** du quartier voit le module.
 
-| Action | Membre | Leader (organisateur) | Admin |
+| Action | Membre | Leader | Admin |
 |---|:-:|:-:|:-:|
 | Voir les événements, les sondages et leurs résultats | ✅ | ✅ | ✅ |
 | Voir le **nombre** de participants | ✅ | ✅ | ✅ |
-| Voir les **noms** des participants | ❌ | ✅ (ses événements) | ✅ |
-| Créer un événement ou un sondage | ❌ (*) | ✅ | ✅ |
-| Modifier un événement | ❌ | ✅ (les siens) | ✅ (tous) |
+| Voir les **noms** des participants, exporter la liste | ❌ | ✅ (ses événements) | ✅ |
+| Créer un événement ou un sondage | ❌ | ✅ | ✅ |
+| Créer un événement **officiel** (épinglé) | ❌ | ❌ | ✅ |
+| Modifier / annuler un événement | ❌ | ✅ (les siens) | ✅ (tous) |
 | Supprimer un événement ou un sondage | ❌ | ✅ (les siens) | ✅ (tous) |
-| Participer / se retirer (pas après l'événement) | ✅ | ✅ | ✅ |
-| Voter (1 fois, définitif, avant la fin) | ✅ | ✅ | ✅ |
-| Modifier un sondage ou changer son vote | ❌ | ❌ | ❌ |
+| Afficher le QR de présence | ❌ | ✅ (ses événements) | ✅ |
+| Participer, « Peut-être », liste d'attente | ✅ | ✅ | ✅ |
+| Voter (1 fois, définitif, avant la fin, secret) | ✅ | ✅ | ✅ |
+| Se porter candidat à l'élection | ✅ | ✅ | ❌ |
+| Ouvrir une élection, publier les résultats, nommer / retirer un leader | ❌ | ❌ | ✅ |
+| Statistiques du module | ❌ | ❌ | ✅ |
 
-(*) **Aujourd'hui** tout membre peut encore créer : le rôle Leader arrive à
-l'étape 3 (ci-dessous). Un leader ne touche pas aux événements d'un autre
-leader.
+### Le rôle Leader
 
-### Le rôle Leader (étape 3, à venir)
-
-- Nouveau rôle dans le module 1, à côté de `resident` et `admin`.
-- Plusieurs leaders par quartier ; l'admin choisit le nombre de places.
+- Rôle du module 1 (`RoleUtilisateur.leader`), à côté de `resident` et `admin`.
+- L'admin nomme ou retire un leader (écran « Membres du quartier »).
 - Élection tous les 6 mois : 3 jours de candidatures puis 2 jours de vote,
-  1 voix par membre, les N premiers sont élus ; égalité : l'admin tranche.
+  1 voix par membre, vote secret. L'admin choisit le nombre de places, coche
+  les élus (égalité : il tranche) et publie : les élus deviennent leaders,
+  les anciens redeviennent résidents.
 - Élection anticipée : les membres appuient sur « Demander une nouvelle
-  élection », l'admin voit le nombre de demandes et peut ouvrir une
-  élection de 24 h (12 h de candidatures + 12 h de vote).
-- Mandat : jusqu'à la prochaine élection, ou jusqu'au retrait par l'admin.
-- Candidats : tout membre pendant la première élection du quartier, ensuite
-  les membres depuis au moins 1 mois. L'admin ne peut pas être leader.
-- Avant la première élection, l'admin nomme des leaders provisoires.
+  élection » ; l'admin voit le nombre de demandes et peut ouvrir une
+  élection de 24 h (12 h + 12 h).
+- Candidats : tout membre pendant la première élection, ensuite les membres
+  depuis au moins 30 jours. L'admin ne peut pas être leader.
+- Sans Cloud Functions (offre gratuite Spark), la phase de l'élection est
+  calculée à partir des dates enregistrées.
 
 ## 3. Les écrans (`lib/screens/module4/`)
 
-| Écran | Fichier | Contenu |
-|---|---|---|
-| Onglet Événements | `evenements_screen.dart` | Sous-onglets **Événements** (recherche, filtres Tous / Cette semaine / J'organise / Je participe, catégories, À venir · Passés) et **Sondages** (En cours · Terminés). Bouton + : nouvel événement / nouveau sondage. |
-| Détail d'un événement | `evenement_detail_screen.dart` | Illustration de la catégorie, date et horaire, lieu, organisateur, participants, bouton **Je participe / Me retirer**, menu Modifier / Supprimer. |
-| Formulaire d'événement | `evenement_form_screen.dart` | Titre, catégorie, date, heure de début et de fin (optionnelle), lieu, description. Création et modification. |
-| Sondage | `sondage_screen.dart` | Question, choix avec barres de %, vote, suppression (auteur / admin). |
-| Nouveau sondage | `sondage_form_screen.dart` | Question, 2 à 6 choix, date de fin. |
-| Outils communs | `module4_widgets.dart` | Icônes et couleurs des catégories, dates en français, messages vide / erreur. |
+| Écran | Fichier |
+|---|---|
+| Onglet Événements (sous-onglets Événements / Sondages, recherche, filtres, catégories) | `evenements_screen.dart` |
+| Détail d'un événement | `evenement_detail_screen.dart` |
+| Formulaire d'événement (photo, carte, places, service lié) | `evenement_form_screen.dart` |
+| Questions, qui apporte quoi, avis, sondages de l'événement | `vie_evenement_widgets.dart` |
+| Sondage (résultats en direct, camembert, compte à rebours) | `sondage_screen.dart`, `graphique_sondage.dart` |
+| Nouveau sondage (dont sondage de date) | `sondage_form_screen.dart` |
+| Élection des leaders | `election_screen.dart` |
+| Calendrier | `calendrier_screen.dart` |
+| Statistiques (admin) | `statistiques_screen.dart` |
+| Carte du lieu | `carte_evenement.dart` |
+| QR de présence et scanner | `presence_qr.dart` |
+| Rappels sur le téléphone, notifications push | `notifications_m4.dart`, `push_m4.dart` |
+| Badge « nouveau », bandeau de rappel, « Mes événements » | `nouveautes_m4.dart`, `bandeau_rappel_m4.dart`, `mes_evenements_m4.dart` |
+| Outils communs | `module4_widgets.dart` |
 
-L'accueil ouvre directement l'événement ou le sondage de ses cartes.
+## 4. Fonctionnalités réalisées
 
-## 4. Étapes
+- **Événements** : catégories et illustrations, heure de fin, annuler /
+  rétablir, événements officiels épinglés, partage, avatars des
+  participants, places maximum + liste d'attente, « Peut-être », qui apporte
+  quoi, questions, avis après l'événement, ajout à l'agenda du téléphone,
+  export de la liste, lieu sur une carte, photo (Cloudinary, offre
+  gratuite, preset non signé), vue calendrier, présence par QR code, lien
+  vers un service commun du module 2.
+- **Sondages** : résultats en direct, camembert, résultats cachés avant de
+  voter, compte à rebours + participation, sondage de date → « Créer
+  l'événement », sondages rattachés à un événement, votes secrets
+  (compteurs `compteurs/{choix}`).
+- **Partout** : bandeau de rappel à l'accueil, rappels sur le téléphone
+  (veille et 1 h avant), badge « nouveau », **notifications push** des
+  nouveaux événements, « Mes événements » et pastille Leader dans le profil,
+  statistiques admin, derja, bandeau hors ligne, mode sombre, sélecteurs de
+  date et d'heure en français (24 h).
 
-- [x] **1. Données** : modèles, `EvenementRepository` (contrat),
-  `FirebaseEvenementRepository`, mock et tests.
-- [x] **2. Écrans** : liste, détail, formulaires, sondages, accueil.
-  Catégories + illustrations, recherche et filtres, heure de fin.
-  Essayé sur l'émulateur avec le vrai Firestore.
-- [ ] **3. Rôle Leader** : rôle dans le module 1, seuls leaders et admin
-  créent, l'admin nomme les leaders, règles.
-- [ ] **4. Si le temps le permet** : élection, bandeau de rappel, résultats
-  en direct, partage.
+## 5. Notifications push (gratuites)
 
-Avant chaque commit : `flutter analyze` puis `flutter test`.
+- Le dossier [`push_worker/`](../push_worker) est un Worker **Cloudflare**
+  (offre gratuite). Il garde la clé du compte de service Firebase en
+  **secret Cloudflare** : elle n'est jamais dans le dépôt ni dans l'app.
+- L'app envoie le jeton Firebase de l'utilisateur ; le Worker vérifie qu'il
+  est **leader ou admin actif de ce quartier**, puis envoie la notification
+  par Firebase Cloud Messaging au sujet `quartier_{id}`.
+- Redéployer : `cd push_worker && npx wrangler deploy`. Changer la clé :
+  `npx wrangler secret put SERVICE_ACCOUNT < cle.json` (depuis Git Bash :
+  PowerShell ajoute un caractère invisible au début du fichier).
 
-## 5. Règles : changements à déployer
+## 6. Tests
 
-- `evenements` (update) : l'organisateur **ou l'admin** modifie ; champs
-  autorisés : `titre`, `description`, `date`, `dateFin`, `lieu`,
-  `categorie`. **Pas encore déployé** : avant le déploiement, modifier un
-  événement peut être refusé.
-- Supprimer un événement laisse ses fiches `participants` (l'application ne
-  peut pas supprimer celles des autres). Sans gêne pour l'affichage.
+- `flutter test` : tests du module dans `test/module4_evenements_test.dart`
+  et `test/module4_election_test.dart` (mocks dans `test/`).
+- Règles Firestore : `test_regles/regles_m4.test.js` (voir
+  [`test_regles/README.md`](../test_regles/README.md)).
+- Vérifié sur l'émulateur avec le vrai Firestore (leader, résident, admin),
+  dont l'élection complète et une vraie notification push.
 
-## 6. Pour plus tard
+## 7. Pour plus tard
 
-Choisis pendant la revue, hors du temps disponible : photo d'événement
-(Cloudinary, gratuit), annulation au lieu de suppression, places maximum et
-liste d'attente, « Peut-être », qui apporte quoi, commentaires, événements
-officiels, lieu sur une carte, vue calendrier, ajout à l'agenda du
-téléphone, partage, avatars, note après l'événement, export de la liste,
-QR code ; résultats en direct, graphique, sondage de date → événement,
-sondage dans un événement, votes secrets, résultats cachés avant de voter,
-rappel de participation ; bandeau de rappel, notification locale, badge
-« nouveau », notifications push (gratuites via un service externe) ;
-« Mes événements » dans le profil, événement depuis un signalement (M3),
-lien avec un service commun (M2), statistiques admin ; derja, mode hors
-ligne, tests des règles.
+- **Événement depuis un signalement (M3)** : le module 3 n'existe pas encore
+  dans les branches ; à ajouter quand il sera fusionné.
+- Mode hors ligne complet (aujourd'hui : cache Firestore + bandeau).
+- Fonctionnalité d'IA (à définir).
