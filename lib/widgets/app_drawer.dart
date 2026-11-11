@@ -183,7 +183,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     actif: widget.chemin.startsWith('/evenements'),
                     sousRubriques: [
                       _sousRubrique(
-                          'Sondage du quartier', () => _allerA('/evenements')),
+                          'Événements et sondages', () => _allerA('/evenements')),
                     ],
                   ),
                   _titreSection('MON COMPTE'),

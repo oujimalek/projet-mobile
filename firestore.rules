@@ -378,10 +378,11 @@ service cloud.firestore {
           && request.resource.data.organisateurId == monUid()
           && request.resource.data.nbParticipants == 0;
 
-        // L'organisateur modifie son événement (pas le compteur).
+        // L'organisateur (ou l'admin) modifie l'événement (pas le compteur).
         allow update: if membreDe(q)
-          && resource.data.organisateurId == monUid()
-          && changeSeulement(['titre', 'description', 'date', 'lieu']);
+          && (resource.data.organisateurId == monUid() || adminDe(q))
+          && changeSeulement(['titre', 'description', 'date', 'dateFin',
+                              'lieu', 'categorie']);
 
         // Compteur de participants : +1 avec ma fiche créée, -1 avec ma
         // fiche supprimée, dans le même WriteBatch.

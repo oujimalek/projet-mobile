@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/signalement.dart';
 import '../../data/models/sondage.dart';
+import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
+import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
@@ -10,10 +12,14 @@ import '../../widgets/status_badge.dart';
 
 /// M4 - Événements : sondage entre voisins.
 ///
-/// StatefulWidget : quand l'utilisateur choisit une option puis confirme,
-/// le nombre de votes et les barres de pourcentage se mettent à jour.
+/// StatefulWidget : au chargement, on lit le sondage en cours et son vote
+/// éventuel ; quand l'utilisateur confirme, le vote est enregistré et les
+/// barres de pourcentage se mettent à jour.
 class SondageScreen extends StatefulWidget {
-  const SondageScreen({super.key});
+  /// Le sondage à afficher ; null = le sondage en cours (accueil, démo).
+  final String? sondageId;
+
+  const SondageScreen({super.key, this.sondageId});
 
   @override
   State<SondageScreen> createState() {
@@ -22,7 +28,12 @@ class SondageScreen extends StatefulWidget {
 }
 
 class _SondageScreenState extends State<SondageScreen> {
-  final Sondage _sondage = EvenementRepository().getSondageActif();
+  final EvenementRepository _depot = EvenementRepository();
+
+  Sondage? _sondage; // null : pas de sondage ouvert
+  String? _erreur; // message si le chargement a échoué
+  bool _enChargement = true; // chargement du sondage
+  bool _envoiEnCours = false; // envoi du vote
 
   // Nombre de votes de chaque option (copié depuis le sondage au départ)
   final List<int> _votes = [];
@@ -33,10 +44,60 @@ class _SondageScreenState extends State<SondageScreen> {
   @override
   void initState() {
     super.initState();
-    // On copie les votes du repository pour pouvoir les modifier ici
-    for (final option in _sondage.options) {
-      _votes.add(option.votes);
+    _charger();
+  }
+
+  /// Lit le sondage en cours, puis le vote de l'utilisateur.
+  Future<void> _charger() async {
+    setState(() {
+      _enChargement = true;
+      _erreur = null;
+    });
+    final Resultat<List<Sondage>> resultat = await _depot.chargerSondages();
+    if (!mounted) {
+      return;
     }
+    if (!resultat.estSucces) {
+      setState(() {
+        _enChargement = false;
+        _erreur = resultat.erreur;
+      });
+      return;
+    }
+
+    // Le sondage demandé, sinon le sondage en cours
+    Sondage? sondage;
+    if (widget.sondageId == null) {
+      sondage = _depot.getSondageActif();
+    } else {
+      for (final Sondage candidat in resultat.donnee!) {
+        if (candidat.id == widget.sondageId) {
+          sondage = candidat;
+        }
+      }
+    }
+    int? monVote;
+    if (sondage != null) {
+      final Resultat<int?> vote = await _depot.getMonVote(sondage.id);
+      if (!mounted) {
+        return;
+      }
+      monVote = vote.donnee;
+    }
+
+    setState(() {
+      _enChargement = false;
+      _sondage = sondage;
+      _votes.clear();
+      if (sondage != null) {
+        // On copie les votes du repository pour pouvoir les modifier ici
+        for (final option in sondage.options) {
+          _votes.add(option.votes);
+        }
+      }
+      _choix = monVote;
+      _aVote = monVote != null;
+    });
   }
 
   /// Nombre total de votes (toutes options confondues).
@@ -49,12 +110,12 @@ class _SondageScreenState extends State<SondageScreen> {
   }
 
   /// Sous-titre : "Proposé par l'admin · se termine dans 2 jours".
-  String _sousTitre() {
+  String _sousTitre(Sondage sondage) {
     // Nombre de jours entre aujourd'hui et la date de fin (sans les heures)
     final DateTime maintenant = DateTime.now();
     final DateTime aujourdhui =
         DateTime(maintenant.year, maintenant.month, maintenant.day);
-    final DateTime fin = _sondage.dateFin;
+    final DateTime fin = sondage.dateFin;
     final DateTime jourFin = DateTime(fin.year, fin.month, fin.day);
     final int jours = jourFin.difference(aujourdhui).inDays;
 
@@ -69,24 +130,46 @@ class _SondageScreenState extends State<SondageScreen> {
       finTexte = 'se termine dans $jours jours';
     }
 
-    if (_sondage.proposePar.isEmpty) {
+    if (sondage.proposePar.isEmpty) {
       return 'Sondage du quartier · $finTexte';
     }
-    return 'Proposé par ${_sondage.proposePar} · $finTexte';
+    return 'Proposé par ${sondage.proposePar} · $finTexte';
+  }
+
+  /// "1 vote", "3 votes" (0 et 1 : singulier).
+  String _texteVotes(int nombre) {
+    return nombre > 1 ? '$nombre votes' : '$nombre vote';
   }
 
   /// Texte sous les options : "22 votes sur 46 membres".
-  String _texteTotal() {
-    if (_sondage.nombreMembres > 0) {
-      return '${_totalVotes()} votes sur ${_sondage.nombreMembres} membres';
+  String _texteTotal(Sondage sondage) {
+    if (sondage.nombreMembres > 0) {
+      return '${_texteVotes(_totalVotes())} sur ${sondage.nombreMembres} membres';
     }
-    return '${_totalVotes()} votes au total';
+    return '${_texteVotes(_totalVotes())} au total';
   }
 
-  /// Appelé quand on touche "Confirmer mon vote".
-  void _confirmerVote() {
+  /// Appelé quand on touche "Confirmer mon vote" : enregistre le vote.
+  Future<void> _confirmerVote() async {
     final int? choix = _choix;
-    if (choix == null) {
+    final Sondage? sondage = _sondage;
+    if (choix == null || sondage == null) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat = await _depot.voter(sondage, choix);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
       return;
     }
     setState(() {
@@ -95,30 +178,133 @@ class _SondageScreenState extends State<SondageScreen> {
     });
   }
 
+  /// L'auteur ou l'admin supprime le sondage (après confirmation).
+  Future<void> _supprimer() async {
+    final Sondage? sondage = _sondage;
+    if (sondage == null) {
+      return;
+    }
+    final bool? confirme = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Supprimer le sondage ?'),
+          content: const Text('Les votes seront perdus. Cette action est définitive.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Supprimer', style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirme != true || !mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat = await _depot.supprimerSondage(sondage.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
+      return;
+    }
+    // Ouvert depuis la liste : on y retourne. Depuis l'onglet : on recharge.
+    if (widget.sondageId != null && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      _charger();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Le bouton est désactivé (null) tant qu'on n'a rien choisi ou après le vote
+    final Sondage? sondage = _sondage;
+
+    // Chargement, erreur ou aucun sondage : un message au centre
+    Widget? message;
+    if (_enChargement) {
+      message = const CircularProgressIndicator();
+    } else if (_erreur != null) {
+      message = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_erreur!, textAlign: TextAlign.center),
+          TextButton(onPressed: _charger, child: const Text('Réessayer')),
+        ],
+      );
+    } else if (sondage == null) {
+      message = Text(
+        'Aucun sondage en cours dans ta houma',
+        style: TextStyle(color: AppColors.textSecondary),
+      );
+    }
+    if (message != null || sondage == null) {
+      return Scaffold(
+        body: Column(
+          children: [
+            const AppHeader(titre: 'Sondage'),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: message,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Le bouton est désactivé (null) tant qu'on n'a rien choisi, pendant
+    // l'envoi ou après le vote
     Function()? actionBouton;
-    if (_choix != null && !_aVote) {
+    if (_choix != null && !_aVote && !_envoiEnCours && sondage.estOuvert) {
       actionBouton = _confirmerVote;
     }
 
     // Une carte par option, construites avec une boucle
     final List<Widget> cartesOptions = [];
-    for (int i = 0; i < _sondage.options.length; i++) {
-      cartesOptions.add(_carteOption(i));
+    for (int i = 0; i < sondage.options.length; i++) {
+      cartesOptions.add(_carteOption(sondage, i));
     }
 
     // Badge "En cours" tant que le sondage n'est pas terminé
-    final StatutSignalement statut = _sondage.dateFin.isAfter(DateTime.now())
+    final StatutSignalement statut = sondage.estOuvert
         ? StatutSignalement.enCours
         : StatutSignalement.resolu;
 
     return Scaffold(
       body: Column(
         children: [
-          // En-tête blanc arrondi, comme sur la maquette
-          const AppHeader(titre: 'Sondage'),
+          // En-tête blanc arrondi, comme sur la maquette ; l'auteur et
+          // l'admin peuvent supprimer le sondage
+          AppHeader(
+            titre: 'Sondage',
+            action: EvenementRepository.peutSupprimer(
+                    UtilisateurRepository().getUtilisateurConnecte(),
+                    sondage.proposeParId)
+                ? IconButton(
+                    tooltip: 'Supprimer le sondage',
+                    icon: Icon(Icons.delete_outline, color: AppColors.error),
+                    onPressed: _envoiEnCours ? null : _supprimer,
+                  )
+                : null,
+          ),
 
           // ----- Question + options (partie qui défile) -----
           Expanded(
@@ -126,7 +312,7 @@ class _SondageScreenState extends State<SondageScreen> {
               padding: const EdgeInsets.all(24),
               children: [
                 Text(
-                  _sondage.question,
+                  sondage.question,
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -141,7 +327,7 @@ class _SondageScreenState extends State<SondageScreen> {
                   children: [
                     StatusBadge(statut: statut),
                     Text(
-                      _sousTitre(),
+                      _sousTitre(sondage),
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                   ],
@@ -150,7 +336,7 @@ class _SondageScreenState extends State<SondageScreen> {
                 Column(children: cartesOptions),
                 const SizedBox(height: 8),
                 Text(
-                  _texteTotal(),
+                  _texteTotal(sondage),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
@@ -172,17 +358,10 @@ class _SondageScreenState extends State<SondageScreen> {
                 ),
                 const SizedBox(height: 8),
                 PrimaryButton(
-                  texte: _aVote ? 'Vote enregistré' : 'Confirmer mon vote',
+                  texte: !sondage.estOuvert && !_aVote
+                      ? 'Sondage terminé'
+                      : (_aVote ? 'Vote enregistré' : 'Confirmer mon vote'),
                   onPressed: actionBouton,
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Proposer une autre date : à venir
-                  },
-                  child: const Text(
-                    'Proposer une autre date',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
                 ),
               ],
             ),
@@ -193,8 +372,8 @@ class _SondageScreenState extends State<SondageScreen> {
   }
 
   /// La carte d'une option : rond de sélection, texte, votes et barre.
-  Widget _carteOption(int index) {
-    final OptionSondage option = _sondage.options[index];
+  Widget _carteOption(Sondage sondage, int index) {
+    final OptionSondage option = sondage.options[index];
     final bool choisie = _choix == index;
 
     // Pourcentage de cette option (entre 0 et 1) pour la barre
@@ -254,7 +433,7 @@ class _SondageScreenState extends State<SondageScreen> {
                     ),
                   ),
                   Text(
-                    '${_votes[index]} votes',
+                    _texteVotes(_votes[index]),
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ],
