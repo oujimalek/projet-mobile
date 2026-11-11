@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/evenement.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 
 /// M4 - Petits outils partagés par les écrans du module Événements.
 
@@ -156,7 +157,7 @@ class MessageM4 extends StatelessWidget {
     ];
     if (reessayer != null) {
       enfants.add(
-        TextButton(onPressed: reessayer, child: const Text('Réessayer')),
+        TextButton(onPressed: reessayer, child: Text(tr('Réessayer', '3awed jarreb'))),
       );
     }
     return Center(

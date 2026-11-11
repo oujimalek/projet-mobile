@@ -202,7 +202,7 @@ class _SondageScreenState extends State<SondageScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Événement créé à la date gagnante !')),
+      SnackBar(content: Text(tr('Événement créé à la date gagnante !', "L'événement tsna3 fel date elli rab7et !"))),
     );
   }
 
@@ -282,16 +282,16 @@ class _SondageScreenState extends State<SondageScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Supprimer le sondage ?'),
-          content: const Text('Les votes seront perdus. Cette action est définitive.'),
+          title: Text(tr('Supprimer le sondage ?', 'Tfasa5 el sondage ?')),
+          content: Text(tr('Les votes seront perdus. Cette action est définitive.', 'El votes bech yetfas5ou. Ma tnajjamch traja3ha.')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuler'),
+              child: Text(tr('Annuler', 'Batel')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Supprimer', style: TextStyle(color: AppColors.error)),
+              child: Text(tr('Supprimer', 'Fasakh'), style: TextStyle(color: AppColors.error)),
             ),
           ],
         );
@@ -337,7 +337,7 @@ class _SondageScreenState extends State<SondageScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(_erreur!, textAlign: TextAlign.center),
-          TextButton(onPressed: _charger, child: const Text('Réessayer')),
+          TextButton(onPressed: _charger, child: Text(tr('Réessayer', '3awed jarreb'))),
         ],
       );
     } else if (sondage == null) {

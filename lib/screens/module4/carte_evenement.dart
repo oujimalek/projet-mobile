@@ -6,6 +6,7 @@ import '../../data/models/quartier.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../module1/carte_quartier.dart';
@@ -150,7 +151,7 @@ class _ChoisirLieuScreenState extends State<ChoisirLieuScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: PrimaryButton(
-                texte: 'Valider ce lieu',
+                texte: tr('Valider ce lieu', 'Ekhtar el blassa hedhi'),
                 icone: Icons.check,
                 onPressed: choisi == null
                     ? null

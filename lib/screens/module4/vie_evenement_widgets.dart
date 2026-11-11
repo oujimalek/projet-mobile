@@ -310,7 +310,7 @@ class _SectionQuestionsState extends State<SectionQuestions> {
                               color: AppColors.primaryLight,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text('Organisateur',
+                            child: Text(tr('Organisateur', "L'organisateur"),
                                 style: TextStyle(
                                     color: AppColors.primary, fontSize: 11)),
                           ),

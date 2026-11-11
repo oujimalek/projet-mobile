@@ -5,6 +5,7 @@ import '../../data/models/evenement.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import 'evenement_detail_screen.dart';
@@ -152,7 +153,7 @@ class _CalendrierScreenState extends State<CalendrierScreen> {
           ),
           const SizedBox(height: 10),
           if (duJour.isEmpty)
-            Text('Aucun événement ce jour-là',
+            Text(tr('Aucun événement ce jour-là', '7atta événement fi nhar hedha'),
                 style: TextStyle(color: AppColors.textSecondary)),
           for (final Evenement evenement in duJour) _carte(evenement),
         ],
@@ -161,7 +162,7 @@ class _CalendrierScreenState extends State<CalendrierScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Calendrier'),
+          AppHeader(titre: tr('Calendrier', 'Calendrier')),
           Expanded(child: corps),
         ],
       ),
@@ -202,7 +203,7 @@ class _CalendrierScreenState extends State<CalendrierScreen> {
             ),
             if (evenement.annule)
               BadgeM4(
-                texte: 'Annulé',
+                texte: tr('Annulé', 'Tbatel'),
                 couleur: AppColors.error,
                 fond: AppColors.badgeRefuseFond,
               ),

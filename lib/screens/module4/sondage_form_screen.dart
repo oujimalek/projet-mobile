@@ -4,6 +4,7 @@ import '../../data/models/evenement.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
@@ -229,7 +230,7 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
                   // Sondage de date : les choix sont des dates
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Sondage de date'),
+                    title: Text(tr('Sondage de date', 'Sondage mta3 date')),
                     subtitle: const Text(
                         'Les voisins choisissent une date ; ensuite tu crées l\'événement à la date gagnante'),
                     value: _deDate,
@@ -268,7 +269,7 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
                         child: TextButton.icon(
                           onPressed: _ajouterDate,
                           icon: const Icon(Icons.add),
-                          label: const Text('Ajouter une date'),
+                          label: Text(tr('Ajouter une date', 'Zid date')),
                         ),
                       ),
                   ],
@@ -279,7 +280,7 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
                       child: TextButton.icon(
                         onPressed: _ajouterChoix,
                         icon: const Icon(Icons.add),
-                        label: const Text('Ajouter un choix'),
+                        label: Text(tr('Ajouter un choix', 'Zid ekhtiyar')),
                       ),
                     ),
                   const SizedBox(height: 16),
@@ -334,7 +335,7 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
                       ),
                     ),
                   PrimaryButton(
-                    texte: 'Publier le sondage',
+                    texte: tr('Publier le sondage', 'Onchor el sondage'),
                     onPressed: _enChargement ? null : _creer,
                   ),
                 ],

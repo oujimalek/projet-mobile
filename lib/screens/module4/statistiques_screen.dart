@@ -7,6 +7,7 @@ import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/statistiques_m4.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import 'module4_widgets.dart';
@@ -102,12 +103,12 @@ class _StatistiquesScreenState extends State<StatistiquesScreen> {
                   'Participation\naux votes', AppColors.success),
             ]),
             const SizedBox(height: 20),
-            const Text('Événements par mois',
+            Text(tr('Événements par mois', 'Les événements kol chhar'),
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
             AppCard(child: SizedBox(height: 180, child: _graphique(stats))),
             const SizedBox(height: 20),
-            const Text('Les plus suivis',
+            Text(tr('Les plus suivis', 'Elli 3liha barcha nes'),
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
             if (stats.plusPopulaires.isEmpty)
@@ -141,7 +142,7 @@ class _StatistiquesScreenState extends State<StatistiquesScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Statistiques'),
+          AppHeader(titre: tr('Statistiques', 'Statistiques')),
           Expanded(child: corps),
         ],
       ),

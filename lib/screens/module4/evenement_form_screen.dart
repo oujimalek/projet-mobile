@@ -9,6 +9,7 @@ import '../../data/services/evenement_repository.dart';
 import '../../data/services/photos_m4.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
@@ -410,12 +411,12 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
             children: [
               ListTile(
                 leading: Icon(Icons.photo_library_outlined, color: AppColors.primary),
-                title: const Text('Choisir dans la galerie'),
+                title: Text(tr('Choisir dans la galerie', 'Ekhtar mel galerie')),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
               ListTile(
                 leading: Icon(Icons.photo_camera_outlined, color: AppColors.primary),
-                title: const Text('Prendre une photo'),
+                title: Text(tr('Prendre une photo', 'Ekhou taswira')),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
             ],
@@ -457,13 +458,13 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   Widget _choixPhoto() {
     final String? photo = _photoUrl;
     if (_envoiPhoto) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
+      return Padding(
+        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
             SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
             SizedBox(width: 12),
-            Text('Envoi de la photo...'),
+            Text(tr('Envoi de la photo...', '9a3ed nab3ath fel taswira...')),
           ],
         ),
       );
@@ -472,7 +473,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       return OutlinedButton.icon(
         onPressed: _ajouterPhoto,
         icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text('Ajouter une photo (optionnel)'),
+        label: Text(tr('Ajouter une photo (optionnel)', 'Zid taswira (ekhtiyari)')),
       );
     }
     return Stack(
@@ -537,9 +538,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       context: context,
       builder: (context) {
         final List<Widget> lignes = [];
-        lignes.add(const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Lier un service commun',
+        lignes.add(Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(tr('Lier un service commun', 'Orbot b service commun'),
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         ));
         if (communs.isEmpty) {

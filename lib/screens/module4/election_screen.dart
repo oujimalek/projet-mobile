@@ -6,6 +6,7 @@ import '../../data/resultat.dart';
 import '../../data/services/election_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
@@ -156,7 +157,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Élection des leaders'),
+          AppHeader(titre: tr('Élection des leaders', 'Intikhabet el leaders')),
           Expanded(child: corps),
         ],
       ),
@@ -236,14 +237,14 @@ class _ElectionScreenState extends State<ElectionScreen> {
       const SizedBox(height: 12),
       _aDemande
           ? SecondaryButton(
-              texte: 'Retirer ma demande',
+              texte: tr('Retirer ma demande', 'Na7i demande mte3i'),
               onPressed: _envoiEnCours
                   ? null
                   : () => _action(() => _depot.demanderElection(false),
                       'Ta demande est retirée'),
             )
           : PrimaryButton(
-              texte: 'Demander une nouvelle élection',
+              texte: tr('Demander une nouvelle élection', 'Nottlob intikhabet jdida'),
               icone: Icons.how_to_vote_outlined,
               onPressed: _envoiEnCours
                   ? null
@@ -262,8 +263,8 @@ class _ElectionScreenState extends State<ElectionScreen> {
       const SizedBox(height: 8),
       Row(
         children: [
-          const Expanded(
-            child: Text('Nombre de leaders à élire',
+          Expanded(
+            child: Text(tr('Nombre de leaders à élire', '9addech men leader bech nentakhbou'),
                 style: TextStyle(fontWeight: FontWeight.w600)),
           ),
           IconButton(
@@ -292,7 +293,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       ),
       const SizedBox(height: 10),
       SecondaryButton(
-        texte: 'Élection anticipée (24 h)',
+        texte: tr('Élection anticipée (24 h)', 'Intikhabet mosta3jla (24 h)'),
         onPressed: _envoiEnCours
             ? null
             : () => _action(
@@ -340,7 +341,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
 
     if (suisCandidat) {
       enfants.add(SecondaryButton(
-        texte: 'Retirer ma candidature',
+        texte: tr('Retirer ma candidature', 'Na7i tarachou7i'),
         onPressed: _envoiEnCours
             ? null
             : () => _action(() => _depot.retirerCandidature(election),
@@ -348,7 +349,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       ));
     } else if (refus == null) {
       enfants.add(PrimaryButton(
-        texte: 'Me porter candidat',
+        texte: tr('Me porter candidat', 'Narachah rou7i'),
         icone: Icons.front_hand_outlined,
         onPressed: _envoiEnCours ? null : () => _seporterCandidat(election),
       ));
@@ -387,7 +388,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       _titre(aVote ? 'Ton vote' : 'Choisis ton candidat'),
     ];
     if (_candidats.isEmpty) {
-      enfants.add(Text('Aucun candidat pour cette élection.',
+      enfants.add(Text(tr('Aucun candidat pour cette élection.', '7atta mrachah fel intikhabet hedhi.'),
           style: TextStyle(color: AppColors.textSecondary)));
     }
     for (final Candidat candidat in _candidats) {
@@ -424,7 +425,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
     } else {
       final String? choix = _choixVote;
       enfants.add(PrimaryButton(
-        texte: 'Confirmer mon vote',
+        texte: tr('Confirmer mon vote', 'Akked el vote mte3i'),
         onPressed: choix == null || _envoiEnCours
             ? null
             : () => _action(() => _depot.voter(election, choix),
@@ -500,7 +501,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       }
       enfants.add(const SizedBox(height: 8));
       enfants.add(PrimaryButton(
-        texte: 'Publier les résultats',
+        texte: tr('Publier les résultats', 'Onchor el nata2ej'),
         onPressed: elus.isEmpty || _envoiEnCours
             ? null
             : () => _action(() => _depot.publierResultats(election, elus),
@@ -620,7 +621,7 @@ class _DialoguePresentationState extends State<_DialoguePresentation> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Me porter candidat'),
+      title: Text(tr('Me porter candidat', 'Narachah rou7i')),
       content: TextField(
         controller: _texte,
         maxLines: 3,
@@ -632,11 +633,11 @@ class _DialoguePresentationState extends State<_DialoguePresentation> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
+          child: Text(tr('Annuler', 'Batel')),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, _texte.text),
-          child: const Text('Me présenter'),
+          child: Text(tr('Me présenter', 'Narachah')),
         ),
       ],
     );

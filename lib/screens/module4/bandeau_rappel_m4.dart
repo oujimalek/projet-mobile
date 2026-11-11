@@ -4,6 +4,7 @@ import '../../data/models/evenement.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import 'evenement_detail_screen.dart';
 import 'module4_widgets.dart';
 import 'nouveautes_m4.dart';
@@ -110,7 +111,7 @@ class _BandeauRappelM4State extends State<BandeauRappelM4> {
                 EvenementDetailScreen(evenementId: evenement.id),
               );
             },
-            child: const Text('Voir'),
+            child: Text(tr('Voir', 'Chouf')),
           ),
         ],
       ),
