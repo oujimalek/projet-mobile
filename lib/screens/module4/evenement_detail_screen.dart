@@ -38,6 +38,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
 
   Evenement? _evenement;
   bool _inscrit = false;
+  bool _interesse = false; // "Peut-être"
   List<Participant> _participants = []; // organisateur et admin seulement
   bool _enChargement = true;
   bool _envoiEnCours = false; // participer / se retirer / supprimer
@@ -71,6 +72,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     final Evenement evenement = resultat.donnee!;
 
     final Resultat<bool> inscrit = await _depot.estInscrit(evenement.id);
+    final Resultat<bool> interesse = await _depot.estInteresse(evenement.id);
     List<Participant> noms = [];
     if (EvenementRepository.peutVoirParticipants(_moi, evenement)) {
       final Resultat<List<Participant>> participants =
@@ -84,6 +86,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       _enChargement = false;
       _evenement = evenement;
       _inscrit = inscrit.donnee ?? false;
+      _interesse = interesse.donnee ?? false;
       _participants = noms;
     });
   }
@@ -95,10 +98,34 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     );
   }
 
+  /// "Peut-être" : je deviens (ou ne suis plus) intéressé.
+  Future<void> _changerInteret() async {
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat =
+        await _depot.changerInteret(widget.evenementId, !_interesse);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      _afficherErreur(resultat);
+      return;
+    }
+    _charger();
+  }
+
   Future<void> _participerOuSeRetirer() async {
     setState(() {
       _envoiEnCours = true;
     });
+    // Je participe : je ne suis plus seulement "peut-être"
+    if (!_inscrit && _interesse) {
+      await _depot.changerInteret(widget.evenementId, false);
+    }
     final Resultat<void> resultat = _inscrit
         ? await _depot.seRetirer(widget.evenementId)
         : await _depot.participer(widget.evenementId);
@@ -278,6 +305,12 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                 couleur: AppColors.primary,
                 fond: AppColors.primaryLight,
               ),
+            if (evenement.estComplet && !evenement.annule)
+              BadgeM4(
+                texte: 'Complet',
+                couleur: AppColors.error,
+                fond: AppColors.badgeRefuseFond,
+              ),
             if (evenement.annule)
               BadgeM4(
                 texte: 'Annulé',
@@ -337,6 +370,14 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
   /// Le nombre de participants, et leurs noms pour l'organisateur et l'admin.
   Widget _blocParticipants(Evenement evenement) {
     final int nombre = evenement.participants;
+    // "12 participants / 30 places" + "4 peut-être"
+    String detail = '';
+    final int? restantes = evenement.placesRestantes;
+    if (restantes != null) {
+      detail = evenement.estComplet
+          ? 'Complet (${evenement.placesMax} places)'
+          : '$restantes place${restantes > 1 ? 's' : ''} libre${restantes > 1 ? 's' : ''} sur ${evenement.placesMax}';
+    }
     final List<Widget> enfants = [
       Row(
         children: [
@@ -346,8 +387,24 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
             '$nombre participant${nombre > 1 ? 's' : ''}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
+          const Spacer(),
+          if (evenement.interesses > 0)
+            Text(
+              '${evenement.interesses} peut-être',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
         ],
       ),
+      if (detail.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        Text(
+          detail,
+          style: TextStyle(
+            color: evenement.estComplet ? AppColors.error : AppColors.success,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     ];
 
     if (EvenementRepository.peutVoirParticipants(_moi, evenement)) {
@@ -453,10 +510,24 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
       );
     } else {
-      bouton = PrimaryButton(
-        texte: 'Je participe',
-        icone: Icons.check,
-        onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
+      // "Je participe" + "Peut-être" (je suis intéressé, sans m'engager)
+      bouton = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PrimaryButton(
+            texte: 'Je participe',
+            icone: Icons.check,
+            onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
+          ),
+          TextButton.icon(
+            onPressed: _envoiEnCours ? null : _changerInteret,
+            icon: Icon(_interesse ? Icons.star : Icons.star_border),
+            label: Text(
+              _interesse ? 'Je ne suis plus intéressé' : 'Peut-être',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       );
     }
     return SafeArea(

@@ -169,6 +169,23 @@ abstract class EvenementRepository {
     if (evenement.estPasse) {
       return 'Cet événement est terminé';
     }
+    if (evenement.estComplet) {
+      return 'Cet événement est complet';
+    }
+    return null;
+  }
+
+  static const int placesLimite = 500;
+
+  /// Pourquoi ce nombre de places est refusé (null : accepté). 0 = sans limite.
+  /// En modification, on ne descend pas sous le nombre d'inscrits.
+  static String? refusPlaces(int placesMax, {int inscrits = 0}) {
+    if (placesMax < 0 || placesMax > placesLimite) {
+      return 'Entre 1 et $placesLimite places (ou sans limite)';
+    }
+    if (placesMax > 0 && placesMax < inscrits) {
+      return 'Déjà $inscrits inscrits : choisis au moins $inscrits places';
+    }
     return null;
   }
 
@@ -227,10 +244,11 @@ abstract class EvenementRepository {
     DateTime? dateFin,
     required String lieu,
     required CategorieEvenement categorie,
+    int placesMax = 0,
   });
 
-  /// L'organisateur (ou l'admin) modifie titre, description, dates, lieu
-  /// et catégorie. Le compteur de participants ne change pas.
+  /// L'organisateur (ou l'admin) modifie titre, description, dates, lieu,
+  /// catégorie et places. Le compteur de participants ne change pas.
   Future<Resultat<void>> modifierEvenement(Evenement evenement);
 
   /// L'organisateur (ou l'admin) supprime l'événement.
@@ -251,6 +269,13 @@ abstract class EvenementRepository {
 
   /// Je me retire : ma fiche supprimée + compteur -1 (en une seule écriture).
   Future<Resultat<void>> seRetirer(String evenementId);
+
+  /// true si j'ai répondu "Peut-être" à cet événement.
+  Future<Resultat<bool>> estInteresse(String evenementId);
+
+  /// "Peut-être" : ma fiche interesses/{uid} + nbInteresses ±1, en une
+  /// seule écriture (comme participer).
+  Future<Resultat<void>> changerInteret(String evenementId, bool interesse);
 
   // =====================================================================
   // Sondages

@@ -125,15 +125,17 @@ class FirebaseEvenementRepository implements EvenementRepository {
     DateTime? dateFin,
     required String lieu,
     required CategorieEvenement categorie,
+    int placesMax = 0,
   }) {
     return _executer(() async {
       final String? refus = EvenementRepository.refusEvenement(
-        titre: titre,
-        description: description,
-        lieu: lieu,
-        date: date,
-        dateFin: dateFin,
-      );
+            titre: titre,
+            description: description,
+            lieu: lieu,
+            date: date,
+            dateFin: dateFin,
+          ) ??
+          EvenementRepository.refusPlaces(placesMax);
       if (refus != null) {
         throw RefusM4(refus);
       }
@@ -153,6 +155,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
         organisateur: EvenementRepository.nomCourt(moi),
         participants: 0, // les règles exigent 0 à la création
         officiel: moi.estAdmin, // les événements de l'admin sont officiels
+        placesMax: placesMax,
       );
       await _collectionEvenements.add(evenement.toMap());
     });
@@ -177,12 +180,14 @@ class FirebaseEvenementRepository implements EvenementRepository {
             'Seul l\'organisateur ou l\'admin peut modifier l\'événement');
       }
       final String? refus = EvenementRepository.refusEvenement(
-        titre: evenement.titre,
-        description: evenement.description,
-        lieu: evenement.lieu,
-        date: evenement.date,
-        dateFin: evenement.dateFin,
-      );
+            titre: evenement.titre,
+            description: evenement.description,
+            lieu: evenement.lieu,
+            date: evenement.date,
+            dateFin: evenement.dateFin,
+          ) ??
+          EvenementRepository.refusPlaces(evenement.placesMax,
+              inscrits: evenement.participants);
       if (refus != null) {
         throw RefusM4(refus);
       }
@@ -195,6 +200,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
         'dateFin': evenement.dateFin,
         'lieu': evenement.lieu.trim(),
         'categorie': evenement.categorie.name,
+        'placesMax': evenement.placesMax,
       });
     });
   }
@@ -290,6 +296,47 @@ class FirebaseEvenementRepository implements EvenementRepository {
       final WriteBatch batch = FirestoreCommun.base.batch();
       batch.delete(maFiche);
       batch.update(evenement, {'nbParticipants': FieldValue.increment(-1)});
+      await batch.commit();
+    });
+  }
+
+  @override
+  Future<Resultat<bool>> estInteresse(String evenementId) {
+    return _executer(() async {
+      final DocumentSnapshot<Map<String, dynamic>> fiche =
+          await _collectionEvenements
+              .doc(evenementId)
+              .collection('interesses')
+              .doc(_moi().id)
+              .get();
+      return fiche.exists;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> changerInteret(String evenementId, bool interesse) {
+    return _executer(() async {
+      final Utilisateur moi = _moi();
+      final DocumentReference<Map<String, dynamic>> evenement =
+          _collectionEvenements.doc(evenementId);
+      final DocumentReference<Map<String, dynamic>> maFiche =
+          evenement.collection('interesses').doc(moi.id);
+      final bool deja = (await maFiche.get()).exists;
+      if (deja == interesse) {
+        return; // rien à changer
+      }
+      // Fiche + compteur dans le MÊME WriteBatch (comme les participants)
+      final WriteBatch batch = FirestoreCommun.base.batch();
+      if (interesse) {
+        batch.set(maFiche, {
+          'nom': EvenementRepository.nomCourt(moi),
+          'date': FieldValue.serverTimestamp(),
+        });
+        batch.update(evenement, {'nbInteresses': FieldValue.increment(1)});
+      } else {
+        batch.delete(maFiche);
+        batch.update(evenement, {'nbInteresses': FieldValue.increment(-1)});
+      }
       await batch.commit();
     });
   }

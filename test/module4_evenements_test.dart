@@ -9,7 +9,9 @@ import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/evenement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
+import 'package:houmani/screens/module4/calendrier_screen.dart';
 import 'package:houmani/screens/module4/evenement_detail_screen.dart';
+import 'package:houmani/screens/module4/graphique_sondage.dart';
 import 'package:houmani/screens/module4/evenement_form_screen.dart';
 import 'package:houmani/screens/module4/evenements_screen.dart';
 import 'package:houmani/screens/module4/sondage_form_screen.dart';
@@ -642,6 +644,88 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Vote pour voir les résultats'), findsNothing);
       expect(find.text('1 vote'), findsNWidgets(2)); // Oui : 1, Non : 1
+    });
+  });
+
+  group('Lot 2 : places, peut-être, calendrier, graphique', () {
+    test('places : complet → plus d\'inscription ; se retirer libère une place', () async {
+      final Evenement atelier = depot.ajouterEvenementDe(nizar, placesMax: 1);
+      expect(atelier.placesRestantes, 1);
+      await devenir(sarra);
+      expect((await depot.participer(atelier.id)).estSucces, isTrue);
+      expect(depot.evenements.single.estComplet, isTrue);
+
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      final Resultat<void> refus = await depot.participer(atelier.id);
+      expect(refus.erreur, 'Cet événement est complet');
+
+      await devenir(sarra);
+      await depot.seRetirer(atelier.id);
+      expect(depot.evenements.single.estComplet, isFalse);
+    });
+
+    test('refusPlaces : jamais moins que les inscrits', () {
+      expect(EvenementRepository.refusPlaces(0), isNull); // sans limite
+      expect(EvenementRepository.refusPlaces(20, inscrits: 5), isNull);
+      expect(EvenementRepository.refusPlaces(3, inscrits: 5), isNotNull);
+      expect(EvenementRepository.refusPlaces(-1), isNotNull);
+    });
+
+    test('peut-être : le compteur suit', () async {
+      final Evenement fete = depot.ajouterEvenementDe(nizar);
+      await depot.changerInteret(fete.id, true);
+      expect(depot.evenements.single.interesses, 1);
+      expect((await depot.estInteresse(fete.id)).donnee, isTrue);
+      await depot.changerInteret(fete.id, true); // deux fois : rien ne change
+      expect(depot.evenements.single.interesses, 1);
+      await depot.changerInteret(fete.id, false);
+      expect(depot.evenements.single.interesses, 0);
+    });
+
+    testWidgets('détail : complet et peut-être', (tester) async {
+      final Evenement plein = depot.ajouterEvenementDe(nizar, placesMax: 1);
+      await devenir(sarra);
+      await depot.participer(plein.id);
+      await devenir(nizar);
+      await afficher(tester, EvenementDetailScreen(evenementId: plein.id));
+      expect(find.text('Complet'), findsOneWidget);
+      expect(find.text('Cet événement est complet'), findsOneWidget);
+    });
+
+    testWidgets('détail : bouton Peut-être', (tester) async {
+      final Evenement fete = depot.ajouterEvenementDe(nizar);
+      await devenir(sarra);
+      await afficher(tester, EvenementDetailScreen(evenementId: fete.id));
+      await tester.tap(find.text('Peut-être'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 peut-être'), findsOneWidget);
+      expect(find.text('Je ne suis plus intéressé'), findsOneWidget);
+    });
+
+    testWidgets('calendrier : les événements du jour choisi', (tester) async {
+      final DateTime aujourdhui = DateTime.now();
+      depot.ajouterEvenementDe(nizar,
+          titre: 'Ce soir',
+          date: DateTime(aujourdhui.year, aujourdhui.month, aujourdhui.day, 23, 0));
+      await afficher(tester, const CalendrierScreen());
+      expect(find.text('Calendrier'), findsOneWidget);
+      expect(find.text('Ce soir'), findsOneWidget); // le jour choisi = aujourd'hui
+    });
+
+    testWidgets('sondage : camembert après le vote', (tester) async {
+      final Sondage sondage = depot.ajouterSondageDe(nizar, options: ['Oui', 'Non']);
+      depot.ajouterVoteDe(sarra, sondage, 0);
+      await afficher(tester, SondageScreen(sondageId: sondage.id));
+      expect(find.byType(GraphiqueSondage), findsNothing); // pas encore voté
+      await tester.tap(find.text('Oui'));
+      await tester.pump();
+      await tester.tap(find.text('Confirmer mon vote'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GraphiqueSondage), findsOneWidget);
+      expect(find.text('100 %'), findsWidgets);
     });
   });
 

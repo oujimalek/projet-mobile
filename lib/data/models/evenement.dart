@@ -48,6 +48,8 @@ class Evenement {
   final int participants; // Firestore : nbParticipants
   final bool annule; // annulé : reste visible avec un badge, plus d'inscription
   final bool officiel; // créé par l'admin : badge "Officiel", en tête de liste
+  final int placesMax; // 0 = pas de limite
+  final int interesses; // "Peut-être" (Firestore : nbInteresses, compteur protégé)
 
   const Evenement({
     required this.id,
@@ -62,10 +64,18 @@ class Evenement {
     this.participants = 0,
     this.annule = false,
     this.officiel = false,
+    this.placesMax = 0,
+    this.interesses = 0,
   });
 
   /// true si l'événement est terminé (sa fin, ou son début s'il n'a pas de fin).
   bool get estPasse => (dateFin ?? date).isBefore(DateTime.now());
+
+  /// true si toutes les places sont prises.
+  bool get estComplet => placesMax > 0 && participants >= placesMax;
+
+  /// Places encore libres (null : pas de limite).
+  int? get placesRestantes => placesMax > 0 ? placesMax - participants : null;
 
   /// Le document Firestore (l'id n'est pas recopié : c'est le nom du document).
   Map<String, dynamic> toMap() {
@@ -81,6 +91,8 @@ class Evenement {
       'nbParticipants': participants,
       'annule': annule,
       'officiel': officiel,
+      'placesMax': placesMax,
+      'nbInteresses': interesses,
     };
   }
 
@@ -102,6 +114,8 @@ class Evenement {
       participants: map['nbParticipants'] ?? 0,
       annule: map['annule'] ?? false,
       officiel: map['officiel'] ?? false,
+      placesMax: map['placesMax'] ?? 0,
+      interesses: map['nbInteresses'] ?? 0,
     );
   }
 
@@ -117,6 +131,8 @@ class Evenement {
     CategorieEvenement? categorie,
     int? participants,
     bool? annule,
+    int? placesMax,
+    int? interesses,
   }) {
     return Evenement(
       id: id,
@@ -131,6 +147,8 @@ class Evenement {
       participants: participants ?? this.participants,
       annule: annule ?? this.annule,
       officiel: officiel,
+      placesMax: placesMax ?? this.placesMax,
+      interesses: interesses ?? this.interesses,
     );
   }
 }

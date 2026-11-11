@@ -9,6 +9,7 @@ import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/arch_date_block.dart';
+import 'calendrier_screen.dart';
 import 'election_screen.dart';
 import 'evenement_detail_screen.dart';
 import 'evenement_form_screen.dart';
@@ -301,6 +302,17 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
               ],
             ),
           ),
+          // Calendrier du mois
+          IconButton(
+            tooltip: 'Calendrier',
+            onPressed: () async {
+              await ouvrirEcranM4<void>(context, const CalendrierScreen());
+              if (mounted) {
+                _chargerEvenements();
+              }
+            },
+            icon: Icon(Icons.calendar_month_outlined, color: AppColors.card),
+          ),
           // Élection des leaders (pour tout le monde)
           IconButton(
             tooltip: 'Élection des leaders',
@@ -580,6 +592,15 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
         ),
       );
     }
+    if (evenement.estComplet && !evenement.annule) {
+      badges.add(
+        BadgeM4(
+          texte: 'Complet',
+          couleur: AppColors.error,
+          fond: AppColors.badgeRefuseFond,
+        ),
+      );
+    }
     if (evenement.annule) {
       badges.add(
         BadgeM4(
@@ -643,7 +664,9 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${evenement.participants} participant${evenement.participants > 1 ? 's' : ''}',
+                      evenement.placesMax > 0
+                          ? '${evenement.participants} / ${evenement.placesMax} places'
+                          : '${evenement.participants} participant${evenement.participants > 1 ? 's' : ''}',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,

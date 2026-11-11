@@ -388,6 +388,9 @@ service cloud.firestore {
         function maParticipation() {
           return /databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid());
         }
+        function monInteret() {
+          return /databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/interesses/$(monUid());
+        }
 
         allow read: if membreDe(q);
 
@@ -396,6 +399,7 @@ service cloud.firestore {
         allow create: if organisateurDe(q)
           && request.resource.data.organisateurId == monUid()
           && request.resource.data.nbParticipants == 0
+          && request.resource.data.get('nbInteresses', 0) == 0
           && (request.resource.data.get('officiel', false) == false || adminDe(q))
           && request.resource.data.get('annule', false) == false;
 
@@ -404,17 +408,32 @@ service cloud.firestore {
         allow update: if membreDe(q)
           && (resource.data.organisateurId == monUid() || adminDe(q))
           && changeSeulement(['titre', 'description', 'date', 'dateFin',
-                              'lieu', 'categorie', 'annule']);
+                              'lieu', 'categorie', 'annule', 'placesMax'])
+          && (request.resource.data.get('placesMax', 0) == 0
+              || request.resource.data.placesMax >= resource.data.nbParticipants);
 
-        // Compteur de participants : +1 avec ma fiche créée, -1 avec ma
-        // fiche supprimée, dans le même WriteBatch.
+        // Compteur de participants : +1 avec ma fiche créée (et une place
+        // libre s'il y a une limite), -1 avec ma fiche supprimée, dans le
+        // même WriteBatch.
         allow update: if membreDe(q)
           && changeSeulement(['nbParticipants'])
           && (
             (request.resource.data.nbParticipants == resource.data.nbParticipants + 1
-              && !exists(maParticipation()) && existsAfter(maParticipation()))
+              && !exists(maParticipation()) && existsAfter(maParticipation())
+              && (resource.data.get('placesMax', 0) == 0
+                  || request.resource.data.nbParticipants <= resource.data.placesMax))
             || (request.resource.data.nbParticipants == resource.data.nbParticipants - 1
               && exists(maParticipation()) && !existsAfter(maParticipation()))
+          );
+
+        // Compteur "Peut-être" : même principe, avec ma fiche interesses/{uid}
+        allow update: if membreDe(q)
+          && changeSeulement(['nbInteresses'])
+          && (
+            (request.resource.data.nbInteresses == resource.data.get('nbInteresses', 0) + 1
+              && !exists(monInteret()) && existsAfter(monInteret()))
+            || (request.resource.data.nbInteresses == resource.data.get('nbInteresses', 0) - 1
+              && exists(monInteret()) && !existsAfter(monInteret()))
           );
 
         allow delete: if (membreDe(q) && resource.data.organisateurId == monUid())
@@ -431,6 +450,20 @@ service cloud.firestore {
             && uidParticipant == monUid()
             && getAfter(chemin()).data.nbParticipants
                == get(chemin()).data.nbParticipants - 1;
+          allow update: if false;
+        }
+
+        // ----- "Peut-être" (id du document = uid) -----
+        match /interesses/{uidInteresse} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidInteresse == monUid()
+            && getAfter(chemin()).data.nbInteresses
+               == get(chemin()).data.get('nbInteresses', 0) + 1;
+          allow delete: if membreDe(q)
+            && uidInteresse == monUid()
+            && getAfter(chemin()).data.nbInteresses
+               == get(chemin()).data.get('nbInteresses', 0) - 1;
           allow update: if false;
         }
       }

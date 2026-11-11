@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_badge.dart';
+import 'graphique_sondage.dart';
 
 /// M4 - Événements : sondage entre voisins.
 ///
@@ -427,6 +428,14 @@ class _SondageScreenState extends State<SondageScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
+                // Camembert des résultats (quand ils sont visibles)
+                if (_resultatsVisibles(sondage)) ...[
+                  const SizedBox(height: 16),
+                  GraphiqueSondage(
+                    choix: [for (final option in sondage.options) option.texte],
+                    votes: List.of(_votes),
+                  ),
+                ],
               ],
             ),
           ),

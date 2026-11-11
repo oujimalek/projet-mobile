@@ -55,6 +55,7 @@ class MockEvenementRepository implements EvenementRepository {
     CategorieEvenement categorie = CategorieEvenement.fete,
     bool annule = false,
     bool? officiel, // par défaut : officiel si l'organisateur est admin
+    int placesMax = 0,
   }) {
     final Evenement evenement = Evenement(
       id: _nouvelId('e'),
@@ -68,9 +69,11 @@ class MockEvenementRepository implements EvenementRepository {
       organisateur: EvenementRepository.nomCourt(organisateur),
       annule: annule,
       officiel: officiel ?? organisateur.estAdmin,
+      placesMax: placesMax,
     );
     _evenements.add(evenement);
     _participants[evenement.id] = {};
+    _interesses[evenement.id] = {};
     return evenement;
   }
 
@@ -176,17 +179,19 @@ class MockEvenementRepository implements EvenementRepository {
     DateTime? dateFin,
     required String lieu,
     required CategorieEvenement categorie,
+    int placesMax = 0,
   }) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
     }
     final String? refus = EvenementRepository.refusEvenement(
-      titre: titre,
-      description: description,
-      lieu: lieu,
-      date: date,
-      dateFin: dateFin,
-    );
+          titre: titre,
+          description: description,
+          lieu: lieu,
+          date: date,
+          dateFin: dateFin,
+        ) ??
+        EvenementRepository.refusPlaces(placesMax);
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -201,6 +206,7 @@ class MockEvenementRepository implements EvenementRepository {
       date: date,
       dateFin: dateFin,
       categorie: categorie,
+      placesMax: placesMax,
     );
     return const Resultat.succes(null);
   }
@@ -219,12 +225,14 @@ class MockEvenementRepository implements EvenementRepository {
           'Seul l\'organisateur ou l\'admin peut modifier l\'événement');
     }
     final String? refus = EvenementRepository.refusEvenement(
-      titre: evenement.titre,
-      description: evenement.description,
-      lieu: evenement.lieu,
-      date: evenement.date,
-      dateFin: evenement.dateFin,
-    );
+          titre: evenement.titre,
+          description: evenement.description,
+          lieu: evenement.lieu,
+          date: evenement.date,
+          dateFin: evenement.dateFin,
+        ) ??
+        EvenementRepository.refusPlaces(evenement.placesMax,
+            inscrits: _evenements[index].participants);
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -237,6 +245,7 @@ class MockEvenementRepository implements EvenementRepository {
       dateFin: evenement.dateFin,
       sansFin: evenement.dateFin == null,
       categorie: evenement.categorie,
+      placesMax: evenement.placesMax,
     );
     return const Resultat.succes(null);
   }
@@ -341,6 +350,41 @@ class MockEvenementRepository implements EvenementRepository {
     final Evenement evenement = _evenements[index];
     _evenements[index] =
         evenement.copyWith(participants: evenement.participants - 1);
+    return const Resultat.succes(null);
+  }
+
+  final Map<String, Set<String>> _interesses = {}; // evenementId → uids
+
+  @override
+  Future<Resultat<bool>> estInteresse(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    return Resultat.succes(_interesses[evenementId]?.contains(_moi().id) ?? false);
+  }
+
+  @override
+  Future<Resultat<void>> changerInteret(String evenementId, bool interesse) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    final int index = _index(evenementId);
+    if (index < 0) {
+      return const Resultat.echec('Donnée introuvable');
+    }
+    final Set<String> uids = _interesses[evenementId]!;
+    final bool deja = uids.contains(_moi().id);
+    if (deja == interesse) {
+      return const Resultat.succes(null);
+    }
+    if (interesse) {
+      uids.add(_moi().id);
+    } else {
+      uids.remove(_moi().id);
+    }
+    final Evenement evenement = _evenements[index];
+    _evenements[index] = evenement.copyWith(
+        interesses: evenement.interesses + (interesse ? 1 : -1));
     return const Resultat.succes(null);
   }
 

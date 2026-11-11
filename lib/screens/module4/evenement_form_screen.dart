@@ -28,6 +28,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   final TextEditingController _titre = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _lieu = TextEditingController();
+  final TextEditingController _places = TextEditingController(); // vide = sans limite
 
   CategorieEvenement _categorie = CategorieEvenement.fete;
   DateTime? _jour; // la date choisie (sans l'heure)
@@ -47,6 +48,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       _titre.text = existant.titre;
       _description.text = existant.description;
       _lieu.text = existant.lieu;
+      if (existant.placesMax > 0) {
+        _places.text = '${existant.placesMax}';
+      }
       _categorie = existant.categorie;
       _jour = DateTime(existant.date.year, existant.date.month, existant.date.day);
       _heureDebut = TimeOfDay.fromDateTime(existant.date);
@@ -62,6 +66,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
     _titre.dispose();
     _description.dispose();
     _lieu.dispose();
+    _places.dispose();
     super.dispose();
   }
 
@@ -120,14 +125,19 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
     final TimeOfDay? heureFin = _heureFin;
     final DateTime? fin = heureFin == null ? null : _combiner(jour, heureFin);
 
+    // Places : vide = sans limite (0)
+    final int places = int.tryParse(_places.text.trim()) ?? 0;
+
     // 3. Les règles métier (les mêmes que le repository)
     final String? refus = EvenementRepository.refusEvenement(
-      titre: _titre.text,
-      description: _description.text,
-      lieu: _lieu.text,
-      date: debut,
-      dateFin: fin,
-    );
+          titre: _titre.text,
+          description: _description.text,
+          lieu: _lieu.text,
+          date: debut,
+          dateFin: fin,
+        ) ??
+        EvenementRepository.refusPlaces(places,
+            inscrits: widget.evenement?.participants ?? 0);
     if (refus != null) {
       setState(() {
         _message = refus;
@@ -149,6 +159,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         dateFin: fin,
         lieu: _lieu.text,
         categorie: _categorie,
+        placesMax: places,
       );
     } else {
       resultat = await _depot.modifierEvenement(
@@ -160,6 +171,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           sansFin: fin == null,
           lieu: _lieu.text,
           categorie: _categorie,
+          placesMax: places,
         ),
       );
     }
@@ -261,6 +273,21 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
                     validator: (valeur) {
                       if (valeur == null || valeur.trim().isEmpty) {
                         return 'Indique le lieu';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    label: 'Nombre de places (vide = sans limite)',
+                    hint: 'Ex : 30',
+                    icone: Icons.event_seat_outlined,
+                    controller: _places,
+                    clavier: TextInputType.number,
+                    validator: (valeur) {
+                      final String texte = (valeur ?? '').trim();
+                      if (texte.isNotEmpty && int.tryParse(texte) == null) {
+                        return 'Écris un nombre';
                       }
                       return null;
                     },
