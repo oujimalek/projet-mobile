@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/evenement.dart';
 import '../models/sondage.dart';
 import '../models/utilisateur.dart';
+import '../models/vie_evenement.dart';
 import '../resultat.dart';
 import 'evenement_repository.dart';
 import 'firestore_commun.dart';
@@ -338,6 +339,153 @@ class FirebaseEvenementRepository implements EvenementRepository {
         batch.update(evenement, {'nbInteresses': FieldValue.increment(-1)});
       }
       await batch.commit();
+    });
+  }
+
+  // =====================================================================
+  // Questions, objets à apporter, avis (sous-collections de l'événement)
+  // =====================================================================
+
+  CollectionReference<Map<String, dynamic>> _sous(
+      String evenementId, String nom) {
+    return _collectionEvenements.doc(evenementId).collection(nom);
+  }
+
+  @override
+  Future<Resultat<List<Commentaire>>> getCommentaires(String evenementId) {
+    return _executer(() async {
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await _sous(evenementId, 'commentaires').orderBy('date').get();
+      final List<Commentaire> liste = [];
+      for (final document in snapshot.docs) {
+        liste.add(Commentaire.fromMap(document.id, document.data()));
+      }
+      return liste;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> ajouterCommentaire(String evenementId, String texte) {
+    return _executer(() async {
+      final String? refus = EvenementRepository.refusCommentaire(texte);
+      if (refus != null) {
+        throw RefusM4(refus);
+      }
+      final Utilisateur moi = _moi();
+      final Commentaire commentaire = Commentaire(
+        id: '',
+        auteurId: moi.id,
+        auteurNom: EvenementRepository.nomCourt(moi),
+        texte: texte.trim(),
+        date: DateTime.now(),
+      );
+      await _sous(evenementId, 'commentaires').add(commentaire.toMap());
+    });
+  }
+
+  @override
+  Future<Resultat<void>> supprimerCommentaire(
+      String evenementId, String commentaireId) {
+    return _executer(() async {
+      await _sous(evenementId, 'commentaires').doc(commentaireId).delete();
+    });
+  }
+
+  @override
+  Future<Resultat<List<ObjetAApporter>>> getObjets(String evenementId) {
+    return _executer(() async {
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await _sous(evenementId, 'aApporter').get();
+      final List<ObjetAApporter> liste = [];
+      for (final document in snapshot.docs) {
+        liste.add(ObjetAApporter.fromMap(document.id, document.data()));
+      }
+      liste.sort((a, b) => a.objet.compareTo(b.objet));
+      return liste;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> ajouterObjet(Evenement evenement, String objet) {
+    return _executer(() async {
+      if (!EvenementRepository.peutModifier(_moi(), evenement)) {
+        throw const RefusM4('Seul l\'organisateur ou l\'admin gère la liste');
+      }
+      final String? refus = EvenementRepository.refusObjet(objet);
+      if (refus != null) {
+        throw RefusM4(refus);
+      }
+      await _sous(evenement.id, 'aApporter')
+          .add(ObjetAApporter(id: '', objet: objet.trim()).toMap());
+    });
+  }
+
+  @override
+  Future<Resultat<void>> supprimerObjet(Evenement evenement, String objetId) {
+    return _executer(() async {
+      if (!EvenementRepository.peutModifier(_moi(), evenement)) {
+        throw const RefusM4('Seul l\'organisateur ou l\'admin gère la liste');
+      }
+      await _sous(evenement.id, 'aApporter').doc(objetId).delete();
+    });
+  }
+
+  @override
+  Future<Resultat<void>> prendreObjet(
+      String evenementId, ObjetAApporter objet, bool prendre) {
+    return _executer(() async {
+      final Utilisateur moi = _moi();
+      if (prendre && objet.estPris && objet.prisParId != moi.id) {
+        throw RefusM4('${objet.prisParNom} s\'en charge déjà');
+      }
+      // Les règles : avant et après, c'est "personne" ou "moi"
+      await _sous(evenementId, 'aApporter').doc(objet.id).update({
+        'prisParId': prendre ? moi.id : null,
+        'prisParNom': prendre ? EvenementRepository.nomCourt(moi) : '',
+      });
+    });
+  }
+
+  @override
+  Future<Resultat<List<AvisEvenement>>> getAvis(String evenementId) {
+    return _executer(() async {
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await _sous(evenementId, 'avis').get();
+      final List<AvisEvenement> liste = [];
+      for (final document in snapshot.docs) {
+        liste.add(AvisEvenement.fromMap(document.id, document.data()));
+      }
+      return liste;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> donnerAvis(
+      Evenement evenement, int note, String commentaire) {
+    return _executer(() async {
+      final Utilisateur moi = _moi();
+      final bool participe = (await _sous(evenement.id, 'participants')
+              .doc(moi.id)
+              .get())
+          .exists;
+      final bool deja =
+          (await _sous(evenement.id, 'avis').doc(moi.id).get()).exists;
+      final String? refus = EvenementRepository.refusAvis(
+        evenement,
+        note,
+        participe: participe,
+        dejaDonne: deja,
+      );
+      if (refus != null) {
+        throw RefusM4(refus);
+      }
+      final AvisEvenement avis = AvisEvenement(
+        id: moi.id,
+        nom: EvenementRepository.nomCourt(moi),
+        note: note,
+        commentaire: commentaire.trim(),
+      );
+      await _sous(evenement.id, 'avis').doc(moi.id).set(avis.toMap());
     });
   }
 

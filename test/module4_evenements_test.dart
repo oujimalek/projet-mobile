@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:houmani/data/models/evenement.dart';
 import 'package:houmani/data/models/sondage.dart';
 import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/models/vie_evenement.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/evenement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
@@ -726,6 +727,100 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(GraphiqueSondage), findsOneWidget);
       expect(find.text('100 %'), findsWidgets);
+    });
+  });
+
+  group('Lot 3 : qui apporte quoi, questions, avis', () {
+    test('objets : l\'organisateur ajoute, un voisin s\'en charge, un autre non', () async {
+      final Evenement fete = depot.ajouterEvenementDe(nizar);
+      await devenir(sarra);
+      expect((await depot.ajouterObjet(fete, 'Chaises')).estSucces, isFalse);
+
+      await devenir(nizar);
+      expect((await depot.ajouterObjet(fete, 'Chaises')).estSucces, isTrue);
+      final ObjetAApporter chaises = (await depot.getObjets(fete.id)).donnee!.single;
+
+      await devenir(sarra);
+      expect((await depot.prendreObjet(fete.id, chaises, true)).estSucces, isTrue);
+      final ObjetAApporter pris = (await depot.getObjets(fete.id)).donnee!.single;
+      expect(pris.prisParNom, 'Sarra A.');
+
+      // Amira ne peut pas le prendre à Sarra
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      expect((await depot.prendreObjet(fete.id, pris, true)).estSucces, isFalse);
+    });
+
+    test('questions : vide refusé ; l\'organisateur supprime, un tiers non', () async {
+      final Evenement fete = depot.ajouterEvenementDe(nizar);
+      await devenir(sarra);
+      expect((await depot.ajouterCommentaire(fete.id, '  ')).estSucces, isFalse);
+      expect((await depot.ajouterCommentaire(fete.id, 'On apporte quoi ?')).estSucces,
+          isTrue);
+      final Commentaire question = (await depot.getCommentaires(fete.id)).donnee!.single;
+
+      await utilisateurs.changerRole(sarra.id, RoleUtilisateur.resident);
+      await devenir(nizar); // l'organisateur
+      expect((await depot.supprimerCommentaire(fete.id, question.id)).estSucces, isTrue);
+    });
+
+    test('avis : seulement les participants, après l\'événement, une fois', () async {
+      final Evenement ancien = depot.ajouterEvenementDe(nizar, date: hier);
+      final Evenement futur = depot.ajouterEvenementDe(nizar);
+      await devenir(sarra);
+      // Pas participante
+      expect((await depot.donnerAvis(ancien, 5, '')).estSucces, isFalse);
+
+      // On l'inscrit "à la main" (l'événement est passé : participer() refuse)
+      expect(EvenementRepository.refusAvis(ancien, 5, participe: true, dejaDonne: false),
+          isNull);
+      expect(EvenementRepository.refusAvis(futur, 5, participe: true, dejaDonne: false),
+          isNotNull);
+      expect(EvenementRepository.refusAvis(ancien, 0, participe: true, dejaDonne: false),
+          isNotNull);
+      expect(EvenementRepository.refusAvis(ancien, 4, participe: true, dejaDonne: true),
+          isNotNull);
+    });
+
+    test('moyenne des avis', () {
+      expect(EvenementRepository.moyenne([]), isNull);
+      expect(
+        EvenementRepository.moyenne(const [
+          AvisEvenement(id: 'a', nom: 'A', note: 5),
+          AvisEvenement(id: 'b', nom: 'B', note: 4),
+        ]),
+        4.5,
+      );
+    });
+
+    testWidgets('détail : poser une question', (tester) async {
+      final Evenement fete = depot.ajouterEvenementDe(nizar);
+      await devenir(sarra);
+      await afficher(tester, EvenementDetailScreen(evenementId: fete.id));
+      await tester.scrollUntilVisible(find.text('Questions (0)'), 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.enterText(find.widgetWithText(TextField, 'Pose une question...'),
+          'Il faut apporter quoi ?');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+      expect(find.text('Questions (1)'), findsOneWidget);
+      expect(find.text('Il faut apporter quoi ?'), findsOneWidget);
+    });
+
+    testWidgets('détail : l\'organisateur ajoute un objet à apporter', (tester) async {
+      final Evenement fete = depot.ajouterEvenementDe(nizar);
+      await devenir(nizar);
+      await afficher(tester, EvenementDetailScreen(evenementId: fete.id));
+      await tester.scrollUntilVisible(find.text('Qui apporte quoi ?'), 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Ajouter : chaises, boissons...'), 'Boissons');
+      await tester.tap(find.byIcon(Icons.add_circle));
+      await tester.pumpAndSettle();
+      expect(find.text('Boissons'), findsOneWidget);
+      expect(find.text('Je l\'apporte'), findsOneWidget);
     });
   });
 

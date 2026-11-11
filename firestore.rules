@@ -466,6 +466,54 @@ service cloud.firestore {
                == get(chemin()).data.get('nbInteresses', 0) - 1;
           allow update: if false;
         }
+
+        // L'organisateur de l'événement, ou l'admin
+        function organisateurOuAdmin() {
+          return get(chemin()).data.organisateurId == monUid() || adminDe(q);
+        }
+
+        // ----- Questions / commentaires -----
+        match /commentaires/{commentaireId} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && request.resource.data.auteurId == monUid()
+            && request.resource.data.texte is string
+            && request.resource.data.texte.size() >= 1
+            && request.resource.data.texte.size() <= 300;
+          // Son auteur, l'organisateur ou l'admin
+          allow delete: if membreDe(q)
+            && (resource.data.auteurId == monUid() || organisateurOuAdmin());
+          allow update: if false;
+        }
+
+        // ----- Qui apporte quoi ? -----
+        match /aApporter/{objetId} {
+          allow read: if membreDe(q);
+          // L'organisateur (ou l'admin) gère la liste
+          allow create: if membreDe(q) && organisateurOuAdmin()
+            && request.resource.data.prisParId == null;
+          allow delete: if membreDe(q) && organisateurOuAdmin();
+          // Un voisin s'en charge ou ne s'en charge plus : avant et après,
+          // c'est "personne" ou "moi"
+          allow update: if membreDe(q)
+            && changeSeulement(['prisParId', 'prisParNom'])
+            && resource.data.get('prisParId', null) in [null, monUid()]
+            && request.resource.data.get('prisParId', null) in [null, monUid()];
+        }
+
+        // ----- Avis après l'événement (id = uid) -----
+        // Un participant, après l'événement, une seule fois, 1 à 5 étoiles
+        match /avis/{uidAvis} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidAvis == monUid()
+            && exists(/databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid()))
+            && get(chemin()).data.date < request.time
+            && request.resource.data.note is int
+            && request.resource.data.note >= 1
+            && request.resource.data.note <= 5;
+          allow update, delete: if false;
+        }
       }
 
       // ---------- M4 · Sondages ----------

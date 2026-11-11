@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:houmani/data/models/evenement.dart';
 import 'package:houmani/data/models/sondage.dart';
 import 'package:houmani/data/models/utilisateur.dart';
+import 'package:houmani/data/models/vie_evenement.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/evenement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
@@ -532,5 +533,145 @@ class MockEvenementRepository implements EvenementRepository {
   void voteEnDirect(Utilisateur votant, Sondage sondage, int choix) {
     ajouterVoteDe(votant, sondage, choix);
     _changementVotes.add(null);
+  }
+
+  // =====================================================================
+  // Questions, objets à apporter, avis
+  // =====================================================================
+
+  final Map<String, List<Commentaire>> _commentaires = {};
+  final Map<String, List<ObjetAApporter>> _objets = {};
+  final Map<String, List<AvisEvenement>> _avis = {};
+
+  Evenement? _parId(String evenementId) {
+    final int index = _index(evenementId);
+    return index < 0 ? null : _evenements[index];
+  }
+
+  @override
+  Future<Resultat<List<Commentaire>>> getCommentaires(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    return Resultat.succes(List.of(_commentaires[evenementId] ?? []));
+  }
+
+  @override
+  Future<Resultat<void>> ajouterCommentaire(String evenementId, String texte) async {
+    final String? refus = EvenementRepository.refusCommentaire(texte);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final Utilisateur moi = _moi();
+    _commentaires.putIfAbsent(evenementId, () => []).add(Commentaire(
+          id: _nouvelId('c'),
+          auteurId: moi.id,
+          auteurNom: EvenementRepository.nomCourt(moi),
+          texte: texte.trim(),
+          date: DateTime.now(),
+        ));
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> supprimerCommentaire(
+      String evenementId, String commentaireId) async {
+    final List<Commentaire> liste = _commentaires[evenementId] ?? [];
+    final int index = liste.indexWhere((c) => c.id == commentaireId);
+    final Evenement? evenement = _parId(evenementId);
+    if (index < 0 || evenement == null) {
+      return const Resultat.echec('Donnée introuvable');
+    }
+    if (!EvenementRepository.peutSupprimerCommentaire(
+        _moi(), liste[index], evenement)) {
+      return const Resultat.echec('Action non autorisée');
+    }
+    liste.removeAt(index);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<List<ObjetAApporter>>> getObjets(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    return Resultat.succes(List.of(_objets[evenementId] ?? []));
+  }
+
+  @override
+  Future<Resultat<void>> ajouterObjet(Evenement evenement, String objet) async {
+    if (!EvenementRepository.peutModifier(_moi(), evenement)) {
+      return const Resultat.echec('Seul l\'organisateur ou l\'admin gère la liste');
+    }
+    final String? refus = EvenementRepository.refusObjet(objet);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    _objets
+        .putIfAbsent(evenement.id, () => [])
+        .add(ObjetAApporter(id: _nouvelId('o'), objet: objet.trim()));
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> supprimerObjet(Evenement evenement, String objetId) async {
+    if (!EvenementRepository.peutModifier(_moi(), evenement)) {
+      return const Resultat.echec('Seul l\'organisateur ou l\'admin gère la liste');
+    }
+    _objets[evenement.id]?.removeWhere((o) => o.id == objetId);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> prendreObjet(
+      String evenementId, ObjetAApporter objet, bool prendre) async {
+    final Utilisateur moi = _moi();
+    final List<ObjetAApporter> liste = _objets[evenementId] ?? [];
+    final int index = liste.indexWhere((o) => o.id == objet.id);
+    if (index < 0) {
+      return const Resultat.echec('Donnée introuvable');
+    }
+    final ObjetAApporter actuel = liste[index];
+    if (actuel.estPris && actuel.prisParId != moi.id) {
+      return Resultat.echec('${actuel.prisParNom} s\'en charge déjà');
+    }
+    liste[index] = ObjetAApporter(
+      id: actuel.id,
+      objet: actuel.objet,
+      prisParId: prendre ? moi.id : null,
+      prisParNom: prendre ? EvenementRepository.nomCourt(moi) : '',
+    );
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<List<AvisEvenement>>> getAvis(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    return Resultat.succes(List.of(_avis[evenementId] ?? []));
+  }
+
+  @override
+  Future<Resultat<void>> donnerAvis(
+      Evenement evenement, int note, String commentaire) async {
+    final Utilisateur moi = _moi();
+    final List<AvisEvenement> liste = _avis.putIfAbsent(evenement.id, () => []);
+    final String? refus = EvenementRepository.refusAvis(
+      _parId(evenement.id) ?? evenement,
+      note,
+      participe: _participants[evenement.id]?.containsKey(moi.id) ?? false,
+      dejaDonne: liste.any((a) => a.id == moi.id),
+    );
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    liste.add(AvisEvenement(
+      id: moi.id,
+      nom: EvenementRepository.nomCourt(moi),
+      note: note,
+      commentaire: commentaire.trim(),
+    ));
+    return const Resultat.succes(null);
   }
 }

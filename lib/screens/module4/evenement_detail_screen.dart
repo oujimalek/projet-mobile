@@ -14,6 +14,7 @@ import '../../widgets/secondary_button.dart';
 import '../module1/widgets_module1.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
+import 'vie_evenement_widgets.dart';
 
 /// M4 - Détail d'un événement : infos, participants, et le bouton
 /// "Je participe" / "Me retirer".
@@ -350,6 +351,11 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
         ],
         const SizedBox(height: 20),
         _blocParticipants(evenement),
+        // Qui apporte quoi ? · Questions · Avis (après l'événement)
+        SectionObjets(evenement: evenement),
+        SectionAvis(evenement: evenement, participe: _inscrit),
+        SectionQuestions(evenement: evenement),
+        const SizedBox(height: 8),
       ],
     );
   }

@@ -1,6 +1,7 @@
 import '../models/evenement.dart';
 import '../models/sondage.dart';
 import '../models/utilisateur.dart';
+import '../models/vie_evenement.dart';
 import '../resultat.dart';
 import 'firebase_evenement_repository.dart';
 
@@ -176,6 +177,75 @@ abstract class EvenementRepository {
   }
 
   static const int placesLimite = 500;
+  static const int commentaireMax = 300;
+  static const int objetMax = 60;
+
+  /// Pourquoi ce commentaire est refusé (null : accepté).
+  static String? refusCommentaire(String texte) {
+    if (texte.trim().isEmpty) {
+      return 'Écris ton message';
+    }
+    if (texte.trim().length > commentaireMax) {
+      return '$commentaireMax caractères au maximum';
+    }
+    return null;
+  }
+
+  /// Pourquoi cet objet à apporter est refusé (null : accepté).
+  static String? refusObjet(String objet) {
+    if (objet.trim().isEmpty) {
+      return 'Écris l\'objet à apporter';
+    }
+    if (objet.trim().length > objetMax) {
+      return '$objetMax caractères au maximum';
+    }
+    return null;
+  }
+
+  /// Pourquoi cet avis est refusé (null : accepté). Seuls les participants
+  /// notent, après l'événement, une seule fois (mêmes conditions que les règles).
+  static String? refusAvis(
+    Evenement evenement,
+    int note, {
+    required bool participe,
+    required bool dejaDonne,
+  }) {
+    if (!participe) {
+      return 'Seuls les participants peuvent donner leur avis';
+    }
+    if (!evenement.estPasse) {
+      return 'Tu pourras donner ton avis après l\'événement';
+    }
+    if (dejaDonne) {
+      return 'Tu as déjà donné ton avis';
+    }
+    if (note < 1 || note > 5) {
+      return 'Choisis de 1 à 5 étoiles';
+    }
+    return null;
+  }
+
+  /// La moyenne des notes (null : aucun avis).
+  static double? moyenne(List<AvisEvenement> avis) {
+    if (avis.isEmpty) {
+      return null;
+    }
+    int total = 0;
+    for (final AvisEvenement un in avis) {
+      total += un.note;
+    }
+    return total / avis.length;
+  }
+
+  /// Son auteur, l'organisateur de l'événement ou l'admin supprime un commentaire.
+  static bool peutSupprimerCommentaire(
+    Utilisateur utilisateur,
+    Commentaire commentaire,
+    Evenement evenement,
+  ) {
+    return utilisateur.id == commentaire.auteurId ||
+        peutModifier(utilisateur, evenement);
+  }
 
   /// Pourquoi ce nombre de places est refusé (null : accepté). 0 = sans limite.
   /// En modification, on ne descend pas sous le nombre d'inscrits.
@@ -276,6 +346,38 @@ abstract class EvenementRepository {
   /// "Peut-être" : ma fiche interesses/{uid} + nbInteresses ±1, en une
   /// seule écriture (comme participer).
   Future<Resultat<void>> changerInteret(String evenementId, bool interesse);
+
+  // ----- Questions / commentaires -----
+
+  /// Les commentaires, du plus ancien au plus récent.
+  Future<Resultat<List<Commentaire>>> getCommentaires(String evenementId);
+
+  Future<Resultat<void>> ajouterCommentaire(String evenementId, String texte);
+
+  /// Son auteur, l'organisateur ou l'admin supprime un commentaire.
+  Future<Resultat<void>> supprimerCommentaire(String evenementId, String commentaireId);
+
+  // ----- Qui apporte quoi ? -----
+
+  Future<Resultat<List<ObjetAApporter>>> getObjets(String evenementId);
+
+  /// L'organisateur (ou l'admin) ajoute un objet à la liste.
+  Future<Resultat<void>> ajouterObjet(Evenement evenement, String objet);
+
+  /// L'organisateur (ou l'admin) retire un objet de la liste.
+  Future<Resultat<void>> supprimerObjet(Evenement evenement, String objetId);
+
+  /// Je m'en charge ([prendre] = true) ou je ne m'en charge plus.
+  Future<Resultat<void>> prendreObjet(
+      String evenementId, ObjetAApporter objet, bool prendre);
+
+  // ----- Avis après l'événement -----
+
+  Future<Resultat<List<AvisEvenement>>> getAvis(String evenementId);
+
+  /// Un participant note l'événement terminé (1 à 5), une seule fois.
+  Future<Resultat<void>> donnerAvis(
+      Evenement evenement, int note, String commentaire);
 
   // =====================================================================
   // Sondages
