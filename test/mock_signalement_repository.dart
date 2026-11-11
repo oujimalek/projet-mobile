@@ -38,6 +38,9 @@ class MockSignalementRepository implements SignalementRepository {
   /// (comme Firebase sans réseau).
   String? erreurReseau;
 
+  /// Nombre de signalements vraiment créés (pour vérifier les doublons).
+  int nombreEnvois = 0;
+
   /// Tous les signalements, pour vérifier dans les tests.
   List<Signalement> get tous => List.unmodifiable(_signalements);
 
@@ -191,8 +194,13 @@ class MockSignalementRepository implements SignalementRepository {
     if (refus != null) {
       return Resultat.echec(refus);
     }
+    // Id choisi à l'avance (file d'envoi) : déjà créé = déjà envoyé
+    if (signalement.id.isNotEmpty && _position(signalement.id) != -1) {
+      return const Resultat.succes(null);
+    }
+    nombreEnvois++;
     final Signalement nouveau = signalement.copyWith(
-      id: 's$_prochainNumero',
+      id: signalement.id.isNotEmpty ? signalement.id : 's$_prochainNumero',
       titre: signalement.titre.trim(),
       description: signalement.description.trim(),
       lieu: signalement.lieu.trim(),

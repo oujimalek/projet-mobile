@@ -319,6 +319,10 @@ abstract class SignalementRepository {
   /// Publie un signalement. L'auteur, le statut (enAttente), la date et le
   /// compteur (0) sont remplis par le repository : seuls titre,
   /// description, categorieId, lieu et danger viennent de [signalement].
+  ///
+  /// Si `signalement.id` n'est pas vide, il devient l'id du document : un
+  /// envoi rejoué (file hors ligne, délai dépassé) retrouve le document déjà
+  /// créé et ne fait pas de doublon. Id vide : Firestore en choisit un.
   Future<Resultat<void>> ajouterSignalement(Signalement signalement);
 
   /// L'auteur corrige titre, description, categorieId, lieu et danger, tant

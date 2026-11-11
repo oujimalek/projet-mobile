@@ -156,7 +156,19 @@ class FirebaseSignalementRepository implements SignalementRepository {
       date: DateTime.now(),
     );
     return FirestoreCommun.executer(() async {
-      await _signalements.add(nouveau.toMap());
+      if (nouveau.id.isEmpty) {
+        await _signalements.add(nouveau.toMap());
+        return;
+      }
+      // Id choisi à l'avance (file d'envoi) : déjà créé = déjà envoyé
+      final DocumentReference<Map<String, dynamic>> document =
+          _signalements.doc(nouveau.id);
+      final DocumentSnapshot<Map<String, dynamic>> existant =
+          await document.get();
+      if (existant.exists) {
+        return;
+      }
+      await document.set(nouveau.toMap());
     });
   }
 
