@@ -53,6 +53,30 @@ class NotificationsM4 {
     _pret = true;
   }
 
+  /// (C4) Affiche tout de suite une notification (push reçue pendant que
+  /// l'application est ouverte).
+  static Future<void> afficher(String titre, String texte) async {
+    try {
+      await _preparer();
+      await _plugin.show(
+        DateTime.now().millisecondsSinceEpoch & 0x3fffffff,
+        titre,
+        texte,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'evenements_m4',
+            'Nouveaux événements',
+            channelDescription: 'Les événements publiés dans ta houma',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    } catch (e) {
+      // permission refusée, tests... : on ne montre rien
+    }
+  }
+
   /// Programme les rappels de cet événement (je viens de m'inscrire).
   static Future<void> programmer(Evenement evenement) async {
     try {

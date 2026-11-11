@@ -1,0 +1,7 @@
+# M4 - (C4) Worker Cloudflare des notifications push (offre gratuite).
+# Le secret SERVICE_ACCOUNT (clé du compte de service Firebase) se met avec :
+#   npx wrangler secret put SERVICE_ACCOUNT < chemin/vers/la-cle.json
+# Il n'est JAMAIS dans ce dépôt.
+name = "houmani-push"
+main = "src/index.js"
+compatibility_date = "2025-09-01"

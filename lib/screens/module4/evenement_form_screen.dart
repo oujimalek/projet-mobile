@@ -8,6 +8,7 @@ import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/photos_m4.dart';
 import '../../data/services/service_repository.dart';
+import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
@@ -15,6 +16,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
 import 'carte_evenement.dart';
 import 'module4_widgets.dart';
+import 'push_m4.dart';
 
 /// M4 - Formulaire d'un événement : création, ou modification si
 /// [evenement] est donné. Renvoie `true` (Navigator.pop) une fois enregistré.
@@ -204,6 +206,22 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         serviceId: _serviceId,
         serviceNom: _serviceNom,
       );
+      // (C4) Annonce à tout le quartier (notification push), sans attendre
+      final String? quartierId =
+          UtilisateurRepository().getUtilisateurConnecte().quartierId;
+      if (resultat.estSucces && quartierId != null) {
+        PushM4.annoncer(
+          Evenement(
+            id: '',
+            titre: _titre.text.trim(),
+            description: '',
+            lieu: _lieu.text.trim(),
+            date: debut,
+            organisateur: '',
+          ),
+          quartierId,
+        );
+      }
     } else {
       resultat = await _depot.modifierEvenement(
         existant.copyWith(

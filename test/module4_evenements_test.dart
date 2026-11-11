@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:houmani/data/models/evenement.dart';
+import 'package:houmani/screens/module4/push_m4.dart';
 import 'package:houmani/data/models/sondage.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/models/vie_evenement.dart';
@@ -1332,6 +1333,25 @@ void main() {
       expect(cree.serviceNom, 'Ménage');
       await depot.modifierEvenement(cree.copyWith(sansService: true));
       expect(depot.evenements.single.serviceId, isNull);
+    });
+  });
+
+  group('C4 : notifications push', () {
+    test('sujet du quartier et texte de l\'annonce', () {
+      expect(PushM4.sujet('q1'), 'quartier_q1');
+      final Evenement fete = Evenement(
+        id: 'e', titre: 'Fête', description: '', lieu: 'Jardin',
+        date: DateTime(2026, 11, 14, 18), organisateur: 'X',
+      );
+      expect(PushM4.corps(fete), contains('Jardin'));
+    });
+
+    test('sans Firebase (tests), l\'annonce échoue sans planter', () async {
+      final Evenement fete = Evenement(
+        id: 'e', titre: 'Fête', description: '', lieu: 'Jardin',
+        date: demain, organisateur: 'X',
+      );
+      expect(await PushM4.annoncer(fete, 'q1'), isFalse);
     });
   });
 }

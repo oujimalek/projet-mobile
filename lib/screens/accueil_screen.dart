@@ -17,6 +17,7 @@ import 'module1/widgets_module1.dart';
 import 'module4/bandeau_rappel_m4.dart';
 import 'module4/evenement_detail_screen.dart';
 import 'module4/module4_widgets.dart';
+import 'module4/push_m4.dart';
 import 'module4/sondage_screen.dart';
 
 /// Onglet "Accueil" : le tableau de bord du quartier.
@@ -48,6 +49,8 @@ class _AccueilScreenState extends State<AccueilScreen> {
   void initState() {
     super.initState();
     _chargerDemandesEnAttente();
+    // M4 (C4) : recevoir les annonces de nouveaux événements du quartier
+    PushM4.abonner(_utilisateurs.getUtilisateurConnecte().quartierId);
   }
 
   Future<void> _chargerDemandesEnAttente() async {
