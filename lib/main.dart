@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'data/services/sync_signalements_m3.dart';
 import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
@@ -20,6 +21,8 @@ Future<void> main() async {
   await PreferenceTheme.charger();
   // La langue choisie la dernière fois (français ou derja)
   await PreferenceLangue.charger();
+  // M3 : envoie les signalements gardés hors ligne dès que le réseau revient
+  SyncSignalementsM3.instance.demarrer();
   runApp(const HoumaniApp());
 }
 
