@@ -48,6 +48,8 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
 
   /// Ajoute une date proposée : le jour, puis l'heure.
   Future<void> _ajouterDate() async {
+    // Sans ça, le clavier se rouvre sur le dernier champ quand la fenêtre se ferme
+    FocusManager.instance.primaryFocus?.unfocus();
     final DateTime maintenant = DateTime.now();
     final DateTime? jour = await showDatePicker(
       context: context,
@@ -97,6 +99,7 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
   }
 
   Future<void> _choisirFin() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final DateTime maintenant = DateTime.now();
     final DateTime? choisi = await showDatePicker(
       context: context,

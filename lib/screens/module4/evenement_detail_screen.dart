@@ -479,7 +479,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     final int? restantes = evenement.placesRestantes;
     if (restantes != null) {
       detail = evenement.estComplet
-          ? 'Complet (${evenement.placesMax} places)'
+          ? 'Complet (${evenement.placesMax} place${evenement.placesMax > 1 ? 's' : ''})'
           : '$restantes place${restantes > 1 ? 's' : ''} libre${restantes > 1 ? 's' : ''} sur ${evenement.placesMax}';
     }
     final List<Widget> enfants = [

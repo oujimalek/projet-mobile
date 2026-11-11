@@ -95,11 +95,18 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   }
 
   /// Le jour + une heure → DateTime.
+  /// L'heure au format français (18:00), pas 6:00 PM.
+  String _texteHeure(TimeOfDay heure) {
+    return texteHeure(DateTime(2000, 1, 1, heure.hour, heure.minute));
+  }
+
   DateTime _combiner(DateTime jour, TimeOfDay heure) {
     return DateTime(jour.year, jour.month, jour.day, heure.hour, heure.minute);
   }
 
   Future<void> _choisirJour() async {
+    // Sans ça, le clavier se rouvre sur le dernier champ quand la fenêtre se ferme
+    FocusManager.instance.primaryFocus?.unfocus();
     final DateTime maintenant = DateTime.now();
     final DateTime? choisi = await showDatePicker(
       context: context,
@@ -115,6 +122,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   }
 
   Future<void> _choisirHeure(bool debut) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final TimeOfDay? choisie = await showTimePicker(
       context: context,
       initialTime: (debut ? _heureDebut : _heureFin) ??
@@ -266,7 +274,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
                           Icons.schedule,
                           _heureDebut == null
                               ? 'Début'
-                              : 'Début ${_heureDebut!.format(context)}',
+                              : 'Début ${_texteHeure(_heureDebut!)}',
                           () => _choisirHeure(true),
                         ),
                       ),
@@ -276,7 +284,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
                           Icons.schedule_outlined,
                           _heureFin == null
                               ? 'Fin (optionnel)'
-                              : 'Fin ${_heureFin!.format(context)}',
+                              : 'Fin ${_texteHeure(_heureFin!)}',
                           () => _choisirHeure(false),
                         ),
                       ),
@@ -377,6 +385,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   /// Choisit une photo (galerie ou appareil photo) puis l'envoie tout de
   /// suite à Cloudinary : on garde seulement son adresse.
   Future<void> _ajouterPhoto() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final ImageSource? source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: AppColors.card,
@@ -497,6 +506,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () async {
+              FocusManager.instance.primaryFocus?.unfocus();
               final PointGps? choisi = await ouvrirEcranM4<PointGps>(
                 context,
                 ChoisirLieuScreen(initial: _position),
