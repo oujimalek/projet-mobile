@@ -1022,7 +1022,7 @@ void main() {
     });
   });
 
-  group('Lot 6 : carte, rappels du téléphone, hors ligne, derja', () {
+  group('Lot 6 : carte, rappels du téléphone, derja', () {
     test('position : relue depuis un GeoPoint, retirée avec sansPosition', () {
       final Evenement relu = Evenement.fromMap('e', {
         'position': const GeoPoint(36.85, 10.19),
@@ -1044,13 +1044,6 @@ void main() {
           [DateTime(2026, 11, 14, 17, 0)]);
       expect(NotificationsM4.momentsRappel(debut, DateTime(2026, 11, 14, 17, 30)),
           isEmpty);
-    });
-
-    testWidgets('hors ligne : un bandeau prévient', (tester) async {
-      depot.ajouterEvenementDe(nizar, titre: 'Fête');
-      depot.horsLigne = true;
-      await afficher(tester, const EvenementsScreen());
-      expect(find.textContaining('Hors ligne'), findsOneWidget);
     });
 
     testWidgets('derja : l\'onglet Événements change de langue', (tester) async {

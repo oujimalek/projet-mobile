@@ -428,26 +428,6 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     final List<Evenement> passesRecents = passes.reversed.toList();
 
     final List<Widget> contenu = [
-      // Sans Internet : la copie gardée sur le téléphone
-      if (_depot.horsLigne)
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.backgroundSecondary,
-            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.cloud_off_outlined, color: AppColors.textSecondary),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text('Hors ligne : voici les derniers événements chargés. '
-                    'Tire vers le bas pour actualiser.'),
-              ),
-            ],
-          ),
-        ),
       _champRecherche(),
       const SizedBox(height: 10),
       _filtresRapides(),

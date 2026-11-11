@@ -841,8 +841,4 @@ class MockEvenementRepository implements EvenementRepository {
     _attente[evenementId]?.remove(_moi().id);
     return const Resultat.succes(null);
   }
-
-  /// Simule l'absence d'Internet (les données viennent de la copie locale).
-  @override
-  bool horsLigne = false;
 }

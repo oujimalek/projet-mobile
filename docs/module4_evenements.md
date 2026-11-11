@@ -89,7 +89,7 @@ Seul un membre **actif** du quartier voit le module.
 - **Partout** : bandeau de rappel à l'accueil, rappels sur le téléphone
   (veille et 1 h avant), badge « nouveau », **notifications push** des
   nouveaux événements, « Mes événements » et pastille Leader dans le profil,
-  statistiques admin, derja, bandeau hors ligne, mode sombre, sélecteurs de
+  statistiques admin, derja, mode sombre, sélecteurs de
   date et d'heure en français (24 h).
 
 ## 5. Notifications push (gratuites)
@@ -117,5 +117,4 @@ Seul un membre **actif** du quartier voit le module.
 
 - **Événement depuis un signalement (M3)** : le module 3 n'existe pas encore
   dans les branches ; à ajouter quand il sera fusionné.
-- Mode hors ligne complet (aujourd'hui : cache Firestore + bandeau).
 - Fonctionnalité d'IA (à définir).

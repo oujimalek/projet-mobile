@@ -437,12 +437,7 @@ abstract class EvenementRepository {
   List<Evenement> getEvenements();
 
   /// Tous les événements du quartier, du plus proche au plus lointain.
-  /// Sans Internet, Firestore renvoie la copie gardée sur le téléphone :
-  /// voir [horsLigne].
   Future<Resultat<List<Evenement>>> chargerEvenements();
-
-  /// true si le dernier chargement vient de la copie locale (pas d'Internet).
-  bool get horsLigne;
 
   /// Un événement par son id (pour l'écran de détail).
   Future<Resultat<Evenement>> getEvenement(String evenementId);

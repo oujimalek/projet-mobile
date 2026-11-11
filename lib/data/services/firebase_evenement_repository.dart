@@ -92,18 +92,11 @@ class FirebaseEvenementRepository implements EvenementRepository {
     return aVenir;
   }
 
-  bool _horsLigne = false; // le dernier chargement vient de la copie locale
-
-  @override
-  bool get horsLigne => _horsLigne;
-
   @override
   Future<Resultat<List<Evenement>>> chargerEvenements() async {
     final Resultat<List<Evenement>> resultat = await _executer(() async {
       final QuerySnapshot<Map<String, dynamic>> snapshot =
           await _collectionEvenements.orderBy('date').get();
-      // Sans Internet, Firestore répond avec sa copie locale
-      _horsLigne = snapshot.metadata.isFromCache;
       final List<Evenement> liste = [];
       for (final document in snapshot.docs) {
         liste.add(Evenement.fromMap(document.id, document.data()));
