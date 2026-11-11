@@ -182,7 +182,14 @@ abstract class EvenementRepository {
   }
 
   /// Pourquoi on ne peut pas s'inscrire à cet événement (null : on peut).
-  static String? refusParticipation(Evenement evenement) {
+  /// [attente] : les uids de la liste d'attente, du premier au dernier.
+  /// Quand des places se libèrent, elles reviennent d'abord aux premiers
+  /// de la liste d'attente.
+  static String? refusParticipation(
+    Evenement evenement, {
+    List<String> attente = const [],
+    String moiId = '',
+  }) {
     if (evenement.annule) {
       return 'Cet événement est annulé';
     }
@@ -191,6 +198,34 @@ abstract class EvenementRepository {
     }
     if (evenement.estComplet) {
       return 'Cet événement est complet';
+    }
+    final int? libres = evenement.placesRestantes;
+    if (libres != null && attente.isNotEmpty) {
+      final int rang = attente.indexOf(moiId); // -1 : pas sur la liste
+      if (rang < 0 ? attente.length >= libres : rang >= libres) {
+        return 'Les places libérées reviennent d\'abord à la liste d\'attente';
+      }
+    }
+    return null;
+  }
+
+  /// Pourquoi on ne peut pas rejoindre la liste d'attente (null : on peut).
+  static String? refusAttente(
+    Evenement evenement, {
+    required bool inscrit,
+    required bool dejaEnAttente,
+  }) {
+    if (inscrit) {
+      return 'Tu participes déjà';
+    }
+    if (dejaEnAttente) {
+      return 'Tu es déjà sur la liste d\'attente';
+    }
+    if (evenement.annule || evenement.estPasse) {
+      return 'Cet événement n\'est plus ouvert';
+    }
+    if (!evenement.estComplet) {
+      return 'Il reste des places : inscris-toi directement';
     }
     return null;
   }
@@ -389,6 +424,17 @@ abstract class EvenementRepository {
   /// "Peut-être" : ma fiche interesses/{uid} + nbInteresses ±1, en une
   /// seule écriture (comme participer).
   Future<Resultat<void>> changerInteret(String evenementId, bool interesse);
+
+  // ----- Liste d'attente (événement complet) -----
+
+  /// La liste d'attente, du premier inscrit au dernier.
+  Future<Resultat<List<Participant>>> getAttente(String evenementId);
+
+  /// Je rejoins la liste d'attente (seulement si l'événement est complet).
+  Future<Resultat<void>> rejoindreAttente(Evenement evenement);
+
+  /// Je quitte la liste d'attente.
+  Future<Resultat<void>> quitterAttente(String evenementId);
 
   // ----- Questions / commentaires -----
 

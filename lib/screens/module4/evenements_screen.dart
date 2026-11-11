@@ -17,6 +17,7 @@ import 'module4_widgets.dart';
 import 'nouveautes_m4.dart';
 import 'sondage_form_screen.dart';
 import 'sondage_screen.dart';
+import 'statistiques_screen.dart';
 
 /// Les filtres rapides de la liste des événements.
 enum FiltreEvenements { tous, semaine, jOrganise, jeParticipe }
@@ -304,6 +305,15 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
               ],
             ),
           ),
+          // Statistiques : pour l'admin seulement
+          if (_moi.estAdmin)
+            IconButton(
+              tooltip: 'Statistiques',
+              onPressed: () {
+                ouvrirEcranM4<void>(context, const StatistiquesScreen());
+              },
+              icon: Icon(Icons.insights_outlined, color: AppColors.card),
+            ),
           // Calendrier du mois
           IconButton(
             tooltip: 'Calendrier',

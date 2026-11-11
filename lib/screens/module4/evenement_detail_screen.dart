@@ -41,6 +41,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
   Evenement? _evenement;
   bool _inscrit = false;
   bool _interesse = false; // "Peut-être"
+  List<Participant> _attente = []; // liste d'attente, dans l'ordre
   List<Participant> _participants = []; // organisateur et admin seulement
   bool _enChargement = true;
   bool _envoiEnCours = false; // participer / se retirer / supprimer
@@ -75,6 +76,8 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
 
     final Resultat<bool> inscrit = await _depot.estInscrit(evenement.id);
     final Resultat<bool> interesse = await _depot.estInteresse(evenement.id);
+    final Resultat<List<Participant>> attente =
+        await _depot.getAttente(evenement.id);
     List<Participant> noms = [];
     if (EvenementRepository.peutVoirParticipants(_moi, evenement)) {
       final Resultat<List<Participant>> participants =
@@ -89,6 +92,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       _evenement = evenement;
       _inscrit = inscrit.donnee ?? false;
       _interesse = interesse.donnee ?? false;
+      _attente = attente.donnee ?? [];
       _participants = noms;
     });
   }
@@ -98,6 +102,49 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(resultat.erreur!)),
     );
+  }
+
+  Future<void> _rejoindreAttente() async {
+    final Evenement? evenement = _evenement;
+    if (evenement == null) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat = await _depot.rejoindreAttente(evenement);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      _afficherErreur(resultat);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Tu es sur la liste d\'attente : si une place se libère, elle sera pour toi')));
+    _charger();
+  }
+
+  Future<void> _quitterAttente() async {
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat =
+        await _depot.quitterAttente(widget.evenementId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      _afficherErreur(resultat);
+      return;
+    }
+    _charger();
   }
 
   /// "Peut-être" : je deviens (ou ne suis plus) intéressé.
@@ -458,6 +505,21 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           ),
         );
       }
+      // La liste d'attente, dans l'ordre
+      if (_attente.isNotEmpty) {
+        enfants.add(const SizedBox(height: 14));
+        enfants.add(Text(
+          'Liste d\'attente (${_attente.length})',
+          style: TextStyle(
+              color: AppColors.secondary, fontWeight: FontWeight.w600),
+        ));
+        for (int i = 0; i < _attente.length; i++) {
+          enfants.add(Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('${i + 1}. ${_attente[i].nom}'),
+          ));
+        }
+      }
     } else {
       enfants.add(const SizedBox(height: 6));
       enfants.add(Text(
@@ -536,8 +598,58 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
   /// "Je participe" (bleu) ou "Me retirer" (doré), fixé en bas.
   Widget _boutonBas(Evenement evenement) {
     Widget bouton;
-    final String? refus = EvenementRepository.refusParticipation(evenement);
-    if (refus != null && !_inscrit) {
+    final String moiId = _moi.id;
+    final List<String> attente = [for (final Participant p in _attente) p.id];
+    final int monRang = attente.indexOf(moiId); // -1 : pas en attente
+    final String? refus = EvenementRepository.refusParticipation(
+      evenement,
+      attente: attente,
+      moiId: moiId,
+    );
+    if (!_inscrit && monRang >= 0 && refus != null) {
+      // Je suis sur la liste d'attente, pas encore de place pour moi
+      bouton = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Tu es ${monRang + 1}${monRang == 0 ? 'er' : 'e'} sur la liste d\'attente',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: AppColors.secondary, fontWeight: FontWeight.w600),
+          ),
+          TextButton(
+            onPressed: _envoiEnCours ? null : _quitterAttente,
+            child: const Text('Quitter la liste d\'attente'),
+          ),
+        ],
+      );
+    } else if (!_inscrit &&
+        evenement.estComplet &&
+        !evenement.annule &&
+        !evenement.estPasse) {
+      // Complet : on peut rejoindre la liste d'attente
+      bouton = SecondaryButton(
+        texte: 'Rejoindre la liste d\'attente (${attente.length})',
+        onPressed: _envoiEnCours ? null : _rejoindreAttente,
+      );
+    } else if (!_inscrit && monRang >= 0 && refus == null) {
+      // Une place s'est libérée pour moi
+      bouton = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Une place s\'est libérée pour toi !',
+            style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          PrimaryButton(
+            texte: 'Je participe',
+            icone: Icons.check,
+            onPressed: _envoiEnCours ? null : _participerOuSeRetirer,
+          ),
+        ],
+      );
+    } else if (refus != null && !_inscrit) {
       bouton = Text(
         refus,
         textAlign: TextAlign.center,

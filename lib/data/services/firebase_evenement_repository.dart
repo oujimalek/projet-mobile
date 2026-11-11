@@ -264,8 +264,18 @@ class FirebaseEvenementRepository implements EvenementRepository {
       if (!document.exists) {
         throw const RefusM4('Cet événement n\'existe plus');
       }
+      // La liste d'attente passe en priorité sur les places libérées
+      final List<String> attente = [];
+      final QuerySnapshot<Map<String, dynamic>> enAttente =
+          await evenement.collection('attente').orderBy('date').get();
+      for (final fiche in enAttente.docs) {
+        attente.add(fiche.id);
+      }
       final String? refus = EvenementRepository.refusParticipation(
-          Evenement.fromMap(document.id, document.data()!));
+        Evenement.fromMap(document.id, document.data()!),
+        attente: attente,
+        moiId: moi.id,
+      );
       if (refus != null) {
         throw RefusM4(refus);
       }
@@ -278,6 +288,10 @@ class FirebaseEvenementRepository implements EvenementRepository {
         'date': FieldValue.serverTimestamp(),
       });
       batch.update(evenement, {'nbParticipants': FieldValue.increment(1)});
+      // J'étais sur la liste d'attente : j'en sors
+      if (attente.contains(moi.id)) {
+        batch.delete(evenement.collection('attente').doc(moi.id));
+      }
       await batch.commit();
     });
   }
@@ -349,6 +363,54 @@ class FirebaseEvenementRepository implements EvenementRepository {
   CollectionReference<Map<String, dynamic>> _sous(
       String evenementId, String nom) {
     return _collectionEvenements.doc(evenementId).collection(nom);
+  }
+
+  @override
+  Future<Resultat<List<Participant>>> getAttente(String evenementId) {
+    return _executer(() async {
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await _sous(evenementId, 'attente').orderBy('date').get();
+      final List<Participant> liste = [];
+      for (final document in snapshot.docs) {
+        liste.add(Participant(
+          id: document.id,
+          nom: document.data()['nom'] ?? '',
+          avatar: document.data()['avatar'] ?? '',
+        ));
+      }
+      return liste;
+    });
+  }
+
+  @override
+  Future<Resultat<void>> rejoindreAttente(Evenement evenement) {
+    return _executer(() async {
+      final Utilisateur moi = _moi();
+      final bool inscrit =
+          (await _sous(evenement.id, 'participants').doc(moi.id).get()).exists;
+      final bool deja =
+          (await _sous(evenement.id, 'attente').doc(moi.id).get()).exists;
+      final String? refus = EvenementRepository.refusAttente(
+        evenement,
+        inscrit: inscrit,
+        dejaEnAttente: deja,
+      );
+      if (refus != null) {
+        throw RefusM4(refus);
+      }
+      await _sous(evenement.id, 'attente').doc(moi.id).set({
+        'nom': EvenementRepository.nomCourt(moi),
+        'avatar': moi.avatar,
+        'date': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  @override
+  Future<Resultat<void>> quitterAttente(String evenementId) {
+    return _executer(() async {
+      await _sous(evenementId, 'attente').doc(_moi().id).delete();
+    });
   }
 
   @override
@@ -549,15 +611,12 @@ class FirebaseEvenementRepository implements EvenementRepository {
     Map<String, dynamic> donnees,
     int nombreMembres,
   ) async {
-    final CollectionReference<Map<String, dynamic>> votes =
-        _collectionSondages.doc(id).collection('votes');
+    // Vote secret : on ne lit pas les votes (interdit), seulement les
+    // compteurs compteurs/{index} = {n}, tenus à jour avec chaque vote
     final List<dynamic> options = donnees['options'] ?? [];
-    final List<int> compteurs = [];
-    for (int i = 0; i < options.length; i++) {
-      final AggregateQuerySnapshot compte =
-          await votes.where('choix', isEqualTo: i).count().get();
-      compteurs.add(compte.count ?? 0);
-    }
+    final QuerySnapshot<Map<String, dynamic>> snapshot =
+        await _collectionSondages.doc(id).collection('compteurs').get();
+    final List<int> compteurs = _lireCompteurs(snapshot, options.length);
     return Sondage.fromMap(
       id,
       donnees,
@@ -669,30 +728,46 @@ class FirebaseEvenementRepository implements EvenementRepository {
         throw RefusM4(refus);
       }
 
-      await monVote.set({
+      // Mon vote (secret) + le compteur de mon choix, dans le MÊME WriteBatch
+      final WriteBatch batch = FirestoreCommun.base.batch();
+      batch.set(monVote, {
         'choix': choix,
         'date': FieldValue.serverTimestamp(),
       });
+      batch.set(
+        _collectionSondages.doc(sondage.id).collection('compteurs').doc('$choix'),
+        {'n': FieldValue.increment(1)},
+        SetOptions(merge: true), // crée le compteur s'il n'existe pas encore
+      );
+      await batch.commit();
     });
+  }
+
+  /// compteurs/{index} = {n} → la liste des votes de chaque option.
+  List<int> _lireCompteurs(
+      QuerySnapshot<Map<String, dynamic>> snapshot, int nbOptions) {
+    final List<int> compteurs = List.filled(nbOptions, 0);
+    for (final document in snapshot.docs) {
+      final int? index = int.tryParse(document.id);
+      final Object? n = document.data()['n'];
+      if (index != null && index >= 0 && index < nbOptions && n is int) {
+        compteurs[index] = n;
+      }
+    }
+    return compteurs;
   }
 
   @override
   Stream<List<int>> ecouterVotes(String sondageId, int nbOptions) {
     try {
-      // snapshots() : Firestore renvoie la liste à chaque nouveau vote
+      // snapshots() des compteurs : Firestore renvoie les nombres à chaque
+      // nouveau vote (les votes eux-mêmes restent secrets)
       return _collectionSondages
           .doc(sondageId)
-          .collection('votes')
+          .collection('compteurs')
           .snapshots()
           .map((snapshot) {
-        final List<int> compteurs = List.filled(nbOptions, 0);
-        for (final document in snapshot.docs) {
-          final Object? choix = document.data()['choix'];
-          if (choix is int && choix >= 0 && choix < nbOptions) {
-            compteurs[choix]++;
-          }
-        }
-        return compteurs;
+        return _lireCompteurs(snapshot, nbOptions);
       }).handleError((Object erreur) {
         // Pas de mise à jour en direct : l'écran garde les derniers nombres
       });

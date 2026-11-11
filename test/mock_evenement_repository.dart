@@ -334,11 +334,16 @@ class MockEvenementRepository implements EvenementRepository {
     if (_participants[evenementId]!.containsKey(moi.id)) {
       return const Resultat.echec('Tu participes déjà à cet événement');
     }
-    final String? refus =
-        EvenementRepository.refusParticipation(_evenements[index]);
+    final List<String> attente = _attente[evenementId] ?? [];
+    final String? refus = EvenementRepository.refusParticipation(
+      _evenements[index],
+      attente: attente,
+      moiId: moi.id,
+    );
     if (refus != null) {
       return Resultat.echec(refus);
     }
+    attente.remove(moi.id); // j'étais en attente : j'en sors
     _participants[evenementId]![moi.id] = EvenementRepository.nomCourt(moi);
     _avatars[moi.id] = moi.avatar;
     final Evenement evenement = _evenements[index];
@@ -704,6 +709,48 @@ class MockEvenementRepository implements EvenementRepository {
       note: note,
       commentaire: commentaire.trim(),
     ));
+    return const Resultat.succes(null);
+  }
+
+  // =====================================================================
+  // Liste d'attente
+  // =====================================================================
+
+  final Map<String, List<String>> _attente = {}; // evenementId → uids, dans l'ordre
+  final Map<String, String> _nomsAttente = {}; // uid → nom
+
+  @override
+  Future<Resultat<List<Participant>>> getAttente(String evenementId) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    final List<Participant> liste = [];
+    for (final String uid in _attente[evenementId] ?? []) {
+      liste.add(Participant(id: uid, nom: _nomsAttente[uid] ?? ''));
+    }
+    return Resultat.succes(liste);
+  }
+
+  @override
+  Future<Resultat<void>> rejoindreAttente(Evenement evenement) async {
+    final Utilisateur moi = _moi();
+    final List<String> liste = _attente.putIfAbsent(evenement.id, () => []);
+    final String? refus = EvenementRepository.refusAttente(
+      _parId(evenement.id) ?? evenement,
+      inscrit: _participants[evenement.id]?.containsKey(moi.id) ?? false,
+      dejaEnAttente: liste.contains(moi.id),
+    );
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    liste.add(moi.id);
+    _nomsAttente[moi.id] = EvenementRepository.nomCourt(moi);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> quitterAttente(String evenementId) async {
+    _attente[evenementId]?.remove(_moi().id);
     return const Resultat.succes(null);
   }
 }

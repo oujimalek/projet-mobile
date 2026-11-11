@@ -9,6 +9,7 @@ import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/models/vie_evenement.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/evenement_repository.dart';
+import 'package:houmani/data/services/statistiques_m4.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/screens/module4/calendrier_screen.dart';
 import 'package:houmani/screens/module4/evenement_detail_screen.dart';
@@ -694,7 +695,8 @@ void main() {
       await devenir(nizar);
       await afficher(tester, EvenementDetailScreen(evenementId: plein.id));
       expect(find.text('Complet'), findsOneWidget);
-      expect(find.text('Cet événement est complet'), findsOneWidget);
+      // Complet : on propose la liste d'attente
+      expect(find.text('Rejoindre la liste d\'attente (0)'), findsOneWidget);
     });
 
     testWidgets('détail : bouton Peut-être', (tester) async {
@@ -921,6 +923,98 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Ajouter une date'), findsOneWidget);
       expect(find.text('Choix 1'), findsNothing);
+    });
+  });
+
+  group('Lot 5 : liste d\'attente, statistiques', () {
+    test('liste d\'attente : seulement si complet ; la place libérée lui revient', () async {
+      final Evenement atelier = depot.ajouterEvenementDe(nizar, placesMax: 1);
+
+      // Pas complet : on s'inscrit directement, pas de liste d'attente
+      await devenir(sarra);
+      expect((await depot.rejoindreAttente(atelier)).estSucces, isFalse);
+      expect((await depot.participer(atelier.id)).estSucces, isTrue); // complet
+
+      // Amira (admin) arrive trop tard : liste d'attente
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      expect((await depot.rejoindreAttente(depot.evenements.single)).estSucces, isTrue);
+      expect((await depot.getAttente(atelier.id)).donnee!.single.nom, 'Amira B.');
+
+      // Sarra se retire : la place revient à Amira, pas à Nizar
+      await devenir(sarra);
+      await depot.seRetirer(atelier.id);
+      await devenir(nizar);
+      final Resultat<void> nizarRefuse = await depot.participer(atelier.id);
+      expect(nizarRefuse.estSucces, isFalse);
+      expect(nizarRefuse.erreur, contains('liste d\'attente'));
+
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      expect((await depot.participer(atelier.id)).estSucces, isTrue);
+      expect((await depot.getAttente(atelier.id)).donnee, isEmpty); // sortie de la liste
+    });
+
+    test('refusParticipation : priorité aux premiers de la liste', () {
+      final Evenement deuxLibres = Evenement(
+        id: 'e', titre: 'T', description: '', lieu: '', date: demain,
+        organisateur: 'X', placesMax: 10, participants: 8,
+      );
+      final List<String> attente = ['a', 'b', 'c'];
+      expect(EvenementRepository.refusParticipation(deuxLibres, attente: attente, moiId: 'a'),
+          isNull);
+      expect(EvenementRepository.refusParticipation(deuxLibres, attente: attente, moiId: 'b'),
+          isNull);
+      expect(EvenementRepository.refusParticipation(deuxLibres, attente: attente, moiId: 'c'),
+          isNotNull);
+      expect(EvenementRepository.refusParticipation(deuxLibres, attente: attente, moiId: 'z'),
+          isNotNull);
+    });
+
+    test('statistiques : totaux, moyenne, taux de vote, par mois', () {
+      final DateTime maintenant = DateTime(2026, 11, 11, 12);
+      final List<Evenement> evenements = [
+        Evenement(id: 'a', titre: 'Passé', description: '', lieu: '',
+            date: DateTime(2026, 10, 3), organisateur: 'X', participants: 10),
+        Evenement(id: 'b', titre: 'Passé 2', description: '', lieu: '',
+            date: DateTime(2026, 11, 2), organisateur: 'X', participants: 4),
+        Evenement(id: 'c', titre: 'Futur', description: '', lieu: '',
+            date: DateTime(2026, 11, 20), organisateur: 'X', participants: 2),
+        Evenement(id: 'd', titre: 'Annulé', description: '', lieu: '',
+            date: DateTime(2026, 11, 25), organisateur: 'X', participants: 50,
+            annule: true),
+      ];
+      final List<Sondage> sondages = [
+        Sondage(id: 'p', question: 'Q', dateFin: DateTime(2027),
+            nombreMembres: 10,
+            options: const [OptionSondage(texte: 'A', votes: 4), OptionSondage(texte: 'B', votes: 1)]),
+      ];
+      final StatistiquesM4 stats = StatistiquesM4.calculer(evenements, sondages, maintenant);
+      expect(stats.nbEvenements, 4);
+      expect(stats.nbAnnules, 1);
+      expect(stats.totalParticipants, 16); // l'annulé ne compte pas
+      expect(stats.participationMoyenne, 7); // (10 + 4) / 2 passés
+      expect(stats.tauxVoteMoyen, 0.5);
+      expect(stats.evenementsParMois, [0, 0, 0, 0, 1, 2]); // oct. 1, nov. 2
+      expect(stats.plusPopulaires.first.titre, 'Passé');
+    });
+
+    testWidgets('statistiques : l\'admin voit l\'icône, pas un résident', (tester) async {
+      await afficher(tester, const EvenementsScreen());
+      expect(find.byTooltip('Statistiques'), findsOneWidget);
+      await tester.tap(find.byTooltip('Statistiques'));
+      await tester.pumpAndSettle();
+      expect(find.text('Événements par mois'), findsOneWidget);
+    });
+
+    testWidgets('statistiques : pas d\'icône pour une résidente', (tester) async {
+      await devenir(sarra);
+      await afficher(tester, const EvenementsScreen());
+      expect(find.byTooltip('Statistiques'), findsNothing);
     });
   });
 

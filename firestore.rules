@@ -472,6 +472,19 @@ service cloud.firestore {
           return get(chemin()).data.organisateurId == monUid() || adminDe(q);
         }
 
+        // ----- Liste d'attente (id = uid) : seulement quand c'est complet -----
+        match /attente/{uidAttente} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidAttente == monUid()
+            && get(chemin()).data.get('placesMax', 0) > 0
+            && get(chemin()).data.nbParticipants >= get(chemin()).data.placesMax;
+          // Je la quitte (ou j'obtiens une place), ou l'organisateur / l'admin
+          allow delete: if membreDe(q)
+            && (uidAttente == monUid() || organisateurOuAdmin());
+          allow update: if false;
+        }
+
         // ----- Questions / commentaires -----
         match /commentaires/{commentaireId} {
           allow read: if membreDe(q);
@@ -528,20 +541,49 @@ service cloud.firestore {
           || adminDe(q);
         allow update: if false;
 
-        // ----- Votes (id du document = uid) : 1 vote, définitif -----
+        function compteurChemin(index) {
+          return /databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)/compteurs/$(index);
+        }
+        function monVote() {
+          return /databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)/votes/$(monUid());
+        }
+
+        // ----- Votes (id = uid) : SECRETS, 1 vote, définitif -----
+        // Chacun ne lit que SON vote ; les totaux sont dans compteurs/.
         match /votes/{uidVote} {
           function sondage() {
             return get(/databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)).data;
           }
 
-          allow read: if membreDe(q);
+          allow read: if membreDe(q) && uidVote == monUid();
           allow create: if membreDe(q)
             && uidVote == monUid()
             && request.time < sondage().dateFin
             && request.resource.data.choix is int
             && request.resource.data.choix >= 0
-            && request.resource.data.choix < sondage().options.size();
+            && request.resource.data.choix < sondage().options.size()
+            // le compteur de ce choix monte de 1 dans le même WriteBatch
+            && getAfter(compteurChemin(string(request.resource.data.choix))).data.n
+               == (exists(compteurChemin(string(request.resource.data.choix)))
+                   ? get(compteurChemin(string(request.resource.data.choix))).data.n
+                   : 0) + 1;
           allow update, delete: if false;
+        }
+
+        // ----- Compteurs (id = index du choix) : n = nombre de votes -----
+        // +1 seulement avec MON vote créé dans le même WriteBatch, pour ce choix
+        match /compteurs/{index} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && request.resource.data.n == 1
+            && !exists(monVote()) && existsAfter(monVote())
+            && string(getAfter(monVote()).data.choix) == index;
+          allow update: if membreDe(q)
+            && changeSeulement(['n'])
+            && request.resource.data.n == resource.data.n + 1
+            && !exists(monVote()) && existsAfter(monVote())
+            && string(getAfter(monVote()).data.choix) == index;
+          allow delete: if false;
         }
       }
 
