@@ -14,6 +14,7 @@ import '../widgets/app_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/houmani_logo.dart';
 import 'module1/widgets_module1.dart';
+import 'module4/bandeau_rappel_m4.dart';
 import 'module4/evenement_detail_screen.dart';
 import 'module4/module4_widgets.dart';
 import 'module4/sondage_screen.dart';
@@ -94,6 +95,9 @@ class _AccueilScreenState extends State<AccueilScreen> {
     final Sondage? sondage = _evenements.getSondageActif();
 
     final List<Widget> contenu = [];
+
+    // ----- M4 : rappel des événements de demain / aujourd'hui -----
+    contenu.add(const BandeauRappelM4());
 
     // ----- Admin : demandes en attente -----
     if (utilisateur.estAdmin && _enAttente > 0) {

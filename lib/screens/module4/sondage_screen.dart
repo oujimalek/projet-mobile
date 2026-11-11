@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/models/signalement.dart';
@@ -41,10 +43,36 @@ class _SondageScreenState extends State<SondageScreen> {
   int? _choix; // index de l'option choisie, null = aucune
   bool _aVote = false; // true une fois le vote confirmé
 
+  // Votes en direct : les barres bougent quand un voisin vote
+  StreamSubscription<List<int>>? _ecoute;
+
   @override
   void initState() {
     super.initState();
     _charger();
+  }
+
+  @override
+  void dispose() {
+    _ecoute?.cancel();
+    super.dispose();
+  }
+
+  /// Écoute les votes du sondage (remplace l'écoute précédente).
+  void _ecouterVotes(Sondage sondage) {
+    _ecoute?.cancel();
+    _ecoute = _depot
+        .ecouterVotes(sondage.id, sondage.options.length)
+        .listen((compteurs) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _votes
+          ..clear()
+          ..addAll(compteurs);
+      });
+    });
   }
 
   /// Lit le sondage en cours, puis le vote de l'utilisateur.
@@ -98,6 +126,9 @@ class _SondageScreenState extends State<SondageScreen> {
       _choix = monVote;
       _aVote = monVote != null;
     });
+    if (sondage != null) {
+      _ecouterVotes(sondage);
+    }
   }
 
   /// Nombre total de votes (toutes options confondues).
@@ -172,8 +203,8 @@ class _SondageScreenState extends State<SondageScreen> {
       );
       return;
     }
+    // Les nombres de votes arrivent par l'écoute en direct (_ecouterVotes)
     setState(() {
-      _votes[choix]++; // on ajoute notre vote à l'option choisie
       _aVote = true;
     });
   }

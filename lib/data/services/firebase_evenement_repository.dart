@@ -428,4 +428,29 @@ class FirebaseEvenementRepository implements EvenementRepository {
       });
     });
   }
+
+  @override
+  Stream<List<int>> ecouterVotes(String sondageId, int nbOptions) {
+    try {
+      // snapshots() : Firestore renvoie la liste à chaque nouveau vote
+      return _collectionSondages
+          .doc(sondageId)
+          .collection('votes')
+          .snapshots()
+          .map((snapshot) {
+        final List<int> compteurs = List.filled(nbOptions, 0);
+        for (final document in snapshot.docs) {
+          final Object? choix = document.data()['choix'];
+          if (choix is int && choix >= 0 && choix < nbOptions) {
+            compteurs[choix]++;
+          }
+        }
+        return compteurs;
+      }).handleError((Object erreur) {
+        // Pas de mise à jour en direct : l'écran garde les derniers nombres
+      });
+    } catch (erreur) {
+      return const Stream.empty(); // pas connecté, Firebase absent...
+    }
+  }
 }

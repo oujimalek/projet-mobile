@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:houmani/data/models/evenement.dart';
 import 'package:houmani/data/models/sondage.dart';
 import 'package:houmani/data/models/utilisateur.dart';
@@ -424,6 +426,34 @@ class MockEvenementRepository implements EvenementRepository {
       return Resultat.echec(refus);
     }
     votes[moi] = choix;
+    _changementVotes.add(null); // les écrans en direct se mettent à jour
     return const Resultat.succes(null);
+  }
+
+  // Prévient les écrans qui écoutent les votes (comme snapshots())
+  final StreamController<void> _changementVotes = StreamController<void>.broadcast();
+
+  List<int> _compter(String sondageId, int nbOptions) {
+    final List<int> compteurs = List.filled(nbOptions, 0);
+    for (final int choix in (_votes[sondageId] ?? {}).values) {
+      if (choix >= 0 && choix < nbOptions) {
+        compteurs[choix]++;
+      }
+    }
+    return compteurs;
+  }
+
+  @override
+  Stream<List<int>> ecouterVotes(String sondageId, int nbOptions) async* {
+    yield _compter(sondageId, nbOptions);
+    await for (final _ in _changementVotes.stream) {
+      yield _compter(sondageId, nbOptions);
+    }
+  }
+
+  /// Un voisin vote pendant que l'écran est ouvert (test du « en direct »).
+  void voteEnDirect(Utilisateur votant, Sondage sondage, int choix) {
+    ajouterVoteDe(votant, sondage, choix);
+    _changementVotes.add(null);
   }
 }

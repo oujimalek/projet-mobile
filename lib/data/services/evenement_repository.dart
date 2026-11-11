@@ -125,6 +125,41 @@ abstract class EvenementRepository {
   static const String refusOrganiser =
       'Seuls les leaders et l\'admin du quartier peuvent organiser';
 
+  /// Les événements à rappeler : ceux où je participe, qui ont lieu
+  /// aujourd'hui (pas encore terminés) ou demain, du plus proche au plus loin.
+  static List<Evenement> rappels(
+    List<Evenement> evenements,
+    Set<String> mesParticipations,
+    DateTime maintenant,
+  ) {
+    final DateTime aujourdhui =
+        DateTime(maintenant.year, maintenant.month, maintenant.day);
+    final DateTime apresDemain = aujourdhui.add(const Duration(days: 2));
+    final List<Evenement> liste = [];
+    for (final Evenement evenement in evenements) {
+      final DateTime fin = evenement.dateFin ?? evenement.date;
+      if (mesParticipations.contains(evenement.id) &&
+          fin.isAfter(maintenant) &&
+          evenement.date.isBefore(apresDemain)) {
+        liste.add(evenement);
+      }
+    }
+    liste.sort((a, b) => a.date.compareTo(b.date));
+    return liste;
+  }
+
+  /// "Rappel : demain à 18:00, Fête des voisins (Jardin)"
+  static String texteRappel(Evenement evenement, DateTime maintenant) {
+    final DateTime aujourdhui =
+        DateTime(maintenant.year, maintenant.month, maintenant.day);
+    final DateTime jour =
+        DateTime(evenement.date.year, evenement.date.month, evenement.date.day);
+    final String quand = jour == aujourdhui ? 'aujourd\'hui' : 'demain';
+    final String heure =
+        '${evenement.date.hour.toString().padLeft(2, '0')}:${evenement.date.minute.toString().padLeft(2, '0')}';
+    return 'Rappel : $quand à $heure, ${evenement.titre} (${evenement.lieu})';
+  }
+
   /// true si [utilisateur] peut supprimer ce contenu : son auteur ou l'admin.
   static bool peutSupprimer(Utilisateur utilisateur, String auteurId) {
     return utilisateur.id == auteurId || utilisateur.estAdmin;
@@ -210,4 +245,9 @@ abstract class EvenementRepository {
 
   /// Vote pour l'option [choix] (0, 1, 2...). Un seul vote, définitif.
   Future<Resultat<void>> voter(Sondage sondage, int choix);
+
+  /// Les votes de chaque option, EN DIRECT : une nouvelle liste à chaque
+  /// vote d'un voisin. En cas d'erreur, le Stream ne renvoie rien (l'écran
+  /// garde les derniers nombres connus).
+  Stream<List<int>> ecouterVotes(String sondageId, int nbOptions);
 }

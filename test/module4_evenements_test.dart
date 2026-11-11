@@ -554,6 +554,49 @@ void main() {
     });
   });
 
+  group('Rappels et résultats en direct', () {
+    test('rappels : seulement mes événements d\'aujourd\'hui et de demain', () {
+      final DateTime maintenant = DateTime(2026, 11, 11, 10, 0);
+      final Evenement ceSoir = Evenement(
+          id: 'a', titre: 'Ce soir', description: '', lieu: 'Jardin',
+          date: DateTime(2026, 11, 11, 18, 0), organisateur: 'X');
+      final Evenement demainMatin = Evenement(
+          id: 'b', titre: 'Demain', description: '', lieu: 'Parc',
+          date: DateTime(2026, 11, 12, 9, 0), organisateur: 'X');
+      final Evenement apresDemain = Evenement(
+          id: 'c', titre: 'Plus tard', description: '', lieu: 'Salle',
+          date: DateTime(2026, 11, 13, 9, 0), organisateur: 'X');
+      final Evenement pasInscrit = Evenement(
+          id: 'd', titre: 'Pas moi', description: '', lieu: 'Salle',
+          date: DateTime(2026, 11, 11, 20, 0), organisateur: 'X');
+
+      final List<Evenement> rappels = EvenementRepository.rappels(
+        [apresDemain, demainMatin, ceSoir, pasInscrit],
+        {'a', 'b', 'c'},
+        maintenant,
+      );
+      expect(rappels.map((e) => e.id), ['a', 'b']);
+      expect(EvenementRepository.texteRappel(ceSoir, maintenant),
+          'Rappel : aujourd\'hui à 18:00, Ce soir (Jardin)');
+      expect(EvenementRepository.texteRappel(demainMatin, maintenant),
+          'Rappel : demain à 09:00, Demain (Parc)');
+    });
+
+    testWidgets('sondage : les votes d\'un voisin arrivent en direct', (tester) async {
+      final Sondage sondage = depot.ajouterSondageDe(
+        nizar,
+        question: 'En direct ?',
+        options: ['Oui', 'Non'],
+      );
+      await afficher(tester, SondageScreen(sondageId: sondage.id));
+      expect(find.text('0 vote au total'), findsOneWidget);
+
+      depot.voteEnDirect(sarra, sondage, 0); // Sarra vote sur son téléphone
+      await tester.pumpAndSettle();
+      expect(find.text('1 vote au total'), findsOneWidget);
+    });
+  });
+
   group('Rôle Leader', () {
     test('seuls les leaders et l\'admin organisent', () async {
       expect(EvenementRepository.peutOrganiser(amira), isTrue); // admin
