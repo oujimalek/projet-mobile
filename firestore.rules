@@ -46,6 +46,11 @@ service cloud.firestore {
       return membreDe(q) && moi().role == 'admin';
     }
 
+    // M4 : leader ou admin actif du quartier q (organise événements et sondages)
+    function organisateurDe(q) {
+      return membreDe(q) && moi().role in ['leader', 'admin'];
+    }
+
     // Seuls ces champs changent dans la modification
     function changeSeulement(champs) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(champs);
@@ -104,7 +109,9 @@ service cloud.firestore {
                 && resource.data.role != 'admin'
                 && request.resource.data.quartierId != resource.data.quartierId))
         && changeSeulement(['quartierId', 'quartierNom', 'residence',
-             'statut', 'dateDemande', 'motif'])
+             'statut', 'dateDemande', 'motif', 'role'])
+        // M4 : un leader qui change de quartier redevient résident
+        && request.resource.data.get('role', 'resident') == 'resident'
         && request.resource.data.statut == 'enAttente'
         && request.resource.data.get('motif', '') == ''
         && request.resource.data.dateDemande == request.time
@@ -123,6 +130,16 @@ service cloud.firestore {
                 && request.resource.data.motif is string
                 && request.resource.data.motif.size() >= 3
                 && request.resource.data.motif.size() <= 200));
+
+      // M4 - Admin du quartier : nomme un membre actif leader, ou lui
+      // retire ce rôle. Seulement entre "resident" et "leader" (on ne
+      // devient jamais admin ainsi, et l'admin ne se change pas lui-même).
+      allow update: if adminDe(resource.data.quartierId)
+        && monUid() != uid
+        && resource.data.statut == 'actif'
+        && changeSeulement(['role'])
+        && resource.data.role in ['resident', 'leader']
+        && request.resource.data.role in ['resident', 'leader'];
 
       // Après un changement d'e-mail (lien de confirmation cliqué) :
       // recopier dans le profil l'adresse de Firebase Auth, et rien d'autre.
@@ -374,7 +391,8 @@ service cloud.firestore {
 
         allow read: if membreDe(q);
 
-        allow create: if membreDe(q)
+        // Seuls les leaders et l'admin créent un événement
+        allow create: if organisateurDe(q)
           && request.resource.data.organisateurId == monUid()
           && request.resource.data.nbParticipants == 0;
 
@@ -416,7 +434,8 @@ service cloud.firestore {
       // ---------- M4 · Sondages ----------
       match /sondages/{sondageId} {
         allow read: if membreDe(q);
-        allow create: if membreDe(q)
+        // Seuls les leaders et l'admin créent un sondage
+        allow create: if organisateurDe(q)
           && request.resource.data.proposeParId == monUid()
           && request.resource.data.options is list
           && request.resource.data.options.size() >= 2;

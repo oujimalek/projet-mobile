@@ -13,6 +13,7 @@ enum StatutUtilisateur {
 enum RoleUtilisateur {
   resident, // membre normal
   admin, // administrateur du quartier : valide les inscriptions
+  leader, // élu (ou nommé par l'admin) : organise événements et sondages (M4)
 }
 
 /// M1 - Un utilisateur (habitant) de Houmani.
@@ -84,6 +85,9 @@ class Utilisateur {
 
   bool get estAdmin => role == RoleUtilisateur.admin;
 
+  /// M4 : leader du quartier (organise les événements et les sondages).
+  bool get estLeader => role == RoleUtilisateur.leader;
+
   /// Renvoie une copie de l'utilisateur avec certains champs modifiés.
   /// Les champs non donnés gardent leur valeur actuelle.
   /// Exemple : utilisateur.copier(statut: StatutUtilisateur.actif)
@@ -101,6 +105,7 @@ class Utilisateur {
     DateTime? dateDemande,
     String? avatar,
     String? motif,
+    RoleUtilisateur? role,
   }) {
     return Utilisateur(
       id: id,
@@ -113,7 +118,7 @@ class Utilisateur {
       residence: residence ?? this.residence,
       logement: logement ?? this.logement,
       statut: statut ?? this.statut,
-      role: role,
+      role: role ?? this.role,
       competences: competences ?? this.competences,
       servicesRendus: servicesRendus,
       noteMoyenne: noteMoyenne,
@@ -164,9 +169,7 @@ class Utilisateur {
       residence: map['residence'] ?? '',
       logement: map['logement'] ?? '',
       statut: _statutDepuisTexte(map['statut']),
-      role: map['role'] == RoleUtilisateur.admin.name
-          ? RoleUtilisateur.admin
-          : RoleUtilisateur.resident,
+      role: _roleDepuisTexte(map['role']),
       competences: List<String>.from(map['competences'] ?? []),
       avatar: map['avatar'] ?? '',
       motif: map['motif'] ?? '',
@@ -183,5 +186,15 @@ class Utilisateur {
       }
     }
     return StatutUtilisateur.enAttente;
+  }
+
+  /// Texte ("admin", "leader"...) → rôle ; inconnu ou absent : resident.
+  static RoleUtilisateur _roleDepuisTexte(String? texte) {
+    for (final RoleUtilisateur role in RoleUtilisateur.values) {
+      if (role.name == texte) {
+        return role;
+      }
+    }
+    return RoleUtilisateur.resident;
   }
 }

@@ -184,6 +184,9 @@ class MockEvenementRepository implements EvenementRepository {
     if (refus != null) {
       return Resultat.echec(refus);
     }
+    if (!EvenementRepository.peutOrganiser(_moi())) {
+      return const Resultat.echec(EvenementRepository.refusOrganiser);
+    }
     ajouterEvenementDe(
       _moi(),
       titre: titre.trim(),
@@ -366,6 +369,9 @@ class MockEvenementRepository implements EvenementRepository {
       if (texte.trim().isNotEmpty) {
         remplies.add(texte.trim());
       }
+    }
+    if (!EvenementRepository.peutOrganiser(_moi())) {
+      return const Resultat.echec(EvenementRepository.refusOrganiser);
     }
     ajouterSondageDe(
       _moi(),

@@ -554,6 +554,89 @@ void main() {
     });
   });
 
+  group('Rôle Leader', () {
+    test('seuls les leaders et l\'admin organisent', () async {
+      expect(EvenementRepository.peutOrganiser(amira), isTrue); // admin
+      expect(EvenementRepository.peutOrganiser(sarra), isFalse); // résidente
+
+      // Une résidente ne peut créer ni événement ni sondage
+      await devenir(sarra);
+      final Resultat<void> evenement = await depot.creerEvenement(
+        titre: 'Fête',
+        description: '',
+        date: demain,
+        lieu: 'Jardin',
+        categorie: CategorieEvenement.fete,
+      );
+      expect(evenement.estSucces, isFalse);
+      expect(evenement.erreur, EvenementRepository.refusOrganiser);
+      final Resultat<void> sondage = await depot.creerSondage(
+        question: 'Q ?',
+        options: ['A', 'B'],
+        dateFin: demain,
+      );
+      expect(sondage.estSucces, isFalse);
+      expect(depot.evenements, isEmpty);
+      expect(depot.sondages, isEmpty);
+    });
+
+    test('l\'admin nomme un leader, qui peut alors organiser', () async {
+      expect((await utilisateurs.changerRole(sarra.id, RoleUtilisateur.leader)).estSucces,
+          isTrue);
+
+      await devenir(sarra);
+      expect(utilisateurs.getUtilisateurConnecte().estLeader, isTrue);
+      final Resultat<void> resultat = await depot.creerEvenement(
+        titre: 'Tournoi de foot',
+        description: '',
+        date: demain,
+        lieu: 'Terrain',
+        categorie: CategorieEvenement.sport,
+      );
+      expect(resultat.estSucces, isTrue);
+      expect(depot.evenements.single.organisateurId, sarra.id);
+    });
+
+    test('refusRole : seul l\'admin, jamais sur l\'admin ni vers admin', () async {
+      // L'admin ne peut pas être leader, ni donner le rôle d'admin
+      expect(UtilisateurRepository.refusRole(amira, amira, RoleUtilisateur.leader),
+          isNotNull);
+      expect(UtilisateurRepository.refusRole(amira, sarra, RoleUtilisateur.admin),
+          isNotNull);
+      expect(UtilisateurRepository.refusRole(amira, sarra, RoleUtilisateur.leader),
+          isNull);
+
+      // Une résidente ne peut nommer personne
+      await devenir(sarra);
+      expect((await utilisateurs.changerRole(nizar.id, RoleUtilisateur.leader)).estSucces,
+          isFalse);
+    });
+
+    test('Firestore : le rôle leader est relu correctement', () {
+      final Utilisateur relu = Utilisateur.fromMap('u9', {
+        'prenom': 'Salma',
+        'nom': 'G',
+        'role': 'leader',
+        'statut': 'actif',
+      });
+      expect(relu.estLeader, isTrue);
+      expect(Utilisateur.fromMap('u9', {'role': 'inconnu'}).role,
+          RoleUtilisateur.resident);
+    });
+
+    testWidgets('une résidente ne voit pas le bouton +', (tester) async {
+      await devenir(sarra);
+      await afficher(tester, const EvenementsScreen());
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.textContaining('Les leaders de ta houma'), findsOneWidget);
+    });
+
+    testWidgets('l\'admin voit le bouton +', (tester) async {
+      await afficher(tester, const EvenementsScreen());
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+    });
+  });
+
   group('Formulaires', () {
     testWidgets('événement : titre et lieu obligatoires', (tester) async {
       await afficher(tester, const EvenementFormScreen());

@@ -138,6 +138,9 @@ class FirebaseEvenementRepository implements EvenementRepository {
         throw RefusM4(refus);
       }
       final Utilisateur moi = _moi();
+      if (!EvenementRepository.peutOrganiser(moi)) {
+        throw const RefusM4(EvenementRepository.refusOrganiser);
+      }
       final Evenement evenement = Evenement(
         id: '', // Firestore choisit l'id
         titre: titre.trim(),
@@ -357,6 +360,9 @@ class FirebaseEvenementRepository implements EvenementRepository {
         throw RefusM4(refus);
       }
       final Utilisateur moi = _moi();
+      if (!EvenementRepository.peutOrganiser(moi)) {
+        throw const RefusM4(EvenementRepository.refusOrganiser);
+      }
       final List<OptionSondage> choix = [];
       for (final String texte in options) {
         if (texte.trim().isNotEmpty) {

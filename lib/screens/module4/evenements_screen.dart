@@ -256,13 +256,16 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _ouvrirCreation,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, size: 30),
-      ),
+      // Bouton + : seulement pour les leaders et l'admin
+      floatingActionButton: EvenementRepository.peutOrganiser(_moi)
+          ? FloatingActionButton(
+              onPressed: _ouvrirCreation,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add, size: 30),
+            )
+          : null,
     );
   }
 
@@ -382,7 +385,9 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
       contenu.add(
         MessageM4(
           texte: _evenements.isEmpty
-              ? 'Aucun événement pour l\'instant.\nOrganise le premier avec le bouton + !'
+              ? (EvenementRepository.peutOrganiser(_moi)
+                  ? 'Aucun événement pour l\'instant.\nOrganise le premier avec le bouton + !'
+                  : 'Aucun événement pour l\'instant.\nLes leaders de ta houma les annonceront ici.')
               : 'Aucun événement ne correspond à ta recherche',
           icone: Icons.event_busy_outlined,
         ),
@@ -625,10 +630,12 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
       return RefreshIndicator(
         onRefresh: _chargerSondages,
         child: ListView(
-          children: const [
-            SizedBox(height: 60),
+          children: [
+            const SizedBox(height: 60),
             MessageM4(
-              texte: 'Aucun sondage pour l\'instant.\nPose une question à tes voisins avec le bouton + !',
+              texte: EvenementRepository.peutOrganiser(_moi)
+                  ? 'Aucun sondage pour l\'instant.\nPose une question à tes voisins avec le bouton + !'
+                  : 'Aucun sondage pour l\'instant.',
               icone: Icons.poll_outlined,
             ),
           ],

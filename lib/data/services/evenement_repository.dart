@@ -116,6 +116,15 @@ abstract class EvenementRepository {
     return null;
   }
 
+  /// true si [utilisateur] peut créer des événements et des sondages :
+  /// un leader ou l'admin (vérifié aussi par firestore.rules).
+  static bool peutOrganiser(Utilisateur utilisateur) {
+    return utilisateur.estLeader || utilisateur.estAdmin;
+  }
+
+  static const String refusOrganiser =
+      'Seuls les leaders et l\'admin du quartier peuvent organiser';
+
   /// true si [utilisateur] peut supprimer ce contenu : son auteur ou l'admin.
   static bool peutSupprimer(Utilisateur utilisateur, String auteurId) {
     return utilisateur.id == auteurId || utilisateur.estAdmin;

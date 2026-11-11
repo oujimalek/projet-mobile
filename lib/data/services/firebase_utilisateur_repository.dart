@@ -660,6 +660,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       statut: StatutUtilisateur.enAttente,
       dateDemande: DateTime.now(),
       motif: '', // nouvelle demande : on oublie un ancien refus
+      role: RoleUtilisateur.resident, // un leader ne l'est plus ailleurs (M4)
     );
     try {
       await _utilisateurs.doc(demande.id).update({
@@ -668,6 +669,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'residence': quartier.nom,
         'statut': StatutUtilisateur.enAttente.name,
         'motif': '',
+        'role': RoleUtilisateur.resident.name,
         'dateDemande': FieldValue.serverTimestamp(), // l'heure du serveur
       });
       await _memoriser(demande);
@@ -828,6 +830,28 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   /// L'admin ne change QUE le statut et le motif (seuls champs permis par
   /// firestore.rules). Motif vide pour actif, 3 à 200 caractères sinon.
+  @override
+  Future<Resultat<void>> changerRole(String id, RoleUtilisateur role) async {
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> document =
+          await _utilisateurs.doc(id).get();
+      if (!document.exists) {
+        return const Resultat.echec('Membre introuvable');
+      }
+      final Utilisateur membre = Utilisateur.fromMap(id, document.data()!);
+      final String? refus =
+          UtilisateurRepository.refusRole(getUtilisateurConnecte(), membre, role);
+      if (refus != null) {
+        return Resultat.echec(refus);
+      }
+      // Seulement le rôle : firestore.rules refuse tout autre changement
+      await _utilisateurs.doc(id).update({'role': role.name});
+      return const Resultat.succes(null);
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
   Future<Resultat<void>> _changerStatut(
     String id,
     StatutUtilisateur statut,

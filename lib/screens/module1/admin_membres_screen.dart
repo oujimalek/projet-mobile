@@ -423,12 +423,38 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      membre.nomComplet,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            membre.nomComplet,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        // M4 : badge doré des leaders du quartier
+                        if (membre.estLeader) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondaryLight,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Leader',
+                              style: TextStyle(
+                                color: AppColors.secondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -504,28 +530,14 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         if (membre.id == _repository.getUtilisateurConnecte().id) {
           return const SizedBox();
         }
-        return _boutonRouge(tr('Bloquer', 'Bloki'), () async {
-          final String? motif = await _demanderMotif(
-            tr('Bloquer ce membre ?', 'Tbloki el sekn hedha ?'),
-            tr(
-              '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
-                  'l\'application. Tu pourras le débloquer plus tard.',
-              '${membre.nomComplet} bech yokhrej w ma ynajjamch yesta3mel '
-                  'l\'appli. Tnajjem tdebloukih ba3d.',
-            ),
-            tr('Bloquer', 'Bloki'),
-          );
-          if (motif == null) {
-            return;
-          }
-          _action(
-              tr(
-                '${membre.prenom} est bloqué(e)',
-                '${membre.prenom} tbloka',
-              ), () {
-            return _repository.bloquerMembre(membre.id, motif);
-          });
-        });
+        return Row(
+          children: [
+            // M4 : nommer leader / retirer le rôle de leader
+            Expanded(child: _boutonLeader(membre)),
+            const SizedBox(width: 10),
+            Expanded(child: _boutonBloquer(membre)),
+          ],
+        );
       case StatutUtilisateur.bloque:
         return SecondaryButton(
           texte: tr('Débloquer', 'Debloki'),
@@ -542,6 +554,62 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
       case StatutUtilisateur.refuse:
         return const SizedBox(); // pas d'onglet "refusés"
     }
+  }
+
+  /// M4 - Le bouton qui nomme un membre leader, ou lui retire ce rôle.
+  Widget _boutonLeader(Utilisateur membre) {
+    if (membre.estLeader) {
+      return SecondaryButton(
+        texte: tr('Retirer leader', 'Na77i leader'),
+        onPressed: () {
+          _action(
+            tr(
+              '${membre.prenom} n\'est plus leader',
+              '${membre.prenom} ma3adech leader',
+            ),
+            () => _repository.changerRole(membre.id, RoleUtilisateur.resident),
+          );
+        },
+      );
+    }
+    return PrimaryButton(
+      texte: tr('Nommer leader', 'A3mlou leader'),
+      onPressed: () {
+        _action(
+          tr(
+            '${membre.prenom} est maintenant leader',
+            '${membre.prenom} wallé leader',
+          ),
+          () => _repository.changerRole(membre.id, RoleUtilisateur.leader),
+        );
+      },
+    );
+  }
+
+  /// Le bouton "Bloquer" d'un membre actif (l'admin donne le motif).
+  Widget _boutonBloquer(Utilisateur membre) {
+    return _boutonRouge(tr('Bloquer', 'Bloki'), () async {
+      final String? motif = await _demanderMotif(
+        tr('Bloquer ce membre ?', 'Tbloki el sekn hedha ?'),
+        tr(
+          '${membre.nomComplet} sera déconnecté et ne pourra plus utiliser '
+              'l\'application. Tu pourras le débloquer plus tard.',
+          '${membre.nomComplet} bech yokhrej w ma ynajjamch yesta3mel '
+              'l\'appli. Tnajjem tdebloukih ba3d.',
+        ),
+        tr('Bloquer', 'Bloki'),
+      );
+      if (motif == null) {
+        return;
+      }
+      _action(
+          tr(
+            '${membre.prenom} est bloqué(e)',
+            '${membre.prenom} tbloka',
+          ), () {
+        return _repository.bloquerMembre(membre.id, motif);
+      });
+    });
   }
 
   /// Avant une action négative (refuser, bloquer) : l'admin confirme et
