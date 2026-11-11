@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/signalement.dart';
+import '../../data/resultat.dart';
 import '../../data/services/signalement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
 
-/// M3 - Signalements : création d'un signalement.
+/// M3 - Signalements : création OU modification d'un signalement.
 ///
-/// L'utilisateur choisit une catégorie dans une GridView, décrit le problème,
-/// peut ajouter une photo (bouton visuel pour l'instant) et indique le lieu.
+/// L'utilisateur choisit une catégorie dans une GridView, donne un titre,
+/// décrit le problème, coche "Danger pour les personnes" si besoin, peut
+/// ajouter une photo (bouton visuel pour l'instant) et indique le lieu.
+///
+/// - `CreateSignalementScreen()` : nouveau signalement ;
+/// - `CreateSignalementScreen(signalement: s)` : l'auteur modifie [s]
+///   (seulement tant qu'il est en attente).
+///
+/// En cas de succès, l'écran se ferme avec `Navigator.pop(context, true)`.
 class CreateSignalementScreen extends StatefulWidget {
-  const CreateSignalementScreen({super.key});
+  final Signalement? signalement; // null = création, sinon modification
+
+  const CreateSignalementScreen({super.key, this.signalement});
 
   @override
   State<CreateSignalementScreen> createState() {
@@ -22,20 +33,38 @@ class CreateSignalementScreen extends StatefulWidget {
 }
 
 class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
-  final SignalementRepository _repository = SignalementRepository();
-
   // Formulaire et contrôleurs des champs
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _titreController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _localisationController = TextEditingController();
 
   // État de l'écran
   String? _categorieChoisie; // id de la catégorie, null = rien de choisi
   bool _erreurCategorie = false; // true = afficher "Choisis une catégorie"
-  String _message = ''; // message affiché après la publication
+  bool _danger = false; // case "Danger pour les personnes"
+  bool _enChargement = false; // true pendant l'envoi
+
+  /// true = on modifie un signalement existant.
+  bool get _modeModification => widget.signalement != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Modification : on pré-remplit le formulaire
+    final Signalement? existant = widget.signalement;
+    if (existant != null) {
+      _titreController.text = existant.titre;
+      _descriptionController.text = existant.description;
+      _localisationController.text = existant.lieu;
+      _categorieChoisie = existant.categorieId;
+      _danger = existant.danger;
+    }
+  }
 
   @override
   void dispose() {
+    _titreController.dispose();
     _descriptionController.dispose();
     _localisationController.dispose();
     super.dispose();
@@ -48,30 +77,75 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
         UtilisateurRepository().getUtilisateurConnecte().residence;
   }
 
-  /// Champ obligatoire : renvoie un message si le texte est vide.
-  String? _validerObligatoire(String? valeur) {
-    if (valeur == null || valeur.trim().isEmpty) {
-      return 'Champ obligatoire';
-    }
-    return null;
-  }
-
-  /// Appelé quand on touche "Publier le signalement".
-  void _publier() {
-    // On vérifie les champs du Form
+  /// Appelé quand on touche "Publier" (ou "Enregistrer").
+  Future<void> _publier() async {
+    // On vérifie les champs du Form, et qu'une catégorie a été choisie
     final bool champsValides = _formKey.currentState!.validate();
+    setState(() {
+      _erreurCategorie = _categorieChoisie == null;
+    });
+    final String? categorieId = _categorieChoisie;
+    if (!champsValides || categorieId == null) {
+      return;
+    }
+
+    // Le signalement tel que saisi. L'auteur, le statut, la date et le
+    // compteur sont remplis par le repository (création) ou gardés
+    // (modification).
+    final Signalement? existant = widget.signalement;
+    final Signalement saisi = Signalement(
+      id: existant?.id ?? '',
+      titre: _titreController.text,
+      description: _descriptionController.text,
+      categorieId: categorieId,
+      statut: existant?.statut ?? StatutSignalement.enAttente,
+      date: existant?.date ?? DateTime.now(),
+      lieu: _localisationController.text,
+      auteurId: existant?.auteurId ?? '',
+      auteurNom: existant?.auteurNom ?? '',
+      nbConfirmations: existant?.nbConfirmations ?? 0,
+      danger: _danger,
+    );
 
     setState(() {
-      // On vérifie aussi qu'une catégorie a été choisie
-      _erreurCategorie = _categorieChoisie == null;
+      _enChargement = true;
+    });
+    final Resultat<void> resultat = _modeModification
+        ? await SignalementRepository().modifierSignalement(saisi)
+        : await SignalementRepository().ajouterSignalement(saisi);
+    if (!mounted) {
+      return; // l'écran a été fermé pendant l'attente
+    }
+    setState(() {
+      _enChargement = false;
+    });
 
-      final String? id = _categorieChoisie;
-      if (champsValides && id != null) {
-        final CategorieSignalement categorie = _repository.getCategorieParId(id);
-        _message = 'Yaatik saha ! Signalement "${categorie.nom}" publié.';
-      } else {
-        _message = '';
-      }
+    if (!resultat.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
+      return;
+    }
+
+    // Succès : on revient à l'écran précédent avec "true"
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    // Pas d'écran précédent (ouvert comme onglet) : on vide le formulaire
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(tr('Yaatik saha ! Signalement publié.',
+            'Yaatik saha ! Tablighek tbaath.')),
+      ),
+    );
+    _formKey.currentState!.reset();
+    _titreController.clear();
+    _descriptionController.clear();
+    _localisationController.clear();
+    setState(() {
+      _categorieChoisie = null;
+      _danger = false;
     });
   }
 
@@ -81,7 +155,11 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       body: Column(
         children: [
           // En-tête blanc arrondi, comme sur la maquette
-          const AppHeader(titre: 'Nouveau signalement'),
+          AppHeader(
+            titre: _modeModification
+                ? tr('Modifier le signalement', 'Badel it-tabligh')
+                : tr('Nouveau signalement', 'Tabligh jdid'),
+          ),
 
           // ----- Partie qui défile : catégories + champs -----
           Expanded(
@@ -90,9 +168,12 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
-                  const Text(
-                    'Catégorie',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  Text(
+                    tr('Catégorie', 'Naw3'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   _grilleCategories(),
@@ -106,28 +187,37 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                   ),
                   const SizedBox(height: 12),
                   AppTextField(
-                    label: 'Description',
-                    hint: 'Décris ce qui se passe...',
+                    label: tr('Titre', 'El 3onwen'),
+                    hint: tr('Ex : Lampadaire en panne', 'Ex : Dhaw tafi'),
+                    controller: _titreController,
+                    validator: SignalementRepository.refusTitre,
+                  ),
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    label: tr('Description', 'Chnoua sar'),
+                    hint: tr('Décris ce qui se passe...', 'Ekteb chnoua sar...'),
                     controller: _descriptionController,
                     lignes: 3,
-                    validator: _validerObligatoire,
+                    validator: SignalementRepository.refusDescription,
                   ),
+                  const SizedBox(height: 12),
+                  _caseDanger(),
                   const SizedBox(height: 16),
                   _boutonPhoto(),
                   const SizedBox(height: 16),
                   AppTextField(
-                    label: 'Localisation',
+                    label: tr('Localisation', 'Win'),
                     hint: 'Bloc B, 2e étage',
                     controller: _localisationController,
-                    validator: _validerObligatoire,
+                    validator: SignalementRepository.refusLieu,
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton(
                       onPressed: _utiliserMaPosition,
-                      child: const Text(
-                        'Utiliser ma position',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      child: Text(
+                        tr('Utiliser ma position', 'Esta3mel blasti'),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -141,22 +231,14 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             child: Column(
               children: [
-                Text(
-                  _message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
                 PrimaryButton(
-                  texte: 'Publier le signalement',
-                  onPressed: _publier,
+                  texte: _texteBouton(),
+                  onPressed: _enChargement ? null : _publier,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Tous les membres de la houma seront notifiés.',
+                  tr('Tous les membres de la houma seront notifiés.',
+                      'Ga3 jiran el houma bech ya3rfou.'),
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -170,11 +252,57 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     );
   }
 
+  /// Le texte du bouton du bas selon le mode et le chargement.
+  String _texteBouton() {
+    if (_enChargement) {
+      return tr('Envoi...', 'Yab3ath...');
+    }
+    if (_modeModification) {
+      return tr('Enregistrer', 'Sajjel');
+    }
+    return tr('Publier le signalement', 'Ab3ath it-tabligh');
+  }
+
+  /// La case "Danger pour les personnes" (compte dans l'urgence).
+  Widget _caseDanger() {
+    // Material (et pas Container) : la ListTile dessine son effet de clic
+    // sur le Material le plus proche
+    return Material(
+      color: _danger ? AppColors.incidentLight : AppColors.card,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        side: BorderSide(
+          color: _danger ? AppColors.incident : AppColors.border,
+        ),
+      ),
+      child: CheckboxListTile(
+        value: _danger,
+        onChanged: (valeur) {
+          setState(() {
+            _danger = valeur ?? false;
+          });
+        },
+        activeColor: AppColors.incident,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(
+          tr('Danger pour les personnes', 'Fama khatar 3al nes'),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          tr('Fils électriques, trou, risque de chute...',
+              'Khyout dhaw, 7ofra, tnajjem tetzala9...'),
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+
   /// La grille des 5 catégories (3 par ligne).
   Widget _grilleCategories() {
     // On construit une tuile par catégorie avec une boucle
     final List<Widget> tuiles = [];
-    for (final categorie in _repository.getCategories()) {
+    for (final categorie in SignalementRepository.categories) {
       tuiles.add(_tuileCategorie(categorie));
     }
 
@@ -245,7 +373,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
         width: double.infinity,
         child: TextButton(
           onPressed: () {
-            // Choix d'une photo : à venir
+            // Choix d'une photo : à venir (étape photo du module 3)
           },
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 22),
@@ -253,9 +381,9 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
               borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
             ),
           ),
-          child: const Text(
-            '+ Ajouter une photo',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          child: Text(
+            tr('+ Ajouter une photo', '+ Zid taswira'),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
       ),
