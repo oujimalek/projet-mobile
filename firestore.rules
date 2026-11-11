@@ -411,7 +411,8 @@ service cloud.firestore {
           && (resource.data.organisateurId == monUid() || adminDe(q))
           && changeSeulement(['titre', 'description', 'date', 'dateFin',
                               'lieu', 'categorie', 'annule', 'placesMax',
-                              'position', 'photoUrl'])
+                              'position', 'photoUrl',
+                              'serviceId', 'serviceNom'])
           && (request.resource.data.get('position', null) == null
               || request.resource.data.position is latlng)
           // Photo : seulement une adresse de NOTRE compte Cloudinary

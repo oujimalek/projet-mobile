@@ -56,6 +56,8 @@ class Evenement {
   final DateTime? dateCreation; // pour le badge « nouveau » (null : ancien événement)
   final PointGps? position; // le lieu exact sur la carte (optionnel)
   final String? photoUrl; // la photo de l'événement (Cloudinary), optionnelle
+  final String? serviceId; // (D4) service commun lié (module 2), optionnel
+  final String? serviceNom; // son titre, recopié pour l'affichage
 
   const Evenement({
     required this.id,
@@ -75,6 +77,8 @@ class Evenement {
     this.dateCreation,
     this.position,
     this.photoUrl,
+    this.serviceId,
+    this.serviceNom,
   });
 
   /// true si l'événement est terminé (sa fin, ou son début s'il n'a pas de fin).
@@ -108,6 +112,8 @@ class Evenement {
           ? null
           : GeoPoint(position!.latitude, position!.longitude),
       'photoUrl': photoUrl,
+      'serviceId': serviceId,
+      'serviceNom': serviceNom,
     };
   }
 
@@ -134,6 +140,8 @@ class Evenement {
       dateCreation: FirestoreCommun.lireDate(map['dateCreation']),
       position: Quartier.lirePoint(map['position']),
       photoUrl: map['photoUrl'],
+      serviceId: map['serviceId'],
+      serviceNom: map['serviceNom'],
     );
   }
 
@@ -156,6 +164,9 @@ class Evenement {
     bool sansPosition = false,
     String? photoUrl,
     bool sansPhoto = false,
+    String? serviceId,
+    String? serviceNom,
+    bool sansService = false,
   }) {
     return Evenement(
       id: id,
@@ -175,6 +186,8 @@ class Evenement {
       dateCreation: dateCreation,
       position: sansPosition ? null : (position ?? this.position),
       photoUrl: sansPhoto ? null : (photoUrl ?? this.photoUrl),
+      serviceId: sansService ? null : (serviceId ?? this.serviceId),
+      serviceNom: sansService ? null : (serviceNom ?? this.serviceNom),
     );
   }
 }

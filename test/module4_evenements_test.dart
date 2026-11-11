@@ -1301,4 +1301,37 @@ void main() {
       expect((await depot.getPresents(match.id)).donnee, [sarra.id]);
     });
   });
+
+  group('D4 : service commun lié (module 2)', () {
+    test('toMap / fromMap gardent le service lié', () {
+      final Evenement fete = Evenement(
+        id: 'e', titre: 'Grand ménage', description: '', lieu: 'Hall',
+        date: demain, organisateur: 'X',
+        serviceId: 's1', serviceNom: 'Ménage de l\'escalier',
+      );
+      final Evenement relu = Evenement.fromMap('e', fete.toMap());
+      expect(relu.serviceId, 's1');
+      expect(relu.serviceNom, 'Ménage de l\'escalier');
+      expect(relu.copyWith(sansService: true).serviceId, isNull);
+    });
+
+    test('créer puis retirer le lien', () async {
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      expect(
+          (await depot.creerEvenement(
+            titre: 'Grand ménage', description: '', date: demain,
+            lieu: 'Hall', categorie: CategorieEvenement.nettoyage,
+            serviceId: 's1', serviceNom: 'Ménage',
+          ))
+              .estSucces,
+          isTrue);
+      final Evenement cree = depot.evenements.single;
+      expect(cree.serviceNom, 'Ménage');
+      await depot.modifierEvenement(cree.copyWith(sansService: true));
+      expect(depot.evenements.single.serviceId, isNull);
+    });
+  });
 }

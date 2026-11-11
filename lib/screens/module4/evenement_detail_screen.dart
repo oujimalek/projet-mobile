@@ -15,6 +15,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../module1/widgets_module1.dart';
+import '../module2/service_detail_screen.dart';
 import 'carte_evenement.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
@@ -489,6 +490,29 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
             child: MiniCarteEvenement(position: evenement.position!),
           ),
         _ligneInfo(Icons.person_outline, 'Organisé par ${evenement.organisateur}'),
+        // (D4) Le service commun lié (module 2) : on ouvre sa fiche
+        if (evenement.serviceId != null)
+          InkWell(
+            onTap: () => ouvrirEcranM4(
+                context, ServiceDetailScreen(serviceId: evenement.serviceId!)),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.handshake_outlined, color: AppColors.primary, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Service lié : ${evenement.serviceNom ?? 'service commun'}',
+                      style: TextStyle(
+                          color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: AppColors.primary),
+                ],
+              ),
+            ),
+          ),
         if (evenement.description.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(

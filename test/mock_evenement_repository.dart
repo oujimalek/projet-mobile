@@ -60,6 +60,8 @@ class MockEvenementRepository implements EvenementRepository {
     int placesMax = 0,
     PointGps? position,
     String? photoUrl,
+    String? serviceId,
+    String? serviceNom,
   }) {
     final Evenement evenement = Evenement(
       id: _nouvelId('e'),
@@ -76,6 +78,8 @@ class MockEvenementRepository implements EvenementRepository {
       placesMax: placesMax,
       position: position,
       photoUrl: photoUrl,
+      serviceId: serviceId,
+      serviceNom: serviceNom,
     );
     _evenements.add(evenement);
     _participants[evenement.id] = {};
@@ -199,6 +203,8 @@ class MockEvenementRepository implements EvenementRepository {
     int placesMax = 0,
     PointGps? position,
     String? photoUrl,
+    String? serviceId,
+    String? serviceNom,
   }) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
@@ -228,6 +234,8 @@ class MockEvenementRepository implements EvenementRepository {
       placesMax: placesMax,
       position: position,
       photoUrl: photoUrl,
+      serviceId: serviceId,
+      serviceNom: serviceNom,
     );
     return const Resultat.succes(null);
   }
@@ -271,6 +279,9 @@ class MockEvenementRepository implements EvenementRepository {
       sansPosition: evenement.position == null,
       photoUrl: evenement.photoUrl,
       sansPhoto: evenement.photoUrl == null,
+      serviceId: evenement.serviceId,
+      serviceNom: evenement.serviceNom,
+      sansService: evenement.serviceId == null,
     );
     return const Resultat.succes(null);
   }

@@ -458,6 +458,8 @@ abstract class EvenementRepository {
     int placesMax = 0,
     PointGps? position,
     String? photoUrl,
+    String? serviceId,
+    String? serviceNom,
   });
 
   /// L'organisateur (ou l'admin) modifie titre, description, dates, lieu,

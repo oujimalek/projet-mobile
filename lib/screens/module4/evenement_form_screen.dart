@@ -3,9 +3,11 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/evenement.dart';
 import '../../data/models/quartier.dart';
+import '../../data/models/service.dart';
 import '../../data/resultat.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/photos_m4.dart';
+import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
@@ -48,6 +50,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   TimeOfDay? _heureFin; // optionnelle
   PointGps? _position; // le lieu sur la carte (optionnel)
   String? _photoUrl; // la photo (Cloudinary), optionnelle
+  String? _serviceId; // (D4) service commun lié (module 2), optionnel
+  String? _serviceNom;
   bool _envoiPhoto = false; // photo en cours d'envoi
   bool _enChargement = false;
   String? _message; // erreur affichée au-dessus du bouton
@@ -72,6 +76,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       _lieu.text = existant.lieu;
       _position = existant.position;
       _photoUrl = existant.photoUrl;
+      _serviceId = existant.serviceId;
+      _serviceNom = existant.serviceNom;
       if (existant.placesMax > 0) {
         _places.text = '${existant.placesMax}';
       }
@@ -194,6 +200,8 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         placesMax: places,
         position: _position,
         photoUrl: _photoUrl,
+        serviceId: _serviceId,
+        serviceNom: _serviceNom,
       );
     } else {
       resultat = await _depot.modifierEvenement(
@@ -210,6 +218,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           sansPosition: _position == null,
           photoUrl: _photoUrl,
           sansPhoto: _photoUrl == null,
+          serviceId: _serviceId,
+          serviceNom: _serviceNom,
+          sansService: _serviceId == null,
         ),
       );
     }
@@ -320,6 +331,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
                   _choixCarte(),
                   const SizedBox(height: 12),
                   _choixPhoto(),
+                  const SizedBox(height: 12),
+                  // (D4) un service commun lié (module 2), optionnel
+                  _choixService(),
                   const SizedBox(height: 16),
                   AppTextField(
                     label: 'Nombre de places (vide = sans limite)',
@@ -494,6 +508,98 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  /// (D4) Choisir un service commun du quartier (module 2) à lier.
+  Future<void> _choisirService() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    // Les services communs (sortie des poubelles, ménage de l'escalier...)
+    List<Service> communs = [];
+    try {
+      final List<Service> tous = await ServiceRepository()
+          .ecouterServices()
+          .first
+          .timeout(const Duration(seconds: 10));
+      for (final Service service in tous) {
+        if (service.estCommun) {
+          communs.add(service);
+        }
+      }
+    } catch (e) {
+      communs = [];
+    }
+    if (!mounted) {
+      return;
+    }
+    final Service? choisi = await showModalBottomSheet<Service>(
+      context: context,
+      builder: (context) {
+        final List<Widget> lignes = [];
+        lignes.add(const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Lier un service commun',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        ));
+        if (communs.isEmpty) {
+          lignes.add(Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Text('Aucun service commun dans ta houma pour l\'instant.',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ));
+        }
+        for (final Service service in communs) {
+          lignes.add(ListTile(
+            leading: Icon(Icons.handshake_outlined, color: AppColors.primary),
+            title: Text(service.titre),
+            subtitle: Text(service.jour == null
+                ? service.categorie
+                : '${service.jour} · ${service.heureDebut ?? ''}'),
+            onTap: () => Navigator.of(context).pop(service),
+          ));
+        }
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: lignes),
+          ),
+        );
+      },
+    );
+    if (choisi != null && mounted) {
+      setState(() {
+        _serviceId = choisi.id;
+        _serviceNom = choisi.titre;
+      });
+    }
+  }
+
+  /// Le bouton « Lier un service commun » (ou le service déjà lié).
+  Widget _choixService() {
+    final String? nom = _serviceNom;
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _choisirService,
+            icon: Icon(nom == null ? Icons.add_link : Icons.handshake_outlined),
+            label: Text(nom == null
+                ? 'Lier un service commun (optionnel)'
+                : 'Service lié : $nom',
+                overflow: TextOverflow.ellipsis),
+          ),
+        ),
+        if (nom != null)
+          IconButton(
+            tooltip: 'Retirer le service',
+            icon: Icon(Icons.close, color: AppColors.textSecondary),
+            onPressed: () {
+              setState(() {
+                _serviceId = null;
+                _serviceNom = null;
+              });
+            },
+          ),
       ],
     );
   }
