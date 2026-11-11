@@ -81,7 +81,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
     }
     final List<Evenement> aVenir = [];
     for (final Evenement evenement in _evenements) {
-      if (!evenement.estPasse) {
+      if (!evenement.estPasse && !evenement.annule) {
         aVenir.add(evenement);
       }
     }
@@ -152,8 +152,20 @@ class FirebaseEvenementRepository implements EvenementRepository {
         organisateurId: moi.id,
         organisateur: EvenementRepository.nomCourt(moi),
         participants: 0, // les règles exigent 0 à la création
+        officiel: moi.estAdmin, // les événements de l'admin sont officiels
       );
       await _collectionEvenements.add(evenement.toMap());
+    });
+  }
+
+  @override
+  Future<Resultat<void>> annulerEvenement(Evenement evenement, bool annule) {
+    return _executer(() async {
+      if (!EvenementRepository.peutModifier(_moi(), evenement)) {
+        throw const RefusM4(
+            'Seul l\'organisateur ou l\'admin peut annuler l\'événement');
+      }
+      await _collectionEvenements.doc(evenement.id).update({'annule': annule});
     });
   }
 
@@ -208,7 +220,7 @@ class FirebaseEvenementRepository implements EvenementRepository {
   }
 
   @override
-  Future<Resultat<List<String>>> getParticipants(String evenementId) {
+  Future<Resultat<List<Participant>>> getParticipants(String evenementId) {
     return _executer(() async {
       final QuerySnapshot<Map<String, dynamic>> snapshot =
           await _collectionEvenements
@@ -216,11 +228,15 @@ class FirebaseEvenementRepository implements EvenementRepository {
               .collection('participants')
               .orderBy('date')
               .get();
-      final List<String> noms = [];
+      final List<Participant> participants = [];
       for (final document in snapshot.docs) {
-        noms.add(document.data()['nom'] ?? '');
+        participants.add(Participant(
+          id: document.id,
+          nom: document.data()['nom'] ?? '',
+          avatar: document.data()['avatar'] ?? '',
+        ));
       }
-      return noms;
+      return participants;
     });
   }
 
@@ -236,11 +252,22 @@ class FirebaseEvenementRepository implements EvenementRepository {
       if ((await maFiche.get()).exists) {
         throw const RefusM4('Tu participes déjà à cet événement');
       }
+      final DocumentSnapshot<Map<String, dynamic>> document =
+          await evenement.get();
+      if (!document.exists) {
+        throw const RefusM4('Cet événement n\'existe plus');
+      }
+      final String? refus = EvenementRepository.refusParticipation(
+          Evenement.fromMap(document.id, document.data()!));
+      if (refus != null) {
+        throw RefusM4(refus);
+      }
 
       // Fiche + compteur dans le MÊME WriteBatch : sinon les règles refusent
       final WriteBatch batch = FirestoreCommun.base.batch();
       batch.set(maFiche, {
         'nom': EvenementRepository.nomCourt(moi),
+        'avatar': moi.avatar, // l'avatar du module 1, pour la liste
         'date': FieldValue.serverTimestamp(),
       });
       batch.update(evenement, {'nbParticipants': FieldValue.increment(1)});

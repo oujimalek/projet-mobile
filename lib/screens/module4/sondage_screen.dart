@@ -180,6 +180,30 @@ class _SondageScreenState extends State<SondageScreen> {
     return '${_texteVotes(_totalVotes())} au total';
   }
 
+  /// Les résultats par choix sont cachés tant que je n'ai pas voté
+  /// (pour ne pas influencer le vote), et montrés à la fin du sondage.
+  bool _resultatsVisibles(Sondage sondage) {
+    return _aVote || !sondage.estOuvert;
+  }
+
+  /// "Plus que 1 j 5 h · 12 voisins n'ont pas encore voté"
+  String _texteParticipation(Sondage sondage) {
+    final Duration reste = sondage.dateFin.difference(DateTime.now());
+    String temps;
+    if (reste.inDays >= 1) {
+      temps = 'Plus que ${reste.inDays} j ${reste.inHours % 24} h';
+    } else if (reste.inHours >= 1) {
+      temps = 'Plus que ${reste.inHours} h ${reste.inMinutes % 60} min';
+    } else {
+      temps = 'Plus que ${reste.inMinutes} min';
+    }
+    final int restants = sondage.nombreMembres - _totalVotes();
+    if (sondage.nombreMembres <= 0 || restants <= 0) {
+      return temps;
+    }
+    return '$temps · $restants voisin${restants > 1 ? 's n\'ont' : ' n\'a'} pas encore voté';
+  }
+
   /// Appelé quand on touche "Confirmer mon vote" : enregistre le vote.
   Future<void> _confirmerVote() async {
     final int? choix = _choix;
@@ -363,8 +387,40 @@ class _SondageScreenState extends State<SondageScreen> {
                     ),
                   ],
                 ),
+                // Compte à rebours + voisins qui n'ont pas encore voté
+                if (sondage.estOuvert) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.timer_outlined,
+                          size: 18, color: AppColors.secondary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _texteParticipation(sondage),
+                          style: TextStyle(
+                            color: AppColors.secondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Column(children: cartesOptions),
+                if (!_resultatsVisibles(sondage))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'Vote pour voir les résultats',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Text(
                   _texteTotal(sondage),
@@ -463,22 +519,34 @@ class _SondageScreenState extends State<SondageScreen> {
                       ),
                     ),
                   ),
-                  Text(
-                    _texteVotes(_votes[index]),
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
+                  // Résultats cachés avant mon vote
+                  if (_resultatsVisibles(sondage))
+                    Text(
+                      _texteVotes(_votes[index]),
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
                 ],
               ),
-              const SizedBox(height: 12),
+              if (_resultatsVisibles(sondage)) ...[
+                const SizedBox(height: 12),
 
-              // Barre de pourcentage
-              LinearProgressIndicator(
-                value: pourcentage,
-                minHeight: 6,
-                borderRadius: BorderRadius.circular(4),
-                backgroundColor: AppColors.border,
-                color: choisie ? AppColors.secondary : AppColors.textSecondary,
-              ),
+                // Barre de pourcentage (animée quand les votes changent)
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: pourcentage),
+                  duration: const Duration(milliseconds: 400),
+                  builder: (context, valeur, enfant) {
+                    return LinearProgressIndicator(
+                      value: valeur,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(4),
+                      backgroundColor: AppColors.border,
+                      color: choisie
+                          ? AppColors.secondary
+                          : AppColors.textSecondary,
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),

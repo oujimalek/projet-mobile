@@ -391,16 +391,20 @@ service cloud.firestore {
 
         allow read: if membreDe(q);
 
-        // Seuls les leaders et l'admin créent un événement
+        // Seuls les leaders et l'admin créent un événement ; seul l'admin
+        // crée un événement "officiel" ; jamais déjà annulé
         allow create: if organisateurDe(q)
           && request.resource.data.organisateurId == monUid()
-          && request.resource.data.nbParticipants == 0;
+          && request.resource.data.nbParticipants == 0
+          && (request.resource.data.get('officiel', false) == false || adminDe(q))
+          && request.resource.data.get('annule', false) == false;
 
-        // L'organisateur (ou l'admin) modifie l'événement (pas le compteur).
+        // L'organisateur (ou l'admin) modifie ou annule l'événement
+        // (pas le compteur, ni "officiel").
         allow update: if membreDe(q)
           && (resource.data.organisateurId == monUid() || adminDe(q))
           && changeSeulement(['titre', 'description', 'date', 'dateFin',
-                              'lieu', 'categorie']);
+                              'lieu', 'categorie', 'annule']);
 
         // Compteur de participants : +1 avec ma fiche créée, -1 avec ma
         // fiche supprimée, dans le même WriteBatch.

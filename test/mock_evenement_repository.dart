@@ -53,6 +53,8 @@ class MockEvenementRepository implements EvenementRepository {
     DateTime? date,
     DateTime? dateFin,
     CategorieEvenement categorie = CategorieEvenement.fete,
+    bool annule = false,
+    bool? officiel, // par défaut : officiel si l'organisateur est admin
   }) {
     final Evenement evenement = Evenement(
       id: _nouvelId('e'),
@@ -64,6 +66,8 @@ class MockEvenementRepository implements EvenementRepository {
       categorie: categorie,
       organisateurId: organisateur.id,
       organisateur: EvenementRepository.nomCourt(organisateur),
+      annule: annule,
+      officiel: officiel ?? organisateur.estAdmin,
     );
     _evenements.add(evenement);
     _participants[evenement.id] = {};
@@ -134,7 +138,7 @@ class MockEvenementRepository implements EvenementRepository {
   List<Evenement> getEvenements() {
     final List<Evenement> aVenir = [];
     for (final Evenement evenement in _evenements) {
-      if (!evenement.estPasse) {
+      if (!evenement.estPasse && !evenement.annule) {
         aVenir.add(evenement);
       }
     }
@@ -265,12 +269,35 @@ class MockEvenementRepository implements EvenementRepository {
   }
 
   @override
-  Future<Resultat<List<String>>> getParticipants(String evenementId) async {
+  Future<Resultat<List<Participant>>> getParticipants(String evenementId) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
     }
     final Map<String, String> fiches = _participants[evenementId] ?? {};
-    return Resultat.succes(fiches.values.toList());
+    final List<Participant> liste = [];
+    fiches.forEach((uid, nom) {
+      liste.add(Participant(id: uid, nom: nom, avatar: _avatars[uid] ?? ''));
+    });
+    return Resultat.succes(liste);
+  }
+
+  final Map<String, String> _avatars = {}; // uid → avatar (module 1)
+
+  @override
+  Future<Resultat<void>> annulerEvenement(Evenement evenement, bool annule) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    final int index = _index(evenement.id);
+    if (index < 0) {
+      return const Resultat.echec('Donnée introuvable');
+    }
+    if (!EvenementRepository.peutModifier(_moi(), _evenements[index])) {
+      return const Resultat.echec(
+          'Seul l\'organisateur ou l\'admin peut annuler l\'événement');
+    }
+    _evenements[index] = _evenements[index].copyWith(annule: annule);
+    return const Resultat.succes(null);
   }
 
   @override
@@ -286,7 +313,13 @@ class MockEvenementRepository implements EvenementRepository {
     if (_participants[evenementId]!.containsKey(moi.id)) {
       return const Resultat.echec('Tu participes déjà à cet événement');
     }
+    final String? refus =
+        EvenementRepository.refusParticipation(_evenements[index]);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
     _participants[evenementId]![moi.id] = EvenementRepository.nomCourt(moi);
+    _avatars[moi.id] = moi.avatar;
     final Evenement evenement = _evenements[index];
     _evenements[index] =
         evenement.copyWith(participants: evenement.participants + 1);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../data/models/evenement.dart';
 import '../../data/models/utilisateur.dart';
@@ -10,6 +11,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
+import '../module1/widgets_module1.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
 
@@ -36,7 +38,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
 
   Evenement? _evenement;
   bool _inscrit = false;
-  List<String> _participants = []; // noms (organisateur et admin seulement)
+  List<Participant> _participants = []; // organisateur et admin seulement
   bool _enChargement = true;
   bool _envoiEnCours = false; // participer / se retirer / supprimer
   String? _erreur;
@@ -69,9 +71,9 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     final Evenement evenement = resultat.donnee!;
 
     final Resultat<bool> inscrit = await _depot.estInscrit(evenement.id);
-    List<String> noms = [];
+    List<Participant> noms = [];
     if (EvenementRepository.peutVoirParticipants(_moi, evenement)) {
-      final Resultat<List<String>> participants =
+      final Resultat<List<Participant>> participants =
           await _depot.getParticipants(evenement.id);
       noms = participants.donnee ?? [];
     }
@@ -188,6 +190,8 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           onSelected: (choix) {
             if (choix == 'modifier') {
               _modifier();
+            } else if (choix == 'annuler') {
+              _annuler(evenement, !evenement.annule);
             } else {
               _supprimer();
             }
@@ -197,6 +201,11 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
             if (peutModifier) {
               choix.add(const PopupMenuItem(
                   value: 'modifier', child: Text('Modifier')));
+              choix.add(PopupMenuItem(
+                  value: 'annuler',
+                  child: Text(evenement.annule
+                      ? 'Rétablir l\'événement'
+                      : 'Annuler l\'événement')));
             }
             if (peutSupprimer) {
               choix.add(const PopupMenuItem(
@@ -224,7 +233,27 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     return Scaffold(
       body: Column(
         children: [
-          AppHeader(titre: 'Événement', action: menu),
+          AppHeader(
+            titre: 'Événement',
+            action: evenement == null
+                ? null
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Partager l'invitation (WhatsApp, SMS...)
+                      IconButton(
+                        tooltip: 'Partager',
+                        icon: Icon(Icons.share_outlined, color: AppColors.primary),
+                        onPressed: () {
+                          SharePlus.instance.share(ShareParams(
+                            text: EvenementRepository.texteInvitation(evenement),
+                          ));
+                        },
+                      ),
+                      ?menu, // menu Modifier / Annuler / Supprimer (s'il existe)
+                    ],
+                  ),
+          ),
           Expanded(child: corps),
           if (evenement != null && !_enChargement) _boutonBas(evenement),
         ],
@@ -243,6 +272,18 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           runSpacing: 6,
           children: [
             PastilleCategorie(categorie: evenement.categorie),
+            if (evenement.officiel)
+              BadgeM4(
+                texte: 'Officiel',
+                couleur: AppColors.primary,
+                fond: AppColors.primaryLight,
+              ),
+            if (evenement.annule)
+              BadgeM4(
+                texte: 'Annulé',
+                couleur: AppColors.error,
+                fond: AppColors.badgeRefuseFond,
+              ),
             if (evenement.estPasse)
               BadgeM4(
                 texte: 'Terminé',
@@ -317,24 +358,21 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
           style: TextStyle(color: AppColors.textSecondary),
         ));
       }
-      for (final String nom in _participants) {
+      for (final Participant participant in _participants) {
         enfants.add(const SizedBox(height: 10));
         enfants.add(
           Row(
             children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: AppColors.primaryLight,
-                child: Text(
-                  nom.isEmpty ? '?' : nom[0].toUpperCase(),
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              // L'avatar choisi dans le profil (module 1), sinon les initiales
+              AvatarUtilisateur(
+                avatar: participant.avatar,
+                initiales: _initiales(participant.nom),
+                taille: 34,
+                couleur: AppColors.primary,
+                fond: AppColors.primaryLight,
               ),
               const SizedBox(width: 10),
-              Text(nom),
+              Text(participant.nom),
             ],
           ),
         );
@@ -355,10 +393,55 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     );
   }
 
+  /// "Salma G." → "SG"
+  String _initiales(String nom) {
+    String resultat = '';
+    for (final String mot in nom.split(' ')) {
+      if (mot.isNotEmpty && resultat.length < 2) {
+        resultat = resultat + mot[0].toUpperCase();
+      }
+    }
+    return resultat;
+  }
+
+  /// L'organisateur (ou l'admin) annule l'événement ou le rétablit.
+  Future<void> _annuler(Evenement evenement, bool annule) async {
+    setState(() {
+      _envoiEnCours = true;
+    });
+    final Resultat<void> resultat =
+        await _depot.annulerEvenement(evenement, annule);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoiEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      _afficherErreur(resultat);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(annule
+            ? 'Événement annulé : les participants le verront'
+            : 'Événement rétabli'),
+      ),
+    );
+    _charger();
+  }
+
   /// "Je participe" (bleu) ou "Me retirer" (doré), fixé en bas.
   Widget _boutonBas(Evenement evenement) {
     Widget bouton;
-    if (evenement.estPasse) {
+    final String? refus = EvenementRepository.refusParticipation(evenement);
+    if (refus != null && !_inscrit) {
+      bouton = Text(
+        refus,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.textSecondary),
+      );
+    } else if (evenement.estPasse) {
       bouton = Text(
         'Cet événement est terminé',
         textAlign: TextAlign.center,

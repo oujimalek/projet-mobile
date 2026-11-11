@@ -46,6 +46,8 @@ class Evenement {
   final String organisateurId; // uid de l'organisateur (règles de sécurité)
   final String organisateur; // son nom, recopié pour l'affichage (Firestore : organisateurNom)
   final int participants; // Firestore : nbParticipants
+  final bool annule; // annulé : reste visible avec un badge, plus d'inscription
+  final bool officiel; // créé par l'admin : badge "Officiel", en tête de liste
 
   const Evenement({
     required this.id,
@@ -58,6 +60,8 @@ class Evenement {
     this.organisateurId = '',
     required this.organisateur,
     this.participants = 0,
+    this.annule = false,
+    this.officiel = false,
   });
 
   /// true si l'événement est terminé (sa fin, ou son début s'il n'a pas de fin).
@@ -75,6 +79,8 @@ class Evenement {
       'organisateurId': organisateurId,
       'organisateurNom': organisateur,
       'nbParticipants': participants,
+      'annule': annule,
+      'officiel': officiel,
     };
   }
 
@@ -94,6 +100,8 @@ class Evenement {
       organisateurId: map['organisateurId'] ?? '',
       organisateur: map['organisateurNom'] ?? '',
       participants: map['nbParticipants'] ?? 0,
+      annule: map['annule'] ?? false,
+      officiel: map['officiel'] ?? false,
     );
   }
 
@@ -108,6 +116,7 @@ class Evenement {
     String? lieu,
     CategorieEvenement? categorie,
     int? participants,
+    bool? annule,
   }) {
     return Evenement(
       id: id,
@@ -120,6 +129,18 @@ class Evenement {
       organisateurId: organisateurId,
       organisateur: organisateur,
       participants: participants ?? this.participants,
+      annule: annule ?? this.annule,
+      officiel: officiel,
     );
   }
+}
+
+/// M4 - Un participant à un événement (fiche participants/{uid}).
+/// [avatar] : l'avatar de la galerie du module 1 (vide : initiales).
+class Participant {
+  final String id; // uid
+  final String nom;
+  final String avatar;
+
+  const Participant({required this.id, required this.nom, this.avatar = ''});
 }

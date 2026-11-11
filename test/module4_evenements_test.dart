@@ -305,7 +305,7 @@ void main() {
       expect((await depot.participer(fete.id)).estSucces, isTrue);
       expect(depot.evenements.single.participants, 1);
       expect((await depot.estInscrit(fete.id)).donnee, isTrue);
-      expect((await depot.getParticipants(fete.id)).donnee, ['Amira B.']);
+      expect((await depot.getParticipants(fete.id)).donnee!.map((p) => p.nom), ['Amira B.']);
 
       // Deux fois : refusé, le compteur ne bouge pas
       expect((await depot.participer(fete.id)).estSucces, isFalse);
@@ -551,6 +551,97 @@ void main() {
       await afficher(tester, EvenementDetailScreen(evenementId: ancien.id));
       expect(find.text('Cet événement est terminé'), findsOneWidget);
       expect(find.text('Je participe'), findsNothing);
+    });
+  });
+
+  group('Lot 1 : annuler, officiel, partage, résultats cachés', () {
+    test('annuler : plus d\'inscription, rétablir : de nouveau possible', () async {
+      final Evenement fete = depot.ajouterEvenementDe(amira); // l'admin organise
+      expect((await depot.annulerEvenement(fete, true)).estSucces, isTrue);
+      expect(depot.evenements.single.annule, isTrue);
+      expect(depot.getEvenements(), isEmpty); // plus sur l'accueil
+
+      await devenir(sarra);
+      final Resultat<void> refus = await depot.participer(fete.id);
+      expect(refus.estSucces, isFalse);
+      expect(refus.erreur, 'Cet événement est annulé');
+      // Une voisine ne peut pas rétablir
+      expect((await depot.annulerEvenement(fete, false)).estSucces, isFalse);
+
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      expect((await depot.annulerEvenement(fete, false)).estSucces, isTrue);
+      await devenir(sarra);
+      expect((await depot.participer(fete.id)).estSucces, isTrue);
+    });
+
+    test('officiel : les événements de l\'admin, pas ceux d\'un leader', () async {
+      await depot.creerEvenement(
+        titre: 'Assemblée', description: '', date: demain,
+        lieu: 'Salle', categorie: CategorieEvenement.reunion,
+      ); // Amira est admin
+      expect(depot.evenements.single.officiel, isTrue);
+
+      await utilisateurs.changerRole(sarra.id, RoleUtilisateur.leader);
+      await devenir(sarra);
+      await depot.creerEvenement(
+        titre: 'Foot', description: '', date: demain,
+        lieu: 'Terrain', categorie: CategorieEvenement.sport,
+      );
+      expect(depot.evenements.last.officiel, isFalse);
+    });
+
+    test('Firestore : annule et officiel sont relus', () {
+      final Evenement relu = Evenement.fromMap('e', {'annule': true, 'officiel': true});
+      expect(relu.annule, isTrue);
+      expect(relu.officiel, isTrue);
+      expect(Evenement.fromMap('e', {}).annule, isFalse);
+    });
+
+    test('texte d\'invitation partagé', () {
+      final Evenement fete = Evenement(
+        id: 'e', titre: 'Fête des voisins', description: '',
+        date: DateTime(2026, 11, 14, 18, 0), lieu: 'Jardin', organisateur: 'Salma G.',
+      );
+      final String texte = EvenementRepository.texteInvitation(fete);
+      expect(texte, contains('Fête des voisins'));
+      expect(texte, contains('14/11/2026 à 18:00'));
+      expect(texte, contains('📍 Jardin'));
+      expect(texte, contains('Organisé par Salma G.'));
+    });
+
+    testWidgets('liste : l\'événement officiel est en tête, badges', (tester) async {
+      depot.ajouterEvenementDe(nizar, titre: 'Normal', date: demain);
+      depot.ajouterEvenementDe(amira,
+          titre: 'Réunion officielle', date: demain.add(const Duration(days: 3)));
+      depot.ajouterEvenementDe(nizar,
+          titre: 'Annulé', date: demain, annule: true, officiel: false);
+      await afficher(tester, const EvenementsScreen());
+      expect(find.text('Officiel'), findsOneWidget);
+      expect(find.text('Annulé'), findsWidgets);
+      final double yOfficiel = tester.getTopLeft(find.text('Réunion officielle')).dy;
+      final double yNormal = tester.getTopLeft(find.text('Normal')).dy;
+      expect(yOfficiel, lessThan(yNormal));
+    });
+
+    testWidgets('sondage : résultats cachés avant de voter, compte à rebours', (tester) async {
+      final Sondage sondage = depot.ajouterSondageDe(nizar, options: ['Oui', 'Non']);
+      depot.ajouterVoteDe(sarra, sondage, 0);
+      depot.nombreMembres = 5;
+      await afficher(tester, SondageScreen(sondageId: sondage.id));
+      expect(find.text('Vote pour voir les résultats'), findsOneWidget);
+      expect(find.text('1 vote'), findsNothing); // pas de résultat par choix
+      expect(find.textContaining('4 voisins n\'ont pas encore voté'), findsOneWidget);
+      expect(find.textContaining('Plus que'), findsOneWidget);
+
+      await tester.tap(find.text('Non'));
+      await tester.pump();
+      await tester.tap(find.text('Confirmer mon vote'));
+      await tester.pumpAndSettle();
+      expect(find.text('Vote pour voir les résultats'), findsNothing);
+      expect(find.text('1 vote'), findsNWidgets(2)); // Oui : 1, Non : 1
     });
   });
 

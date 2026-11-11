@@ -138,7 +138,8 @@ abstract class EvenementRepository {
     final List<Evenement> liste = [];
     for (final Evenement evenement in evenements) {
       final DateTime fin = evenement.dateFin ?? evenement.date;
-      if (mesParticipations.contains(evenement.id) &&
+      if (!evenement.annule &&
+          mesParticipations.contains(evenement.id) &&
           fin.isAfter(maintenant) &&
           evenement.date.isBefore(apresDemain)) {
         liste.add(evenement);
@@ -158,6 +159,34 @@ abstract class EvenementRepository {
     final String heure =
         '${evenement.date.hour.toString().padLeft(2, '0')}:${evenement.date.minute.toString().padLeft(2, '0')}';
     return 'Rappel : $quand à $heure, ${evenement.titre} (${evenement.lieu})';
+  }
+
+  /// Pourquoi on ne peut pas s'inscrire à cet événement (null : on peut).
+  static String? refusParticipation(Evenement evenement) {
+    if (evenement.annule) {
+      return 'Cet événement est annulé';
+    }
+    if (evenement.estPasse) {
+      return 'Cet événement est terminé';
+    }
+    return null;
+  }
+
+  /// Le texte partagé (WhatsApp, SMS...) pour inviter un voisin.
+  static String texteInvitation(Evenement evenement) {
+    final String heure =
+        '${evenement.date.hour.toString().padLeft(2, '0')}:${evenement.date.minute.toString().padLeft(2, '0')}';
+    final String date =
+        '${evenement.date.day.toString().padLeft(2, '0')}/${evenement.date.month.toString().padLeft(2, '0')}/${evenement.date.year}';
+    final StringBuffer texte = StringBuffer()
+      ..writeln('📅 ${evenement.titre}')
+      ..writeln('🕒 $date à $heure')
+      ..writeln('📍 ${evenement.lieu}');
+    if (evenement.description.isNotEmpty) {
+      texte.writeln(evenement.description);
+    }
+    texte.write('Organisé par ${evenement.organisateur} · sur Houmani');
+    return texte.toString();
   }
 
   /// true si [utilisateur] peut supprimer ce contenu : son auteur ou l'admin.
@@ -210,8 +239,12 @@ abstract class EvenementRepository {
   /// true si l'utilisateur connecté participe à cet événement.
   Future<Resultat<bool>> estInscrit(String evenementId);
 
-  /// Les noms des participants.
-  Future<Resultat<List<String>>> getParticipants(String evenementId);
+  /// Les participants (nom + avatar), du premier inscrit au dernier.
+  Future<Resultat<List<Participant>>> getParticipants(String evenementId);
+
+  /// L'organisateur (ou l'admin) annule l'événement, ou le rétablit : il
+  /// reste visible avec un badge "Annulé" et on ne peut plus s'y inscrire.
+  Future<Resultat<void>> annulerEvenement(Evenement evenement, bool annule);
 
   /// Je participe : ma fiche + compteur +1 (en une seule écriture).
   Future<Resultat<void>> participer(String evenementId);

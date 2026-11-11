@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_drawer.dart';
+import '../module4/mes_evenements_m4.dart';
 import 'widgets_module1.dart';
 
 /// M1 - Utilisateurs : écran 6, profil de l'utilisateur connecté.
@@ -112,6 +113,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 _competences(utilisateur),
                 const SizedBox(height: 20),
 
+                // ----- M4 : mes prochains événements -----
+                const MesEvenementsM4(),
+
                 // ----- Liens -----
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -149,6 +153,16 @@ class _ProfilScreenState extends State<ProfilScreen> {
       pastilles.add(
         Pastille(
           texte: 'Admin',
+          couleur: AppColors.secondary,
+          fond: AppColors.secondaryLight,
+        ),
+      );
+    }
+    // M4 : leader élu du quartier
+    if (utilisateur.estLeader) {
+      pastilles.add(
+        Pastille(
+          texte: 'Leader',
           couleur: AppColors.secondary,
           fond: AppColors.secondaryLight,
         ),

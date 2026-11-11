@@ -384,6 +384,20 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
         aVenir.add(evenement);
       }
     }
+    // À venir : les événements officiels (admin) d'abord, puis par date
+    final List<Evenement> officiels = [];
+    final List<Evenement> autres = [];
+    for (final Evenement evenement in aVenir) {
+      if (evenement.officiel) {
+        officiels.add(evenement);
+      } else {
+        autres.add(evenement);
+      }
+    }
+    aVenir
+      ..clear()
+      ..addAll(officiels)
+      ..addAll(autres);
     // Passés : le plus récent d'abord
     final List<Evenement> passesRecents = passes.reversed.toList();
 
@@ -557,6 +571,24 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
   /// catégorie et nombre de participants.
   Widget _carteEvenement(Evenement evenement) {
     final List<Widget> badges = [PastilleCategorie(categorie: evenement.categorie)];
+    if (evenement.officiel) {
+      badges.add(
+        BadgeM4(
+          texte: 'Officiel',
+          couleur: AppColors.primary,
+          fond: AppColors.primaryLight,
+        ),
+      );
+    }
+    if (evenement.annule) {
+      badges.add(
+        BadgeM4(
+          texte: 'Annulé',
+          couleur: AppColors.error,
+          fond: AppColors.badgeRefuseFond,
+        ),
+      );
+    }
     if (_mesParticipations.contains(evenement.id)) {
       badges.add(
         BadgeM4(
@@ -579,7 +611,8 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Opacity(
-        opacity: evenement.estPasse ? 0.6 : 1, // les événements passés en grisé
+        // les événements passés ou annulés en grisé
+        opacity: evenement.estPasse || evenement.annule ? 0.6 : 1,
         child: AppCard(
           onTap: () {
             _ouvrirEvenement(evenement);
