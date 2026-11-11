@@ -642,7 +642,8 @@ class _SectionSondagesEvenementState extends State<SectionSondagesEvenement> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _titreSection(Icons.poll_outlined, 'Sondages de l\'événement'),
+            _titreSection(Icons.poll_outlined,
+                tr('Sondages de l\'événement', 'Les sondages mta3 l\'événement')),
             ...lignes,
           ],
         ),

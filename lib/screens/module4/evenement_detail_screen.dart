@@ -489,7 +489,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: MiniCarteEvenement(position: evenement.position!),
           ),
-        _ligneInfo(Icons.person_outline, 'Organisé par ${evenement.organisateur}'),
+        _ligneInfo(Icons.person_outline, tr('Organisé par ${evenement.organisateur}', 'Mnadhmou ${evenement.organisateur}')),
         // (D4) Le service commun lié (module 2) : on ouvre sa fiche
         if (evenement.serviceId != null)
           InkWell(
@@ -503,7 +503,7 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Service lié : ${evenement.serviceNom ?? 'service commun'}',
+                      '${tr('Service lié', 'Service marbout')} : ${evenement.serviceNom ?? 'service commun'}',
                       style: TextStyle(
                           color: AppColors.primary, fontWeight: FontWeight.w600),
                     ),

@@ -302,7 +302,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   tr('Ce qui se passe dans ta houma', 'Chnowa sayer fi houmtek'),
-                  style: TextStyle(color: AppColors.primaryLight),
+                  style: TextStyle(color: Colors.white70),
                 ),
               ],
             ),
