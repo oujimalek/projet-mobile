@@ -1,14 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/models/signalement.dart';
 import '../../data/resultat.dart';
+import '../../data/services/base_locale_m3.dart';
 import '../../data/services/signalement_repository.dart';
+import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
+import 'widgets_module3.dart';
 
 /// M3 - Signalements : création OU modification d'un signalement.
 ///
@@ -20,7 +25,13 @@ import '../../widgets/primary_button.dart';
 /// - `CreateSignalementScreen(signalement: s)` : l'auteur modifie [s]
 ///   (seulement tant qu'il est en attente).
 ///
-/// En cas de succès, l'écran se ferme avec `Navigator.pop(context, true)`.
+/// En cas de succès, l'écran se ferme avec :
+///   - création : `Navigator.pop(context, etat)` (EtatPublicationM3 : envoyé,
+///     ou gardé dans SQLite faute de réseau) ;
+///   - modification : `Navigator.pop(context, true)`.
+///
+/// Création : le formulaire est enregistré tout seul comme brouillon
+/// (SQLite) ; à la prochaine ouverture, on propose de le reprendre.
 class CreateSignalementScreen extends StatefulWidget {
   final Signalement? signalement; // null = création, sinon modification
 
@@ -45,6 +56,12 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   bool _danger = false; // case "Danger pour les personnes"
   bool _enChargement = false; // true pendant l'envoi
 
+  // Brouillon (création seulement)
+  final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
+  Brouillon? _brouillonTrouve; // proposé avec "Reprendre le brouillon"
+  Timer? _minuteurBrouillon; // enregistre 1 s après la dernière frappe
+  bool _termine = false; // publié : plus de brouillon à garder
+
   /// true = on modifie un signalement existant.
   bool get _modeModification => widget.signalement != null;
 
@@ -59,15 +76,90 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       _localisationController.text = existant.lieu;
       _categorieChoisie = existant.categorieId;
       _danger = existant.danger;
+      return;
     }
+    // Création : brouillon automatique à chaque frappe
+    _titreController.addListener(_formulaireModifie);
+    _descriptionController.addListener(_formulaireModifie);
+    _localisationController.addListener(_formulaireModifie);
+    _chercherBrouillon();
   }
 
   @override
   void dispose() {
+    _minuteurBrouillon?.cancel();
+    // On quitte sans publier : le brouillon est gardé (lu AVANT dispose)
+    if (!_modeModification && !_termine) {
+      _sync.enregistrerBrouillon(_brouillonActuel());
+    }
     _titreController.dispose();
     _descriptionController.dispose();
     _localisationController.dispose();
     super.dispose();
+  }
+
+  // =====================================================================
+  // Brouillon (table SQLite "brouillons")
+  // =====================================================================
+
+  /// Y a-t-il un brouillon d'une visite précédente ?
+  Future<void> _chercherBrouillon() async {
+    final Brouillon? brouillon = await _sync.lireBrouillon();
+    if (!mounted || brouillon == null || brouillon.estVide) {
+      return;
+    }
+    setState(() {
+      _brouillonTrouve = brouillon;
+    });
+  }
+
+  /// Le formulaire tel qu'il est maintenant.
+  Brouillon _brouillonActuel() {
+    return Brouillon(
+      utilisateurId: UtilisateurRepository().getUtilisateurConnecte().id,
+      titre: _titreController.text,
+      description: _descriptionController.text,
+      categorieId: _categorieChoisie,
+      lieu: _localisationController.text,
+      danger: _danger,
+      dateModification: DateTime.now(),
+    );
+  }
+
+  /// Un champ a changé : on enregistre 1 s après la dernière modification
+  /// (pas à chaque lettre).
+  void _formulaireModifie() {
+    if (_modeModification || _termine) {
+      return;
+    }
+    _minuteurBrouillon?.cancel();
+    _minuteurBrouillon = Timer(const Duration(seconds: 1), () {
+      _sync.enregistrerBrouillon(_brouillonActuel());
+    });
+  }
+
+  /// "Reprendre" : on remet le brouillon dans le formulaire.
+  void _reprendreBrouillon() {
+    final Brouillon? brouillon = _brouillonTrouve;
+    if (brouillon == null) {
+      return;
+    }
+    _titreController.text = brouillon.titre;
+    _descriptionController.text = brouillon.description;
+    _localisationController.text = brouillon.lieu;
+    setState(() {
+      _categorieChoisie = brouillon.categorieId;
+      _danger = brouillon.danger;
+      _brouillonTrouve = null;
+    });
+  }
+
+  /// "Supprimer" le brouillon proposé.
+  Future<void> _jeterBrouillon() async {
+    setState(() {
+      _brouillonTrouve = null;
+    });
+    await _sync.supprimerBrouillon();
   }
 
   /// "Utiliser ma position" : on remplit le lieu avec la résidence
@@ -110,35 +202,75 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     setState(() {
       _enChargement = true;
     });
-    final Resultat<void> resultat = _modeModification
-        ? await SignalementRepository().modifierSignalement(saisi)
-        : await SignalementRepository().ajouterSignalement(saisi);
+    if (_modeModification) {
+      await _enregistrerModification(saisi);
+    } else {
+      await _publierNouveau(saisi);
+    }
+  }
+
+  /// Modification : seulement en ligne (Firestore n'enverrait pas tout de
+  /// suite, et l'écran attendrait).
+  Future<void> _enregistrerModification(Signalement saisi) async {
+    Resultat<void> resultat;
+    if (await _sync.estEnLigne()) {
+      resultat = await SignalementRepository().modifierSignalement(saisi);
+    } else {
+      resultat = Resultat.echec(tr(
+        'Pas de connexion Internet : la modification se fait en ligne',
+        'Ma famech connexion : el ta3dil yetsna3 en ligne',
+      ));
+    }
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
     }
     setState(() {
       _enChargement = false;
     });
-
     if (!resultat.estSucces) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(resultat.erreur!)),
-      );
+      afficherMessageM3(context, resultat.erreur!);
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  /// Création : SyncSignalementsM3 envoie à Firestore, ou garde dans la
+  /// file SQLite s'il n'y a pas de réseau.
+  Future<void> _publierNouveau(Signalement saisi) async {
+    final Resultat<EtatPublicationM3> resultat = await _sync.publier(saisi);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _enChargement = false;
+    });
+    if (!resultat.estSucces) {
+      afficherMessageM3(context, resultat.erreur!);
       return;
     }
 
-    // Succès : on revient à l'écran précédent avec "true"
+    // Publié (ou mis en file) : le brouillon ne sert plus
+    _termine = true;
+    _minuteurBrouillon?.cancel();
+    await _sync.supprimerBrouillon();
+    if (!mounted) {
+      return;
+    }
+    final EtatPublicationM3 etat = resultat.donnee!;
     if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(etat);
       return;
     }
     // Pas d'écran précédent (ouvert comme onglet) : on vide le formulaire
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(tr('Yaatik saha ! Signalement publié.',
-            'Yaatik saha ! Tablighek tbaath.')),
-      ),
+    afficherMessageM3(
+      context,
+      etat == EtatPublicationM3.envoye
+          ? tr('Yaatik saha ! Signalement publié.',
+              'Yaatik saha ! Tablighek tbaath.')
+          : tr('Pas de connexion : ton signalement sera envoyé automatiquement.',
+              'Ma famech connexion : tablighek yetb3ath wa7dou ba3d.'),
     );
+    _termine = false;
     _formKey.currentState!.reset();
     _titreController.clear();
     _descriptionController.clear();
@@ -168,6 +300,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
+                  if (_brouillonTrouve != null) _carteBrouillon(),
                   Text(
                     tr('Catégorie', 'Naw3'),
                     style: const TextStyle(
@@ -252,6 +385,64 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     );
   }
 
+  /// "Tu as un brouillon" : Reprendre / Supprimer.
+  Widget _carteBrouillon() {
+    final Brouillon brouillon = _brouillonTrouve!;
+    final String titre = brouillon.titre.trim().isEmpty
+        ? tr('Sans titre', 'Bla 3onwen')
+        : brouillon.titre.trim();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 4),
+      decoration: BoxDecoration(
+        color: AppColors.secondaryLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(color: AppColors.secondary),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.edit_note, color: AppColors.secondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr('Tu as un brouillon', 'Andek brouillon'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '« $titre » · ${depuisQuandM3(brouillon.dateModification)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          // Wrap : les boutons passent à la ligne sur un petit écran
+          Wrap(
+            alignment: WrapAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _jeterBrouillon,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                ),
+                child: Text(tr('Supprimer', 'Fasakh')),
+              ),
+              TextButton(
+                onPressed: _reprendreBrouillon,
+                child: Text(tr('Reprendre le brouillon', 'Kammel el brouillon')),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Le texte du bouton du bas selon le mode et le chargement.
   String _texteBouton() {
     if (_enChargement) {
@@ -282,6 +473,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
           setState(() {
             _danger = valeur ?? false;
           });
+          _formulaireModifie();
         },
         activeColor: AppColors.incident,
         controlAffinity: ListTileControlAffinity.leading,
@@ -329,6 +521,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
           _categorieChoisie = categorie.id;
           _erreurCategorie = false;
         });
+        _formulaireModifie();
       },
       child: Container(
         decoration: BoxDecoration(

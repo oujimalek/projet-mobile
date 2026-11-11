@@ -38,6 +38,56 @@ String depuisQuandM3(DateTime date) {
   return '${date.day}/${date.month}';
 }
 
+/// Heure courte : "14:05" aujourd'hui, sinon "1/10 à 14:05".
+String heureM3(DateTime date) {
+  final String heure =
+      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  final DateTime maintenant = DateTime.now();
+  if (date.year == maintenant.year &&
+      date.month == maintenant.month &&
+      date.day == maintenant.day) {
+    return heure;
+  }
+  return '${date.day}/${date.month} ${tr('à', 'm3a')} $heure';
+}
+
+/// Bandeau orange en haut d'une liste (ex : "Hors ligne — ...").
+class BandeauM3 extends StatelessWidget {
+  final IconData icone;
+  final String texte;
+
+  const BandeauM3({super.key, required this.icone, required this.texte});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+      ),
+      child: Row(
+        children: [
+          Icon(icone, size: 18, color: AppColors.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              texte,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Date complète : "1/10/2026 à 14:05".
 String dateCompleteM3(DateTime date) {
   final String heure = date.hour.toString().padLeft(2, '0');

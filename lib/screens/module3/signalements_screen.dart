@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/signalement.dart';
 import '../../data/resultat.dart';
+import '../../data/services/base_locale_m3.dart';
 import '../../data/services/signalement_repository.dart';
+import '../../data/services/sync_signalements_m3.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
@@ -38,6 +40,14 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
   String? _erreur; // message affiché si le chargement a échoué
   int _numeroChargement = 0; // pour ignorer une réponse arrivée trop tard
 
+  // Hors ligne (SQLite)
+  final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
+  List<EnvoiEnAttente> _envois = []; // mes signalements pas encore envoyés
+  final Set<int> _envoisOccupes = {}; // "Réessayer" en cours
+  bool _depuisCache = false; // la liste vient du cache SQLite
+  bool _horsLigne = false;
+  DateTime? _miseAJour; // dernier chargement complet (cache)
+
   // Choix de l'utilisateur
   bool _mesSignalements = false; // false = tout le quartier
   StatutSignalement? _statutChoisi; // null = tous les statuts
@@ -47,8 +57,25 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
   @override
   void initState() {
     super.initState();
+    // Écoute la file d'envoi (ex : envoyée au retour du réseau)
+    _sync.changements.addListener(_fileChangee);
+    // Envoie la file maintenant et à chaque retour du réseau
+    _sync.demarrer();
     // Pas de setState pendant initState : _enChargement vaut déjà true
     _chargerDonnees();
+  }
+
+  @override
+  void dispose() {
+    _sync.changements.removeListener(_fileChangee);
+    super.dispose();
+  }
+
+  /// La file d'envoi a changé : on recharge (un envoi a pu partir).
+  void _fileChangee() {
+    if (mounted) {
+      _charger();
+    }
   }
 
   /// Recharge la liste (filtre changé, tirer pour actualiser, retour d'un écran).
@@ -60,20 +87,18 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
     await _chargerDonnees();
   }
 
-  /// Demande la liste au repository selon les filtres choisis.
+  /// Demande la liste selon les filtres choisis : SyncSignalementsM3 lit
+  /// Firestore si le réseau est là, sinon le cache SQLite.
   Future<void> _chargerDonnees() async {
     _numeroChargement++;
     final int numero = _numeroChargement;
-    final SignalementRepository repository = SignalementRepository();
-    Resultat<List<Signalement>> resultat;
-    if (_mesSignalements) {
-      resultat = await repository.getMesSignalements();
-    } else {
-      resultat = await repository.getSignalements(
-        statut: _statutChoisi,
-        categorieId: _categorieChoisie,
-      );
-    }
+    final Resultat<ListeSignalementsM3> resultat =
+        await _sync.chargerSignalements(
+      statut: _statutChoisi,
+      categorieId: _categorieChoisie,
+      mesSignalements: _mesSignalements,
+    );
+    final List<EnvoiEnAttente> envois = await _sync.getEnvois();
     // L'écran est fermé, ou un autre chargement a commencé entre-temps
     if (!mounted || numero != _numeroChargement) {
       return;
@@ -81,23 +106,66 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
 
     setState(() {
       _enChargement = false;
+      _envois = envois;
       if (!resultat.estSucces) {
         _erreur = resultat.erreur;
+        _depuisCache = false;
         return;
       }
-      List<Signalement> liste = resultat.donnee!;
-      if (_mesSignalements) {
-        // "Mes signalements" : les filtres sont appliqués ici
-        if (_statutChoisi != null) {
-          liste = liste.where((s) => s.statut == _statutChoisi).toList();
-        }
-        liste = SignalementRepository.filtrerParCategorie(
-          liste,
-          _categorieChoisie,
-        );
-      }
-      _signalements = liste;
+      final ListeSignalementsM3 liste = resultat.donnee!;
+      _signalements = liste.signalements;
+      _depuisCache = liste.depuisCache;
+      _horsLigne = liste.horsLigne;
+      _miseAJour = liste.miseAJour;
     });
+  }
+
+  /// "Réessayer" sur un envoi en attente.
+  Future<void> _reessayerEnvoi(EnvoiEnAttente envoi) async {
+    setState(() {
+      _envoisOccupes.add(envoi.id!);
+    });
+    final Resultat<void> resultat = await _sync.reessayer(envoi.id!);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _envoisOccupes.remove(envoi.id!);
+    });
+    afficherMessageM3(
+      context,
+      resultat.estSucces
+          ? tr('Signalement envoyé', 'Tabligh tbaath')
+          : resultat.erreur!,
+    );
+  }
+
+  /// "Annuler" un envoi en attente (après confirmation).
+  Future<void> _annulerEnvoi(EnvoiEnAttente envoi) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(tr('Annuler cet envoi ?', 'Tbattel el ib3ath ?')),
+          content: Text(tr('Le signalement ne sera pas envoyé.',
+              'It-tabligh mouch bech yetb3ath.')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(tr('Garder', 'Khallih')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              child: Text(tr('Annuler l\'envoi', 'Battel')),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok == true) {
+      await _sync.annuler(envoi.id!);
+    }
   }
 
   /// La liste triée selon le choix de l'utilisateur.
@@ -108,19 +176,28 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
     return SignalementRepository.trierParDate(_signalements);
   }
 
-  /// Ouvre la création. Au retour (publié), message + rechargement.
+  /// Ouvre la création. Au retour : message (envoyé, ou gardé pour plus
+  /// tard si pas de réseau) + rechargement.
   Future<void> _ouvrirCreation() async {
-    final bool? publie = await ouvrirEcranM3<bool>(
+    final EtatPublicationM3? etat = await ouvrirEcranM3<EtatPublicationM3>(
       context,
       const CreateSignalementScreen(),
     );
-    if (!mounted || publie != true) {
+    if (!mounted || etat == null) {
       return;
     }
-    afficherMessageM3(
-      context,
-      tr('Yaatik saha ! Signalement publié.', 'Yaatik saha ! Tablighek tbaath.'),
-    );
+    if (etat == EtatPublicationM3.envoye) {
+      afficherMessageM3(
+        context,
+        tr('Yaatik saha ! Signalement publié.', 'Yaatik saha ! Tablighek tbaath.'),
+      );
+    } else {
+      afficherMessageM3(
+        context,
+        tr('Pas de connexion : ton signalement sera envoyé automatiquement.',
+            'Ma famech connexion : tablighek yetb3ath wa7dou ba3d.'),
+      );
+    }
     _charger();
   }
 
@@ -161,6 +238,7 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
                 ? const LinearProgressIndicator()
                 : null,
           ),
+          if (_depuisCache) _bandeauCache(),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _charger,
@@ -205,7 +283,7 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
       );
     }
     final List<Signalement> liste = _listeTriee;
-    if (liste.isEmpty) {
+    if (liste.isEmpty && _envois.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -216,18 +294,137 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
         ],
       );
     }
+    // D'abord mes envois en attente, puis les signalements
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
-      itemCount: liste.length,
+      itemCount: _envois.length + liste.length,
       itemBuilder: (context, index) {
-        return _carteSignalement(liste[index]);
+        if (index < _envois.length) {
+          return _carteEnvoi(_envois[index]);
+        }
+        return _carteSignalement(liste[index - _envois.length]);
       },
+    );
+  }
+
+  /// Bandeau "Hors ligne — dernière mise à jour à HH:mm".
+  Widget _bandeauCache() {
+    final DateTime? miseAJour = _miseAJour;
+    final String quand = miseAJour == null
+        ? tr('aucune donnée enregistrée sur ce téléphone',
+            'ma famma 7atta chay msajjel')
+        : '${tr('dernière mise à jour à', 'akher mise à jour m3a')} ${heureM3(miseAJour)}';
+    final String debut = _horsLigne
+        ? tr('Hors ligne', 'Mafamech connexion')
+        : tr('Actualisation impossible', 'Ma najjamnech n7adthou');
+    return BandeauM3(icone: Icons.cloud_off, texte: '$debut — $quand');
+  }
+
+  /// La carte d'un signalement pas encore envoyé (file SQLite).
+  Widget _carteEnvoi(EnvoiEnAttente envoi) {
+    final CategorieSignalement categorie =
+        SignalementRepository.getCategorieParId(envoi.categorieId);
+    final bool occupe = _envoisOccupes.contains(envoi.id);
+    final Color couleur = envoi.estEnEchec ? AppColors.error : AppColors.warning;
+    String etat = envoi.estEnEchec
+        ? tr('Échec de l\'envoi', 'Ma tba3thech')
+        : tr('En attente d\'envoi', 'Yestanna bech yetb3ath');
+    if (envoi.nbTentatives > 0) {
+      etat = '$etat · ${envoi.nbTentatives} ${tr('essai(s)', 'mo7awla')}';
+    }
+    final List<Widget> lignes = [
+      Text(
+        envoi.titre,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        '${envoi.lieu} · ${depuisQuandM3(envoi.dateCreation)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+      ),
+      const SizedBox(height: 8),
+      // Badge d'état
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: couleur.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_upload_outlined, size: 14, color: couleur),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                etat,
+                style: TextStyle(
+                  color: couleur,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+    final String? erreur = envoi.derniereErreur;
+    if (envoi.estEnEchec && erreur != null) {
+      lignes.add(const SizedBox(height: 6));
+      lignes.add(Text(
+        erreur,
+        style: TextStyle(fontSize: 12, color: AppColors.error),
+      ));
+    }
+    // Wrap : les boutons passent à la ligne sur un petit écran
+    lignes.add(Wrap(
+      alignment: WrapAlignment.end,
+      children: [
+        TextButton(
+          onPressed: occupe ? null : () => _annulerEnvoi(envoi),
+          style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+          child: Text(tr('Annuler', 'Battel')),
+        ),
+        TextButton(
+          onPressed: occupe ? null : () => _reessayerEnvoi(envoi),
+          child: Text(tr('Réessayer', '3awed')),
+        ),
+      ],
+    ));
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Opacity(opacity: 0.6, child: PastilleCategorie(categorie: categorie)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: lignes,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   /// Le message quand il n'y a rien à afficher.
   String _texteListeVide() {
+    if (_depuisCache && _miseAJour == null) {
+      return tr('Hors ligne : connecte-toi une première fois pour voir les signalements',
+          'Connecti mara bech tchouf it-tablighat');
+    }
     if (_statutChoisi != null || _categorieChoisie != null) {
       return tr('Aucun signalement avec ces filtres',
           'Hatta tabligh b les filtres hedhom');

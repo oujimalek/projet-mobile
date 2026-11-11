@@ -4,6 +4,7 @@ import '../../data/models/signalement.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/signalement_repository.dart';
+import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -40,6 +41,9 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
   bool _enChargement = true; // chargement du signalement
   bool _actionEnCours = false; // confirmer, changer le statut, supprimer
   String? _erreur;
+  bool _depuisCache = false; // lu dans SQLite (hors ligne) : pas d'action
+
+  final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
 
   @override
   void initState() {
@@ -59,11 +63,11 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     await _chargerDonnees();
   }
 
-  /// Lit le signalement, puis si je l'ai déjà confirmé.
+  /// Lit le signalement (Firestore, ou le cache SQLite hors ligne), puis
+  /// si je l'ai déjà confirmé.
   Future<void> _chargerDonnees() async {
-    final SignalementRepository repository = SignalementRepository();
-    final Resultat<Signalement> resultat =
-        await repository.getSignalement(widget.signalementId);
+    final Resultat<SignalementLuM3> resultat =
+        await _sync.lireSignalement(widget.signalementId);
     if (!mounted) {
       return;
     }
@@ -74,11 +78,13 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       });
       return;
     }
-    final Signalement signalement = resultat.donnee!;
+    final Signalement signalement = resultat.donnee!.signalement;
+    final bool depuisCache = resultat.donnee!.depuisCache;
 
-    // Pas besoin de demander pour son propre signalement
+    // Pas besoin de demander pour son propre signalement, ni hors ligne
     bool deja = false;
-    if (signalement.auteurId != _moi.id) {
+    final SignalementRepository repository = SignalementRepository();
+    if (signalement.auteurId != _moi.id && !depuisCache) {
       final Resultat<bool> confirme = await repository.aConfirme(signalement.id);
       if (!mounted) {
         return;
@@ -88,8 +94,20 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     setState(() {
       _signalement = signalement;
       _aConfirme = deja;
+      _depuisCache = depuisCache;
       _enChargement = false;
     });
+  }
+
+  /// Avant une action : sans réseau, Firestore attendrait sans fin.
+  /// Renvoie false (avec un message) s'il n'y a pas de réseau.
+  Future<bool> _verifierReseau() async {
+    final bool enLigne = await _sync.estEnLigne();
+    if (!enLigne && mounted) {
+      _message(tr('Pas de connexion Internet : réessaie quand le réseau revient',
+          'Ma famech connexion : 3awed ki yerja3 el réseau'));
+    }
+    return enLigne;
   }
 
   /// Affiche un message en bas de l'écran.
@@ -100,6 +118,9 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
   /// "Sa7, ena zeda" : je confirme le problème.
   Future<void> _confirmer() async {
     final Signalement signalement = _signalement!;
+    if (!await _verifierReseau() || !mounted) {
+      return;
+    }
     setState(() {
       _actionEnCours = true;
     });
@@ -164,6 +185,9 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     if (ok != true || !mounted) {
       return;
     }
+    if (!await _verifierReseau() || !mounted) {
+      return;
+    }
     setState(() {
       _actionEnCours = true;
     });
@@ -179,6 +203,10 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       _message(resultat.erreur!);
       return;
     }
+    await _sync.oublier(widget.signalementId); // retiré du cache SQLite aussi
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pop(true);
   }
 
@@ -186,6 +214,9 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
   Future<void> _changerStatut(StatutSignalement nouveau) async {
     final Signalement signalement = _signalement!;
     if (nouveau == signalement.statut) {
+      return;
+    }
+    if (!await _verifierReseau() || !mounted) {
       return;
     }
     setState(() {
@@ -238,13 +269,24 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     }
 
     final Utilisateur moi = _moi;
-    final List<Widget> enfants = [
+    final List<Widget> enfants = [];
+    if (_depuisCache) {
+      enfants.add(Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: BandeauM3(
+          icone: Icons.cloud_off,
+          texte: tr('Hors ligne : version enregistrée sur le téléphone',
+              'Mafamech connexion : nos5a msajla fel téléphone'),
+        ),
+      ));
+    }
+    enfants.addAll([
       _carteEnTete(signalement),
       const SizedBox(height: 12),
       _carteInfos(signalement),
       const SizedBox(height: 12),
       _carteDescription(signalement),
-    ];
+    ]);
     final String? photo = signalement.photoUrl;
     if (photo != null) {
       enfants.add(const SizedBox(height: 12));
@@ -259,6 +301,19 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       ));
     }
     enfants.add(const SizedBox(height: 24));
+    if (_depuisCache) {
+      // Hors ligne : les actions passent par Firestore, on les cache
+      enfants.add(Text(
+        tr('Les actions reviendront avec la connexion.',
+            'El actions yarj3ou ki tarja3 el connexion.'),
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.textSecondary),
+      ));
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        children: enfants,
+      );
+    }
     enfants.add(_zoneConfirmation(signalement, moi));
     enfants.addAll(_actionsAuteur(signalement, moi));
     if (moi.estAdmin) {
