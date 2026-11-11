@@ -5,3 +5,11 @@
 name = "houmani-push"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
+
+# (IA) Cloudflare Workers AI (offre gratuite) pour l'assistant du leader
+[ai]
+binding = "AI"
+
+# (IA) L'analyse automatique : chaque lundi à 7h (UTC) = 8h en Tunisie
+[triggers]
+crons = ["0 7 * * 1"]

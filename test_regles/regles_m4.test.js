@@ -305,3 +305,20 @@ describe('présence par QR code (A21)', () => {
     );
   });
 });
+
+describe('assistant IA (suggestionsIA)', () => {
+  test('les leaders et l\'admin lisent les idées, pas un résident', async () => {
+    await env.withSecurityRulesDisabled(async (contexte) => {
+      await setDoc(doc(contexte.firestore(), 'quartiers/q1/suggestionsIA/courant'), { suggestions: [] });
+    });
+    await assertSucceeds(getDoc(doc(base('leader1'), 'quartiers/q1/suggestionsIA/courant')));
+    await assertSucceeds(getDoc(doc(base('admin1'), 'quartiers/q1/suggestionsIA/courant')));
+    await assertFails(getDoc(doc(base('resident1'), 'quartiers/q1/suggestionsIA/courant')));
+  });
+
+  test('personne n\'écrit les idées depuis l\'application', async () => {
+    await assertFails(
+      setDoc(doc(base('admin1'), 'quartiers/q1/suggestionsIA/courant'), { suggestions: [] }),
+    );
+  });
+});

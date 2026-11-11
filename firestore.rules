@@ -680,6 +680,15 @@ service cloud.firestore {
         }
       }
 
+      // ---------- M4 · Idées de l'assistant IA (écrites par le serveur) ----------
+      // quartiers/{q}/suggestionsIA/courant : lues par les leaders et l'admin.
+      // Personne ne les écrit depuis l'app (le serveur Cloudflare écrit avec
+      // le compte de service, qui ne passe pas par ces règles).
+      match /suggestionsIA/{docIA} {
+        allow read: if organisateurDe(q);
+        allow write: if false;
+      }
+
       // ---------- M4 · Demandes d'élection anticipée (id = uid) ----------
       match /demandesElection/{uidD} {
         allow read: if adminDe(q) || (membreDe(q) && uidD == monUid());

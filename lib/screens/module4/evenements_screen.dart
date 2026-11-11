@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/arch_date_block.dart';
+import 'assistant_ia_carte.dart';
 import 'calendrier_screen.dart';
 import 'election_screen.dart';
 import 'evenement_detail_screen.dart';
@@ -427,7 +428,17 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
     // Passés : le plus récent d'abord
     final List<Evenement> passesRecents = passes.reversed.toList();
 
+    final String? quartierId = _moi.quartierId;
     final List<Widget> contenu = [
+      // (IA) L'assistant du leader : seulement pour les leaders et l'admin
+      if (EvenementRepository.peutOrganiser(_moi) && quartierId != null)
+        AssistantIACarte(
+          quartierId: quartierId,
+          apresCreation: () {
+            _chargerEvenements();
+            _chargerSondages();
+          },
+        ),
       _champRecherche(),
       const SizedBox(height: 10),
       _filtresRapides(),

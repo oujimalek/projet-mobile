@@ -50,7 +50,11 @@ class _AccueilScreenState extends State<AccueilScreen> {
     super.initState();
     _chargerDemandesEnAttente();
     // M4 (C4) : recevoir les annonces de nouveaux événements du quartier
-    PushM4.abonner(_utilisateurs.getUtilisateurConnecte().quartierId);
+    final Utilisateur moi = _utilisateurs.getUtilisateurConnecte();
+    PushM4.abonner(
+      moi.quartierId,
+      organisateur: EvenementRepository.peutOrganiser(moi), // (IA) idées du lundi
+    );
   }
 
   Future<void> _chargerDemandesEnAttente() async {

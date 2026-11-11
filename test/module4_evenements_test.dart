@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:houmani/data/models/evenement.dart';
+import 'package:houmani/data/services/assistant_ia_m4.dart';
 import 'package:houmani/screens/module4/push_m4.dart';
 import 'package:houmani/data/models/sondage.dart';
 import 'package:houmani/data/models/utilisateur.dart';
@@ -1345,6 +1346,58 @@ void main() {
         date: demain, organisateur: 'X',
       );
       expect(await PushM4.annoncer(fete, 'q1'), isFalse);
+    });
+  });
+
+  group('IA : assistant du leader', () {
+    test('lit les idées du serveur et ignore celles qui sont mal formées', () {
+      final List<SuggestionIA> idees = IdeesIA.lireListe([
+        {'type': 'evenement', 'titre': 'Nettoyage du jardin', 'categorie': 'nettoyage',
+         'date': '2026-11-22', 'heure': '10:00', 'raison': 'Aucun nettoyage depuis 2 mois'},
+        {'type': 'sondage', 'question': 'Quel jour ?', 'choix': ['Samedi', 'Dimanche'],
+         'raison': 'Avis partagés'},
+        {'type': 'conseil', 'titre': 'Essaie 18h', 'raison': '2x plus de monde'},
+        {'type': 'sondage', 'question': 'Un seul choix', 'choix': ['A']}, // ignoré
+        {'type': 'inconnu', 'titre': 'x'}, // ignoré
+        'pas une map', // ignoré
+      ]);
+      expect(idees.length, 3);
+      expect(idees[0].estEvenement, isTrue);
+      expect(idees[0].categorie, CategorieEvenement.nettoyage);
+      expect(idees[0].date, DateTime(2026, 11, 22, 10, 0));
+      expect(idees[1].estSondage, isTrue);
+      expect(idees[1].choix, ['Samedi', 'Dimanche']);
+      expect(idees[2].type, 'conseil');
+    });
+
+    test('catégorie inconnue -> autre ; sans date -> null', () {
+      final SuggestionIA? idee = SuggestionIA.depuisMap(
+          {'type': 'evenement', 'titre': 'Fête', 'categorie': 'pique-nique'});
+      expect(idee!.categorie, CategorieEvenement.autre);
+      expect(idee.date, isNull);
+    });
+
+    testWidgets('formulaire d\'événement pré-rempli par une idée', (tester) async {
+      await utilisateurs.connexion(
+        MockUtilisateurRepository.emailDemo,
+        MockUtilisateurRepository.motDePasseDemo,
+      );
+      await afficher(tester, EvenementFormScreen(
+        titreInitial: 'Nettoyage du jardin',
+        dateInitiale: DateTime(2026, 11, 22, 10, 0),
+        categorieInitiale: CategorieEvenement.nettoyage,
+      ));
+      expect(find.text('Nettoyage du jardin'), findsOneWidget);
+      expect(find.textContaining('10:00'), findsOneWidget);
+    });
+
+    testWidgets('formulaire de sondage pré-rempli par une idée', (tester) async {
+      await afficher(tester, const SondageFormScreen(
+        questionInitiale: 'Quel jour pour le tournoi ?',
+        choixInitiaux: ['Samedi', 'Dimanche', 'Vendredi'],
+      ));
+      expect(find.text('Quel jour pour le tournoi ?'), findsOneWidget);
+      expect(find.text('Vendredi'), findsOneWidget);
     });
   });
 }

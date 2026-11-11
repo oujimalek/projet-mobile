@@ -104,7 +104,21 @@ Seul un membre **actif** du quartier voit le module.
   `npx wrangler secret put SERVICE_ACCOUNT < cle.json` (depuis Git Bash :
   PowerShell ajoute un caractère invisible au début du fichier).
 
-## 6. Tests
+## 6. Assistant du leader (IA gratuite)
+
+- Carte « Assistant du leader » en haut de l'onglet Événements (leaders et
+  admin) : 3 à 5 idées d'événements, de sondages et un conseil, chacune
+  avec sa raison ; « Créer » ouvre le formulaire déjà rempli.
+- Les idées viennent du Worker (`push_worker/src/assistant.js`) : il calcule
+  des statistiques **anonymes** de la houma (catégories, participation,
+  meilleurs créneaux, sondages, services communs, saison et fêtes) et les
+  donne à **Cloudflare Workers AI** (modèle Mistral Small, offre gratuite).
+- Chaque lundi à 8 h (cron du Worker) : nouvelles idées pour chaque houma et
+  notification aux leaders (sujet `leaders_{q}`). Bouton ↻ : tout de suite.
+- Rangé dans `quartiers/{q}/suggestionsIA/courant` (lecture : leaders et
+  admin ; écriture : seulement le serveur).
+
+## 7. Tests
 
 - `flutter test` : tests du module dans `test/module4_evenements_test.dart`
   et `test/module4_election_test.dart` (mocks dans `test/`).
@@ -113,8 +127,7 @@ Seul un membre **actif** du quartier voit le module.
 - Vérifié sur l'émulateur avec le vrai Firestore (leader, résident, admin),
   dont l'élection complète et une vraie notification push.
 
-## 7. Pour plus tard
+## 8. Pour plus tard
 
 - **Événement depuis un signalement (M3)** : le module 3 n'existe pas encore
   dans les branches ; à ajouter quand il sera fusionné.
-- Fonctionnalité d'IA (à définir).

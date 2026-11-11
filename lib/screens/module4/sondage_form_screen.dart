@@ -18,8 +18,15 @@ import 'module4_widgets.dart';
 /// Renvoie `true` (Navigator.pop) une fois créé.
 class SondageFormScreen extends StatefulWidget {
   final Evenement? evenement;
+  final String? questionInitiale; // (IA) idée de l'assistant
+  final List<String> choixInitiaux;
 
-  const SondageFormScreen({super.key, this.evenement});
+  const SondageFormScreen({
+    super.key,
+    this.evenement,
+    this.questionInitiale,
+    this.choixInitiaux = const [],
+  });
 
   @override
   State<SondageFormScreen> createState() {
@@ -46,6 +53,19 @@ class _SondageFormScreenState extends State<SondageFormScreen> {
   late DateTime _fin = _finDuJour(DateTime.now().add(const Duration(days: 3)));
   bool _enChargement = false;
   String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    // (IA) Sondage pré-rempli par l'assistant du leader
+    _question.text = widget.questionInitiale ?? '';
+    for (int i = 0; i < widget.choixInitiaux.length && i < 6; i++) {
+      if (i >= _choix.length) {
+        _choix.add(TextEditingController());
+      }
+      _choix[i].text = widget.choixInitiaux[i];
+    }
+  }
 
   /// Ajoute une date proposée : le jour, puis l'heure.
   Future<void> _ajouterDate() async {

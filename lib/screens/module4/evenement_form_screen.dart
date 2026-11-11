@@ -25,12 +25,14 @@ class EvenementFormScreen extends StatefulWidget {
   // Pré-remplissage d'un nouvel événement (ex : la date gagnante d'un sondage)
   final String? titreInitial;
   final DateTime? dateInitiale;
+  final CategorieEvenement? categorieInitiale; // (IA) idée de l'assistant
 
   const EvenementFormScreen({
     super.key,
     this.evenement,
     this.titreInitial,
     this.dateInitiale,
+    this.categorieInitiale,
   });
 
   @override
@@ -64,12 +66,18 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
   @override
   void initState() {
     super.initState();
-    // Nouvel événement pré-rempli (sondage de date)
+    // Nouvel événement pré-rempli (sondage de date, idée de l'assistant)
     final DateTime? dateInitiale = widget.dateInitiale;
-    if (widget.evenement == null && dateInitiale != null) {
+    if (widget.evenement == null) {
       _titre.text = widget.titreInitial ?? '';
-      _jour = DateTime(dateInitiale.year, dateInitiale.month, dateInitiale.day);
-      _heureDebut = TimeOfDay.fromDateTime(dateInitiale);
+      if (dateInitiale != null) {
+        _jour = DateTime(dateInitiale.year, dateInitiale.month, dateInitiale.day);
+        _heureDebut = TimeOfDay.fromDateTime(dateInitiale);
+      }
+      final CategorieEvenement? categorie = widget.categorieInitiale;
+      if (categorie != null) {
+        _categorie = categorie;
+      }
     }
     // Modification : on pré-remplit avec l'événement existant
     final Evenement? existant = widget.evenement;

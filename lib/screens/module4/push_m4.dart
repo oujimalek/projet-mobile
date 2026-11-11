@@ -39,7 +39,7 @@ class PushM4 {
 
   /// S'abonne aux annonces de MON quartier (et se désabonne de l'ancien
   /// si j'ai changé de quartier). Appelé à l'ouverture de l'accueil.
-  static Future<void> abonner(String? quartierId) async {
+  static Future<void> abonner(String? quartierId, {bool organisateur = false}) async {
     try {
       final FirebaseMessaging messagerie = FirebaseMessaging.instance;
       await messagerie.requestPermission();
@@ -59,6 +59,17 @@ class PushM4 {
         await messagerie.subscribeToTopic(nouveau);
       }
       await boite.put('sujetPush', nouveau);
+      // (IA) Leaders et admin : les idées de l'assistant du lundi
+      final String? ancienLeaders = boite.get('sujetLeaders') as String?;
+      final String? leaders =
+          (quartierId != null && organisateur) ? 'leaders_$quartierId' : null;
+      if (ancienLeaders != null && ancienLeaders != leaders) {
+        await messagerie.unsubscribeFromTopic(ancienLeaders);
+      }
+      if (leaders != null) {
+        await messagerie.subscribeToTopic(leaders);
+      }
+      await boite.put('sujetLeaders', leaders);
       _ecouterAuPremierPlan();
     } catch (e) {
       // pas de Firebase (tests), pas de réseau... : pas de push, c'est tout
