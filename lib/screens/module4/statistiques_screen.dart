@@ -130,7 +130,7 @@ class _StatistiquesScreenState extends State<StatistiquesScreen> {
                         child: Text(stats.plusPopulaires[i].titre,
                             style: const TextStyle(fontWeight: FontWeight.w600)),
                       ),
-                      Text('${stats.plusPopulaires[i].participants} inscrits'),
+                      Text('${stats.plusPopulaires[i].participants} inscrit${stats.plusPopulaires[i].participants > 1 ? 's' : ''}'),
                     ],
                   ),
                 ),
