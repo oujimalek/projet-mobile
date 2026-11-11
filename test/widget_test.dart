@@ -11,6 +11,7 @@ import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/cache_local.dart';
 import 'package:houmani/data/services/localisation.dart';
+import 'package:houmani/data/services/signalement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
@@ -30,7 +31,7 @@ import 'package:houmani/screens/module1/profil_screen.dart';
 import 'package:houmani/screens/module1/tracer_limites_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
 import 'package:houmani/screens/module2/services_list_screen.dart';
-import 'package:houmani/screens/module3/create_signalement_screen.dart';
+import 'package:houmani/screens/module3/signalements_screen.dart';
 import 'package:houmani/screens/module4/sondage_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
@@ -39,6 +40,7 @@ import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
 import 'package:houmani/widgets/primary_button.dart';
 
+import 'mock_signalement_repository.dart';
 import 'mock_utilisateur_repository.dart';
 
 /// Le faux repository injecté dans chaque test (voir setUp).
@@ -114,6 +116,7 @@ void main() {
   // (pas de réseau, pas de vrai compte).
   setUp(() {
     UtilisateurRepository.instance = MockUtilisateurRepository();
+    SignalementRepository.instance = MockSignalementRepository();
     appRouter.go('/accueil');
   });
 
@@ -140,7 +143,7 @@ void main() {
     expect(find.byType(BottomNavigationBar), findsOneWidget);
 
     await toucherOnglet(tester, 'Signalements');
-    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+    expect(find.byType(SignalementsScreen), findsOneWidget);
     expect(find.byType(BottomNavigationBar), findsOneWidget);
 
     await toucherOnglet(tester, 'Événements');
@@ -521,7 +524,7 @@ void main() {
 
     // Un raccourci ouvre l'onglet du module
     await toucher(tester, find.text('Signaler'));
-    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+    expect(find.byType(SignalementsScreen), findsOneWidget);
   });
 
   testWidgets('Menu latéral : modules, sous-rubriques et déconnexion',

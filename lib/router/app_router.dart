@@ -17,7 +17,7 @@ import '../screens/module1/profil_screen.dart';
 import '../screens/module1/tracer_limites_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
 import '../screens/module2/services_list_screen.dart';
-import '../screens/module3/create_signalement_screen.dart';
+import '../screens/module3/signalements_screen.dart';
 import '../screens/module4/sondage_screen.dart';
 import '../screens/splash_screen.dart';
 import '../widgets/app_bottom_nav.dart';
@@ -67,7 +67,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/signalements',
           builder: (context, state) {
-            return const CreateSignalementScreen(); // M3
+            return const SignalementsScreen(); // M3
           },
         ),
         GoRoute(
