@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../data/models/evenement.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
+import '../../data/services/base_locale_m4.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/photos_m4.dart';
 import '../../data/services/utilisateur_repository.dart';
@@ -137,6 +138,9 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
       }
     });
     if (resultat.estSucces) {
+      BaseLocaleM4.noterPresence(evenement); // (SQLite) mon historique
+    }
+    if (resultat.estSucces) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(tr('Bienvenue ! Ta présence est enregistrée',
             'Mar7ba ! El 7odhour mte3ek tsajjel'))),
@@ -240,6 +244,8 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
     // Rappels sur le téléphone : la veille et 1 h avant (ou on les annule)
     final Evenement? evenement = _evenement;
     if (evenement != null) {
+      // (SQLite) Mon historique, gardé sur le téléphone
+      BaseLocaleM4.noterParticipation(evenement, !_inscrit);
       if (_inscrit) {
         NotificationsM4.annuler(evenement.id);
       } else {

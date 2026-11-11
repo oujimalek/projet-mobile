@@ -5,6 +5,7 @@ import '../../data/models/sondage.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/models/vie_evenement.dart';
 import '../../data/resultat.dart';
+import '../../data/services/base_locale_m4.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
@@ -435,6 +436,7 @@ class _SectionAvisState extends State<SectionAvis> {
       _erreur(context, resultat);
       return;
     }
+    BaseLocaleM4.noterAvis(widget.evenement, _note); // (SQLite) mon historique
     _charger();
   }
 

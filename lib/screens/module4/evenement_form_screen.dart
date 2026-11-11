@@ -5,6 +5,7 @@ import '../../data/models/evenement.dart';
 import '../../data/models/quartier.dart';
 import '../../data/models/service.dart';
 import '../../data/resultat.dart';
+import '../../data/services/base_locale_m4.dart';
 import '../../data/services/evenement_repository.dart';
 import '../../data/services/photos_m4.dart';
 import '../../data/services/service_repository.dart';
@@ -26,6 +27,7 @@ class EvenementFormScreen extends StatefulWidget {
   final String? titreInitial;
   final DateTime? dateInitiale;
   final CategorieEvenement? categorieInitiale; // (IA) idée de l'assistant
+  final BrouillonEvenement? brouillon; // (SQLite) reprendre un brouillon
 
   const EvenementFormScreen({
     super.key,
@@ -33,6 +35,7 @@ class EvenementFormScreen extends StatefulWidget {
     this.titreInitial,
     this.dateInitiale,
     this.categorieInitiale,
+    this.brouillon,
   });
 
   @override
@@ -63,6 +66,43 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
 
   bool get _estModification => widget.evenement != null;
 
+  // (SQLite) Brouillon : son id dans la base du téléphone, et "publié"
+  // pour ne pas le réenregistrer en quittant l'écran
+  int? _idBrouillon;
+  bool _publie = false;
+
+  /// Le formulaire actuel, sous forme de brouillon.
+  BrouillonEvenement _versBrouillon() {
+    final DateTime? jour = _jour;
+    final TimeOfDay? debut = _heureDebut;
+    final TimeOfDay? fin = _heureFin;
+    return BrouillonEvenement(
+      id: _idBrouillon,
+      titre: _titre.text.trim(),
+      description: _description.text.trim(),
+      lieu: _lieu.text.trim(),
+      categorie: _categorie,
+      debut: (jour != null && debut != null) ? _combiner(jour, debut) : jour,
+      fin: (jour != null && fin != null) ? _combiner(jour, fin) : null,
+      places: int.tryParse(_places.text.trim()) ?? 0,
+      majLe: DateTime.now(),
+    );
+  }
+
+  /// Enregistre le brouillon dans SQLite (nouvel événement seulement).
+  Future<bool> _enregistrerBrouillon() async {
+    if (_estModification || _publie) {
+      return false;
+    }
+    final BrouillonEvenement brouillon = _versBrouillon();
+    if (brouillon.estVide) {
+      return false;
+    }
+    final int? id = await BaseLocaleM4.enregistrerBrouillon(brouillon);
+    _idBrouillon = id ?? _idBrouillon;
+    return id != null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +117,27 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       final CategorieEvenement? categorie = widget.categorieInitiale;
       if (categorie != null) {
         _categorie = categorie;
+      }
+    }
+    // (SQLite) Reprise d'un brouillon gardé sur le téléphone
+    final BrouillonEvenement? brouillon = widget.brouillon;
+    if (widget.evenement == null && brouillon != null) {
+      _idBrouillon = brouillon.id;
+      _titre.text = brouillon.titre;
+      _description.text = brouillon.description;
+      _lieu.text = brouillon.lieu;
+      _categorie = brouillon.categorie;
+      if (brouillon.places > 0) {
+        _places.text = '${brouillon.places}';
+      }
+      final DateTime? debut = brouillon.debut;
+      if (debut != null) {
+        _jour = DateTime(debut.year, debut.month, debut.day);
+        _heureDebut = TimeOfDay.fromDateTime(debut);
+      }
+      final DateTime? fin = brouillon.fin;
+      if (fin != null) {
+        _heureFin = TimeOfDay.fromDateTime(fin);
       }
     }
     // Modification : on pré-remplit avec l'événement existant
@@ -263,15 +324,49 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       });
       return;
     }
+    // (SQLite) Publié : le brouillon n'a plus de raison d'exister
+    _publie = true;
+    final int? idBrouillon = _idBrouillon;
+    if (idBrouillon != null) {
+      await BaseLocaleM4.supprimerBrouillon(idBrouillon);
+    }
+    if (!mounted) {
+      return;
+    }
     Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // (SQLite) En quittant sans publier, le formulaire est gardé en brouillon
+    return PopScope(
+      onPopInvokedWithResult: (aQuitte, resultat) {
+        if (aQuitte) {
+          _enregistrerBrouillon();
+        }
+      },
+      child: Scaffold(
       body: Column(
         children: [
           AppHeader(
+            action: _estModification
+                ? null
+                : IconButton(
+                    tooltip: 'Enregistrer le brouillon',
+                    icon: Icon(Icons.save_outlined, color: AppColors.primary),
+                    onPressed: () async {
+                      final bool ok = await _enregistrerBrouillon();
+                      if (!context.mounted) {
+                        return;
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok
+                            ? tr('Brouillon enregistré sur le téléphone',
+                                'El brouillon tsajjel 3al telifoun')
+                            : tr('Écris au moins un titre', 'Ekteb 3al a9al 3onwen')),
+                      ));
+                    },
+                  ),
             titre: _estModification ? 'Modifier l\'événement' : 'Nouvel événement',
           ),
           Expanded(
@@ -420,6 +515,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

@@ -12,7 +12,9 @@ import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/arch_date_block.dart';
 import 'assistant_ia_carte.dart';
+import 'brouillons_screen.dart';
 import 'calendrier_screen.dart';
+import 'historique_screen.dart';
 import 'election_screen.dart';
 import 'evenement_detail_screen.dart';
 import 'evenement_form_screen.dart';
@@ -196,6 +198,19 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
                   _nouveauSondage();
                 },
               ),
+              // (SQLite) Les événements commencés, gardés sur le téléphone
+              ListTile(
+                leading: Icon(Icons.drafts_outlined, color: AppColors.primary),
+                title: Text(tr('Mes brouillons', 'Brouillonet mte3i')),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final bool? publie =
+                      await ouvrirEcranM4<bool>(this.context, const BrouillonsScreen());
+                  if (publie == true && mounted) {
+                    _chargerEvenements();
+                  }
+                },
+              ),
             ],
           ),
         );
@@ -318,6 +333,14 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
               icon: Icon(Icons.insights_outlined, color: AppColors.card),
             ),
           // Calendrier du mois
+          // (SQLite) Mon historique, gardé sur le téléphone
+          IconButton(
+            tooltip: 'Mon historique',
+            onPressed: () {
+              ouvrirEcranM4<void>(context, const HistoriqueScreen());
+            },
+            icon: Icon(Icons.history, color: AppColors.card),
+          ),
           IconButton(
             tooltip: 'Calendrier',
             onPressed: () async {
