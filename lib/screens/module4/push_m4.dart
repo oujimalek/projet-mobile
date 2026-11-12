@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../../data/models/evenement.dart';
 import '../../data/services/evenement_repository.dart';
+import '../../data/services/limite_ia.dart';
 import 'notifications_m4.dart';
 
 /// M4 - (C4) Les notifications PUSH : un nouvel événement est annoncé sur
@@ -123,7 +124,13 @@ class PushM4 {
 
   /// Annonce un nouvel événement à tout le quartier. Renvoie true si le
   /// serveur a accepté (sinon l'événement est créé quand même).
-  static Future<bool> annoncer(Evenement evenement, String quartierId) async {
+  /// [siLimite] : appelé avec le message du serveur si la limite du jour
+  /// (10 annonces) est atteinte.
+  static Future<bool> annoncer(
+    Evenement evenement,
+    String quartierId, {
+    void Function(String message)? siLimite,
+  }) async {
     try {
       final String? jeton = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (jeton == null) {
@@ -142,6 +149,10 @@ class PushM4 {
             }),
           )
           .timeout(const Duration(seconds: 15));
+      final String? limite = LimiteIA.message(reponse);
+      if (limite != null) {
+        siLimite?.call(limite);
+      }
       return reponse.statusCode == 200;
     } catch (e) {
       return false;

@@ -153,6 +153,24 @@ void main() {
       });
     }
 
+    test('limite du jour (429) : mise en forme locale + message du serveur',
+        () async {
+      reponse = http.Response.bytes(
+        utf8.encode(jsonEncode({'erreur': 'Limite atteinte. Réessaie demain.'})),
+        429,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+      final Resultat<AnnonceProposee> r = await ameliorer();
+      expect(r.donnee!.parIA, isFalse);
+      expect(r.donnee!.titre, 'Perceuse a preter');
+      expect(r.donnee!.limite, 'Limite atteinte. Réessaie demain.');
+    });
+
+    test('autre erreur : pas de message de limite', () async {
+      reponse = http.Response('{"erreur":"x"}', 502);
+      expect((await ameliorer()).donnee!.limite, isNull);
+    });
+
     test('réponse illisible : mise en forme locale', () async {
       reponse = http.Response('pas du json', 200);
       final Resultat<AnnonceProposee> r = await ameliorer();

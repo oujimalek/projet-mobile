@@ -19,10 +19,13 @@
 //   POST /correspondances  (M1, tout membre actif) compétences utiles :
 //        { idToken, quartierId, besoin, competences: [...] }.
 // Voir aide_ia.js : aucun nom de personne n'est envoyé à l'IA.
+// Chaque route est limitée par utilisateur et par jour (limites.js) :
+// au-delà, réponse 429 { erreur: "message en français" }.
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from 'jose';
 
 import { genererPourQuartier, listerQuartiers } from './assistant.js';
 import { ameliorerAnnonce, trouverCompetences } from './aide_ia.js';
+import { compterAppel } from './limites.js';
 
 const PROJET = 'houmani-235bb';
 const CLES_GOOGLE = createRemoteJWKSet(
@@ -189,6 +192,12 @@ export default {
         return verif;
       }
       const { uid, acces } = verif;
+
+      // Limite par utilisateur et par jour (voir limites.js)
+      const limite = await compterAppel(env.LIMITES, chemin, uid);
+      if (!limite.ok) {
+        return reponse(429, { erreur: limite.message });
+      }
 
       // (IA, M2) Réécrire une annonce de service
       if (chemin === '/ameliorer') {

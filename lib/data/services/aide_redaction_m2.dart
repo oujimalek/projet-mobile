@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../resultat.dart';
+import 'limite_ia.dart';
 
 /// M2 - Une annonce (titre + description) proposée à l'utilisateur.
 /// [parIA] = true si elle vient de l'IA, false si c'est la mise en forme
@@ -14,10 +15,15 @@ class AnnonceProposee {
   final String description;
   final bool parIA;
 
+  /// Limite du jour atteinte sur le serveur : son message (sinon null).
+  /// La mise en forme locale est quand même proposée.
+  final String? limite;
+
   const AnnonceProposee({
     required this.titre,
     required this.description,
     required this.parIA,
+    this.limite,
   });
 }
 
@@ -93,6 +99,15 @@ class AideRedactionM2 {
             }),
           )
           .timeout(delaiMax);
+      final String? limite = LimiteIA.message(reponse);
+      if (limite != null) {
+        return Resultat.succes(AnnonceProposee(
+          titre: locale.titre,
+          description: locale.description,
+          parIA: false,
+          limite: limite,
+        ));
+      }
       if (reponse.statusCode != 200) {
         return Resultat.succes(locale);
       }

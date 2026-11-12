@@ -300,7 +300,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       // (C4) Annonce à tout le quartier (notification push), sans attendre
       final String? quartierId =
           UtilisateurRepository().getUtilisateurConnecte().quartierId;
-      if (resultat.estSucces && quartierId != null) {
+      if (resultat.estSucces && quartierId != null && mounted) {
+        // Gardé maintenant : l'écran sera fermé quand le serveur répondra
+        final ScaffoldMessengerState messager = ScaffoldMessenger.of(context);
         PushM4.annoncer(
           Evenement(
             id: '',
@@ -311,6 +313,16 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
             organisateur: '',
           ),
           quartierId,
+          // Limite du jour atteinte : l'événement est publié, sans annonce
+          siLimite: (message) {
+            messager.showSnackBar(SnackBar(
+              content: Text(tr(
+                'Événement publié, mais sans notification : $message',
+                'El 7adath tnachar, ama bla notification : woselt lel 7ad '
+                    'mta3 el youm.',
+              )),
+            ));
+          },
         );
       }
     } else {

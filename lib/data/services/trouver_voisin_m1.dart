@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/utilisateur.dart';
 import '../resultat.dart';
+import 'limite_ia.dart';
 
 /// M1 - Une compétence de la houma utile pour le besoin, et les voisins
 /// qui l'ont déclarée.
@@ -27,7 +28,15 @@ class ReponseBesoin {
   final List<Correspondance> correspondances;
   final bool parIA;
 
-  const ReponseBesoin({required this.correspondances, required this.parIA});
+  /// Limite du jour atteinte sur le serveur : son message (sinon null).
+  /// La recherche locale est quand même faite.
+  final String? limite;
+
+  const ReponseBesoin({
+    required this.correspondances,
+    required this.parIA,
+    this.limite,
+  });
 }
 
 /// M1 - (IA) "Qui peut m'aider ?" dans l'annuaire des voisins.
@@ -157,6 +166,14 @@ class TrouverVoisinM1 {
             }),
           )
           .timeout(delaiMax);
+      final String? limite = LimiteIA.message(reponse);
+      if (limite != null) {
+        return Resultat.succes(ReponseBesoin(
+          correspondances: locale.correspondances,
+          parIA: false,
+          limite: limite,
+        ));
+      }
       if (reponse.statusCode != 200) {
         return Resultat.succes(locale);
       }

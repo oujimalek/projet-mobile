@@ -219,7 +219,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     final AnnonceProposee proposition = resultat.donnee!;
     if (proposition.titre == _titreController.text.trim() &&
         proposition.description == _descriptionController.text.trim()) {
-      afficherMessage(context, 'Ton annonce est déjà bien écrite');
+      // Limite du jour atteinte : on le dit, plutôt que "déjà bien écrite"
+      afficherMessage(
+          context, proposition.limite ?? 'Ton annonce est déjà bien écrite');
       return;
     }
     final bool? accepte = await showDialog<bool>(
@@ -237,8 +239,12 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
-                    'L\'IA n\'est pas disponible : seuls les espaces, les '
-                    'majuscules et la ponctuation ont été corrigés.',
+                    proposition.limite != null
+                        ? '${proposition.limite} En attendant, seuls les '
+                            'espaces, les majuscules et la ponctuation ont été '
+                            'corrigés.'
+                        : 'L\'IA n\'est pas disponible : seuls les espaces, les '
+                            'majuscules et la ponctuation ont été corrigés.',
                     style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                 ),

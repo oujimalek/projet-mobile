@@ -10,6 +10,16 @@ compatibility_date = "2025-09-01"
 [ai]
 binding = "AI"
 
+# Limites d'appels par utilisateur et par jour (src/limites.js) : compteurs
+# dans Cloudflare KV (offre gratuite). Tant que ce bloc est en commentaire,
+# le Worker marche SANS limite (il l'écrit dans le journal).
+# Pour l'activer : créer l'espace KV "houmani-limites" (Cloudflare →
+# Storage & Databases → Workers KV → Create), copier son ID ici, puis
+# enlever les # des 3 lignes ci-dessous.
+# [[kv_namespaces]]
+# binding = "LIMITES"
+# id = "COLLER_ICI_L_ID_DE_L_ESPACE_KV"
+
 # (IA) L'analyse automatique : chaque lundi à 7h (UTC) = 8h en Tunisie
 [triggers]
 crons = ["0 7 * * 1"]
