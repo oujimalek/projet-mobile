@@ -571,6 +571,22 @@ void main() {
     expect(find.text('Coupure d\'électricité'), findsOneWidget);
   });
 
+  testWidgets('M3 : Profil → la statistique "Signalements" est comptée',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    // La carte "Signalements" : le nombre au-dessus du libellé
+    final Finder carte = find.ancestor(
+      of: find.text('Signalements\n'),
+      matching: find.byType(Column),
+    );
+    // Amira a 1 signalement dans le mock M3 (le profil fictif dit 7)
+    expect(find.descendant(of: carte.first, matching: find.text('1')),
+        findsOneWidget);
+    expect(find.descendant(of: carte.first, matching: find.text('7')),
+        findsNothing);
+  });
+
   testWidgets('M3 : Menu → "Nouveau signalement" ouvre la création',
       (WidgetTester tester) async {
     await lancerApp(tester);

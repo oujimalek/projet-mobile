@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
+import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -30,11 +31,25 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
   // Nombre de demandes en attente (affiché à l'admin), chargé au démarrage
   int _enAttente = 0;
+  // M3 : nombre de mes signalements (null tant qu'il n'est pas connu)
+  int? _nbSignalements;
 
   @override
   void initState() {
     super.initState();
     _chargerDemandesEnAttente();
+    _chargerNbSignalements();
+  }
+
+  /// M3 : compte mes signalements (Firestore count(), ou le cache hors ligne).
+  Future<void> _chargerNbSignalements() async {
+    final int? nombre = await SyncSignalementsM3.instance.compterMesSignalements();
+    if (!mounted || nombre == null) {
+      return;
+    }
+    setState(() {
+      _nbSignalements = nombre;
+    });
   }
 
   Future<void> _chargerDemandesEnAttente() async {
@@ -95,7 +110,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                         tr('Note\nmoyenne', 'Noqtek\nel moyenne'),
                         AppColors.primary),
                     const SizedBox(width: 10),
-                    _carteStat('${utilisateur.nbSignalements}', 'Signalements\n',
+                    _carteStat(
+                        '${_nbSignalements ?? utilisateur.nbSignalements}',
+                        'Signalements\n',
                         AppColors.secondary),
                   ],
                 ),
