@@ -29,6 +29,10 @@ Crée un fichier `regles_mX.test.js` sur le modèle de `regles_m1.test.js` :
 ## Fichiers
 
 - `regles_m1.test.js` : Module 1 (utilisateurs, quartiers, codes).
+- `regles_m3.test.js` : Module 3 (créer / corriger un signalement, champs
+  autorisés, photo Cloudinary, position GPS, statut par l'admin,
+  « Sa7, ena zeda » avec le compteur, pas sur un signalement clôturé,
+  suppression).
 - `regles_m4.test.js` : Module 4 (créer / modifier un événement, participer
   avec le compteur, places et liste d'attente, photo Cloudinary, sondages et
   votes secrets, présence par QR code).

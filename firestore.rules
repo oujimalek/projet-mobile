@@ -338,18 +338,49 @@ service cloud.firestore {
           return /databases/$(database)/documents/quartiers/$(q)/signalements/$(signalementId)/confirmations/$(monUid());
         }
 
+        // Le contenu écrit par l'auteur (création et correction) : les mêmes
+        // limites que l'app (SignalementRepository.refusSignalement), et les
+        // champs optionnels du bon type : danger (bool), position (point
+        // GPS), photoUrl (une photo de NOTRE compte Cloudinary).
+        function contenuValide() {
+          let d = request.resource.data;
+          return d.categorieId in ['electricite', 'eau', 'ordures', 'travaux', 'incident']
+            && d.titre is string
+            && d.titre.size() >= 3
+            && d.titre.size() <= 80
+            && d.description is string
+            && d.description.size() >= 10
+            && d.lieu is string
+            && d.lieu.size() >= 2
+            && d.get('danger', false) is bool
+            && (!('position' in d) || d.position is latlng)
+            && (!('photoUrl' in d)
+                || (d.photoUrl is string
+                    && d.photoUrl.matches('^https://res[.]cloudinary[.]com/pu3lxdrf/.+')));
+        }
+
         allow read: if membreDe(q);
 
+        // Créer : seulement les champs connus, en attente, compteur à 0.
         allow create: if membreDe(q)
+          && request.resource.data.keys().hasOnly(['titre', 'description',
+               'categorieId', 'statut', 'date', 'lieu', 'auteurId', 'auteurNom',
+               'nbConfirmations', 'danger', 'position', 'photoUrl'])
           && request.resource.data.auteurId == monUid()
+          && request.resource.data.auteurNom is string
           && request.resource.data.statut == 'enAttente'
-          && request.resource.data.nbConfirmations == 0;
+          && request.resource.data.nbConfirmations == 0
+          && request.resource.data.date is timestamp
+          && contenuValide();
 
-        // L'auteur corrige son signalement tant qu'il est en attente.
+        // L'auteur corrige son signalement tant qu'il est en attente
+        // (retirer la position ou la photo = FieldValue.delete(), accepté).
         allow update: if membreDe(q)
           && resource.data.auteurId == monUid()
           && resource.data.statut == 'enAttente'
-          && changeSeulement(['titre', 'description', 'categorieId', 'lieu']);
+          && changeSeulement(['titre', 'description', 'categorieId', 'lieu',
+               'danger', 'position', 'photoUrl'])
+          && contenuValide();
 
         // L'admin change le statut.
         allow update: if adminDe(q)
@@ -369,11 +400,14 @@ service cloud.firestore {
           || adminDe(q);
 
         // ----- Confirmations (id du document = uid) -----
+        // Pas sur son propre signalement, ni sur un signalement clôturé
+        // (résolu ou refusé).
         match /confirmations/{uidConfirmation} {
           allow read: if membreDe(q);
           allow create: if membreDe(q)
             && uidConfirmation == monUid()
             && get(chemin()).data.auteurId != monUid()
+            && get(chemin()).data.statut in ['enAttente', 'enCours']
             && getAfter(chemin()).data.nbConfirmations
                == get(chemin()).data.nbConfirmations + 1;
           allow update, delete: if false;

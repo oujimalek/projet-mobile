@@ -1,104 +1,26 @@
 # M3 · Signalements : règles et index à déployer
 
-Liste tenue à jour par le module 3. **Rien n'est encore appliqué** dans
-`firestore.rules` ni `firestore.indexes.json` : tout sera relu avec le
-responsable du module 1, fusionné avec les changements du module 4, puis
-déployé **en une seule fois** (`firebase deploy --only firestore`).
+**État : prêts dans la branche, PAS encore déployés.** Le bloc M3 de
+`firestore.rules` et l'index de `firestore.indexes.json` sont écrits et
+testés sur l'émulateur (`test_regles/regles_m3.test.js`). Les règles des
+autres modules (M1, M2, M4) n'ont pas été modifiées.
 
-Légende : ✅ nécessaire (le code l'utilise déjà) · 💡 conseillé (sécurité).
+## 1. Ce qui change
 
-## Récapitulatif
+| # | Changement | Fichier | Pourquoi |
+|---|---|---|---|
+| 1 | Index `signalements` : `auteurId ↑, date ↓` | `firestore.indexes.json` | Onglet « Mes signalements » (sinon `failed-precondition`) |
+| 2 | Création : liste blanche des champs + types | `firestore.rules` | Avant : n'importe quel champ passait |
+| 3 | Contenu valide (création ET correction) | `firestore.rules` | Catégorie connue, titre 3 à 80 caractères, description ≥ 10, lieu ≥ 2 (comme l'app) |
+| 4 | Champ `danger` (bool) | `firestore.rules` | Case « Danger pour les personnes » |
+| 5 | Champ `position` (point GPS, optionnel) | `firestore.rules` | « Utiliser ma position », « Voir sur la carte » |
+| 6 | Champ `photoUrl` (optionnel, préfixe `https://res.cloudinary.com/pu3lxdrf/`) | `firestore.rules` | Photo du signalement, seulement de NOTRE compte Cloudinary |
+| 7 | L'auteur corrige aussi `danger`, `position`, `photoUrl` (et peut les retirer avec `FieldValue.delete()`) | `firestore.rules` | Écran de modification |
+| 8 | Pas de confirmation sur un signalement résolu ou refusé | `firestore.rules` | Le serveur vérifie ce que l'app refuse déjà |
 
-| # | Changement | Fichier | Pourquoi | Étape |
-|---|---|---|---|---|
-| 1 | Index `auteurId ↑, date ↓` | `firestore.indexes.json` | Onglet « Mes signalements » | ✅ 2 |
-| 2 | Champ `danger` (bool) | `firestore.rules` | Case « Danger pour les personnes » (création + modification) | ✅ 2 |
-| 3 | Pas de confirmation sur un signalement clôturé | `firestore.rules` | Le serveur vérifie ce que l'app refuse déjà | 💡 2 |
-| 4 | Création : liste blanche des champs + types | `firestore.rules` | Aujourd'hui n'importe quel champ passe | 💡 2 |
-| 5 | Champ `position` (GeoPoint, optionnel) | `firestore.rules` | « Utiliser ma position », « Voir sur la carte » | ✅ 5 |
-| 6 | Champ `photoUrl` (Cloudinary, optionnel) | `firestore.rules` | Photo du signalement | ✅ 6 |
-
-Le **bloc M3 complet** qui regroupe 2 à 6 est à la fin (section 7) : c'est
-lui qu'il faut coller dans `firestore.rules`.
-
-Pas de changement de règle pour `confirmer()` : l'app écrit
-`nbConfirmations: FieldValue.increment(1)`. Firestore évalue les règles sur
-le document APRÈS l'incrément, donc
-`request.resource.data.nbConfirmations == resource.data.nbConfirmations + 1`
-reste vrai (et deux confirmations simultanées ne s'annulent plus).
-
----
-
-## 1. Index « Mes signalements » ✅
-
-`getMesSignalements()` : `where('auteurId', isEqualTo: uid)` +
-`orderBy('date', descending: true)`. Sans cet index, Firestore répond
-`failed-precondition` (« Requête impossible pour le moment (index manquant ?) »).
-
-À ajouter dans le tableau `indexes` de `firestore.indexes.json` :
-
-```json
-{
-  "collectionGroup": "signalements",
-  "queryScope": "COLLECTION",
-  "fields": [
-    { "fieldPath": "auteurId", "order": "ASCENDING" },
-    { "fieldPath": "date", "order": "DESCENDING" }
-  ]
-}
-```
-
-## 2. Champ `danger` ✅
-
-- Création : accepté aujourd'hui (la règle ne liste pas les champs) ; on
-  vérifie son type.
-- Modification par l'auteur : `danger` doit entrer dans `changeSeulement`,
-  sinon cocher / décocher la case est refusé (« Action non autorisée »).
-
-## 3. Pas de confirmation sur un signalement clôturé 💡
-
-L'app refuse déjà (« Ce signalement est déjà clôturé ») quand le statut est
-`resolu` ou `refuse`. Le serveur vérifie la même chose dans
-`match /confirmations/{uidConfirmation}` (voir section 7).
-
-## 4. Création : liste blanche des champs 💡
-
-Aujourd'hui la règle de création ne limite ni les champs ni leurs types.
-La section 7 n'accepte que les champs connus, une catégorie existante, un
-titre de 3 à 80 caractères et une date : les mêmes limites que
-`SignalementRepository.refusSignalement` dans l'app.
-
-## 5. Champ `position` (GeoPoint, optionnel) ✅
-
-Rempli par « Utiliser ma position » (`Localisation.positionActuelle()` du
-module 1). L'app ne l'écrit **que s'il existe** (jamais `position: null`) ;
-`lieu` reste le texte lisible (adresse Nominatim ou saisie).
-
-- Création et modification : si le champ est là, il doit être un `latlng`.
-- Modification : `position` entre dans `changeSeulement`. Retirer le point
-  d'un signalement publié envoie `FieldValue.delete()` : la clé est alors
-  « changée » (donc dans la liste) et absente après (donc acceptée).
-
-## 6. Champ `photoUrl` (Cloudinary, optionnel) ✅
-
-Adresse https de la photo, envoyée par l'app sur le compte Cloudinary de
-l'équipe (preset `houmani_signalements`, voir `docs/module3_photos.md`).
-
-- Si le champ est là : un texte qui **commence par
-  `https://res.cloudinary.com/pu3lxdrf/`** (notre compte). Sans cette
-  vérification, n'importe qui pourrait afficher une image d'un autre site
-  dans l'application.
-- L'app vérifie la même chose avant d'écrire
-  (`SignalementRepository.refusPhoto`).
-- Modification : `photoUrl` entre dans `changeSeulement` (changer ou
-  retirer la photo, comme `position`).
-
-En règles Firestore, `matches()` doit correspondre au texte ENTIER ; le
-point s'écrit `[.]` :
-
-```
-d.photoUrl.matches('https://res[.]cloudinary[.]com/pu3lxdrf/.+')
-```
+**Inchangé :** lecture (membre actif), changement de statut par l'admin,
+compteur « moi aussi » (`FieldValue.increment(1)` respecte déjà
+`nbConfirmations == ancien + 1`), suppression (auteur en attente, ou admin).
 
 `docs/schema_firestore.md`, section 5, ajouter les lignes :
 
@@ -108,98 +30,43 @@ d.photoUrl.matches('https://res[.]cloudinary[.]com/pu3lxdrf/.+')
 | `position` (`PointGps?`) | `position` | geopoint | Optionnel ; absent si l'utilisateur n'a pas utilisé le GPS |
 | `photoUrl` | `photoUrl` | string | Optionnel ; `https://res.cloudinary.com/pu3lxdrf/...` |
 
----
+## 2. Tester avant de déployer (émulateur)
 
-## 7. Le bloc M3 complet proposé (à coller dans `firestore.rules`)
-
-Remplace le bloc `// ---------- M3 · Signalements ----------` actuel.
-Les règles « admin change le statut », « compteur moi aussi » et
-« supprimer » sont **inchangées**.
+Depuis la racine du dépôt (voir `test_regles/README.md`) :
 
 ```
-      // ---------- M3 · Signalements ----------
-      match /signalements/{signalementId} {
-        function chemin() {
-          return /databases/$(database)/documents/quartiers/$(q)/signalements/$(signalementId);
-        }
-        function maConfirmation() {
-          return /databases/$(database)/documents/quartiers/$(q)/signalements/$(signalementId)/confirmations/$(monUid());
-        }
-
-        // Le contenu écrit par l'auteur : catégorie connue, titre de 3 à
-        // 80 caractères, et les champs optionnels du bon type :
-        // danger (bool), position (point GPS), photoUrl (NOTRE Cloudinary).
-        function contenuValide() {
-          let d = request.resource.data;
-          return d.categorieId in ['electricite', 'eau', 'ordures', 'travaux', 'incident']
-            && d.titre is string
-            && d.titre.size() >= 3
-            && d.titre.size() <= 80
-            && d.get('danger', false) is bool
-            && (!('position' in d) || d.position is latlng)
-            && (!('photoUrl' in d)
-                || (d.photoUrl is string
-                    && d.photoUrl.matches('https://res[.]cloudinary[.]com/pu3lxdrf/.+')));
-        }
-
-        allow read: if membreDe(q);
-
-        allow create: if membreDe(q)
-          && request.resource.data.keys().hasOnly(['titre', 'description',
-               'categorieId', 'statut', 'date', 'lieu', 'auteurId', 'auteurNom',
-               'nbConfirmations', 'danger', 'position', 'photoUrl'])
-          && request.resource.data.auteurId == monUid()
-          && request.resource.data.statut == 'enAttente'
-          && request.resource.data.nbConfirmations == 0
-          && request.resource.data.date is timestamp
-          && contenuValide();
-
-        // L'auteur corrige son signalement tant qu'il est en attente.
-        allow update: if membreDe(q)
-          && resource.data.auteurId == monUid()
-          && resource.data.statut == 'enAttente'
-          && changeSeulement(['titre', 'description', 'categorieId', 'lieu',
-               'danger', 'position', 'photoUrl'])
-          && contenuValide();
-
-        // L'admin change le statut. (inchangé)
-        allow update: if adminDe(q)
-          && changeSeulement(['statut'])
-          && request.resource.data.statut in ['enAttente', 'enCours', 'resolu', 'refuse'];
-
-        // Compteur "moi aussi" (inchangé)
-        allow update: if membreDe(q)
-          && changeSeulement(['nbConfirmations'])
-          && request.resource.data.nbConfirmations == resource.data.nbConfirmations + 1
-          && !exists(maConfirmation())
-          && existsAfter(maConfirmation());
-
-        allow delete: if (membreDe(q) && resource.data.auteurId == monUid()
-                          && resource.data.statut == 'enAttente')
-          || adminDe(q);
-
-        // ----- Confirmations (id du document = uid) -----
-        match /confirmations/{uidConfirmation} {
-          allow read: if membreDe(q);
-          allow create: if membreDe(q)
-            && uidConfirmation == monUid()
-            && get(chemin()).data.auteurId != monUid()
-            && get(chemin()).data.statut in ['enAttente', 'enCours']
-            && getAfter(chemin()).data.nbConfirmations
-               == get(chemin()).data.nbConfirmations + 1;
-          allow update, delete: if false;
-        }
-      }
+firebase emulators:exec --only firestore --project demo-houmani "npm --prefix test_regles test"
 ```
 
-À tester sur l'émulateur (`test_regles/`) avant le déploiement, au moins :
-création avec / sans photo, photo d'un autre site refusée, position qui
-n'est pas un point refusée, champ inconnu refusé, l'auteur retire sa photo
-(`FieldValue.delete()`), confirmation d'un signalement résolu refusée.
+Résultat attendu : `fail 0` (M1 + M3 + M4 ; dernier passage : 122 tests,
+dont 27 pour M3). Les lignes `PERMISSION_DENIED` sont les refus attendus.
 
----
+## 3. Déployer (une seule fois, après validation de l'équipe)
 
-## Points à connaître (sans changement prévu)
+```
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+### Check-list
+
+1. **Comparer avec les règles en ligne** : console Firebase → Firestore
+   Database → Règles. Si elles contiennent des changements absents du
+   dépôt (fait à la main dans la console), les reporter d'abord dans
+   `firestore.rules`, sinon le déploiement les écrase.
+2. Être sur la branche qui contient les règles de **tous** les modules
+   (M1, M2, M3, M4) : un déploiement remplace le fichier entier.
+3. Lancer les tests de l'émulateur (section 2) : `fail 0`.
+4. Déployer avec la commande ci-dessus.
+5. Si la commande propose de **supprimer des index** qui existent en ligne
+   mais pas dans `firestore.indexes.json` : répondre **N** (non). Ils
+   servent peut-être à un autre module ; on les ajoutera au fichier.
+6. Attendre que le nouvel index soit **« Activé »** (console → Firestore →
+   Index ; quelques minutes) avant de tester « Mes signalements ».
+7. Vérifier dans l'app : créer un signalement avec photo et position,
+   le corriger, le confirmer depuis un autre compte, changer son statut
+   avec le compte admin.
+
+## 4. Points à connaître (sans changement prévu)
 
 - **Fiches orphelines** : supprimer un signalement laisse ses documents
   `confirmations/*` (Firestore ne supprime pas les sous-collections, et la
@@ -210,3 +77,7 @@ n'est pas un point refusée, champ inconnu refusé, l'auteur retire sa photo
 - **Photos sur Cloudinary** : supprimer un signalement ne supprime pas sa
   photo sur Cloudinary (il faudrait la clé secrète, qui ne doit jamais être
   dans l'app). Voir `docs/module3_photos.md`.
+- **Anciens signalements** : un document créé avant ces règles et qui ne
+  les respecte pas (ex. titre de 2 caractères) ne pourra plus être corrigé
+  par son auteur tant qu'il n'est pas valide ; l'admin peut toujours
+  changer son statut ou le supprimer.
