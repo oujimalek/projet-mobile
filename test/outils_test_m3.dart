@@ -14,7 +14,10 @@ import 'package:houmani/screens/module1/carte_quartier.dart' show fondOpenStreet
 import 'package:houmani/screens/module3/carte_signalements_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:houmani/data/services/evenement_repository.dart';
+
 import 'fausse_connexion_m3.dart';
+import 'mock_evenement_repository.dart';
 
 bool _sqlitePret = false;
 Directory? _dossierPhotos;
@@ -49,6 +52,8 @@ FausseConnexionM3 installerHorsLigneM3() {
   final FausseConnexionM3 connexion = FausseConnexionM3();
   ConnexionM3.instance = connexion;
   SyncSignalementsM3.instance = SyncSignalementsM3();
+  // (D3) Le détail lit les événements liés (module 4) : son mock, vide
+  EvenementRepository.instance = MockEvenementRepository();
   return connexion;
 }
 

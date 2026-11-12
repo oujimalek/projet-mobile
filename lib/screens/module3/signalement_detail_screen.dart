@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/evenement.dart'; // M4 (D3)
 import '../../data/models/historique_signalement.dart';
 import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
+import '../../data/services/evenement_repository.dart'; // M4 (D3)
 import '../../data/services/liens_m3.dart';
 import '../../data/services/photos_m3.dart';
 import '../../data/services/signalement_repository.dart';
@@ -17,6 +19,9 @@ import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../../widgets/status_badge.dart';
+// M4 (D3) : formulaire et détail d'un événement (import seulement)
+import '../module4/evenement_detail_screen.dart';
+import '../module4/evenement_form_screen.dart';
 import 'carte_signalements_screen.dart';
 import 'create_signalement_screen.dart';
 import 'widgets_module3.dart';
@@ -48,6 +53,9 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
   String? _erreur;
   bool _depuisCache = false; // lu dans SQLite (hors ligne) : pas d'action
   List<EntreeHistorique>? _historique; // null : pas encore chargé
+  // (D3) Événements organisés à la suite de ce signalement (module 4).
+  // null : pas chargés (hors ligne, erreur) → la section est cachée
+  List<Evenement>? _evenementsLies;
   String? _erreurHistorique;
 
   final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
@@ -106,7 +114,157 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     });
     if (!depuisCache) {
       await _chargerHistorique(signalement.id);
+      await _chargerEvenementsLies(signalement.id);
     }
+  }
+
+  /// (D3) Les événements organisés à la suite de ce signalement.
+  /// Échec ou délai dépassé : la section reste cachée.
+  Future<void> _chargerEvenementsLies(String id) async {
+    final Resultat<List<Evenement>> resultat = await EvenementRepository()
+        .getEvenementsDuSignalement(id)
+        .timeout(
+          SyncSignalementsM3.delaiReseau,
+          onTimeout: () =>
+              const Resultat.echec(SyncSignalementsM3.messageDelai),
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _evenementsLies = resultat.donnee;
+    });
+  }
+
+  /// (D3) « Organiser un événement » : le formulaire du module 4,
+  /// pré-rempli (type, titre, lieu, point GPS, lien vers ce signalement).
+  Future<void> _organiserEvenement() async {
+    final Signalement signalement = _signalement!;
+    final bool? cree = await ouvrirEcranM3<bool>(
+      context,
+      EvenementFormScreen(
+        titreInitial: SignalementRepository.titreEvenementPour(signalement),
+        categorieInitiale:
+            SignalementRepository.categorieEvenementPour(signalement.categorieId),
+        lieuInitial: signalement.lieu,
+        positionInitiale: signalement.position,
+        signalementId: signalement.id,
+        signalementTitre: signalement.titre,
+      ),
+    );
+    if (!mounted || cree != true) {
+      return;
+    }
+    _message(tr('Événement organisé : les voisins sont prévenus.',
+        'L\'événement mnadhem : el jiran 3raf.'));
+    await _chargerEvenementsLies(signalement.id); // la section se met à jour
+  }
+
+  /// (D3) Ouvre un événement lié ; au retour, la section est rechargée.
+  Future<void> _ouvrirEvenement(Evenement evenement) async {
+    await ouvrirEcranM3<void>(
+      context,
+      EvenementDetailScreen(evenementId: evenement.id),
+    );
+    if (mounted) {
+      await _chargerEvenementsLies(widget.signalementId);
+    }
+  }
+
+  /// (D3) La section « Événement organisé » (cachée hors ligne ou sans
+  /// événement), avec le conseil à l'admin quand l'événement est passé.
+  List<Widget> _sectionEvenements(Signalement signalement, Utilisateur moi) {
+    final List<Evenement>? evenements = _evenementsLies;
+    if (_depuisCache || evenements == null || evenements.isEmpty) {
+      return [];
+    }
+    final List<Widget> lignes = [
+      Text(
+        evenements.length == 1
+            ? tr('Événement organisé', 'Événement mnadhem')
+            : tr('Événements organisés', 'Événements mnadhmin'),
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 6),
+    ];
+    for (final Evenement evenement in evenements) {
+      lignes.add(InkWell(
+        key: ValueKey('evenement_lie_${evenement.id}'),
+        onTap: () => _ouvrirEvenement(evenement),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.event_outlined, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      evenement.titre,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      '${dateCompleteM3(evenement.date)} · '
+                      '${evenement.participants} '
+                      '${evenement.participants <= 1 ? tr('participant', 'mcharek') : tr('participants', 'mcharkin')}'
+                      '${evenement.annule ? ' · ${tr('Annulé', 'Mbattel')}' : ''}',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppColors.primary),
+            ],
+          ),
+        ),
+      ));
+    }
+    // Conseil à l'admin : l'événement a eu lieu, le signalement est ouvert
+    final bool aEuLieu = evenements.any((e) => e.estPasse && !e.annule);
+    if (moi.estAdmin && !signalement.estCloture && aEuLieu) {
+      lignes.add(Container(
+        key: const ValueKey('conseil_resolu'),
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.fromLTRB(12, 10, 4, 4),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr('L\'événement a eu lieu — marquer comme résolu ?',
+                  'L\'événement t3ada — n7otouh tsalle7 ?'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _actionEnCours
+                    ? null
+                    : () => _changerStatut(StatutSignalement.resolu),
+                child: Text(tr('Marquer comme résolu', 'Tsalle7')),
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+    return [
+      AppCard(
+        key: const ValueKey('evenements_lies'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: lignes,
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
   }
 
   /// L'historique des statuts (en ligne seulement).
@@ -542,6 +700,7 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       enfants.add(_carteNumeroUtile(numero));
     }
     enfants.add(const SizedBox(height: 12));
+    enfants.addAll(_sectionEvenements(signalement, _moi)); // (D3)
     enfants.add(_carteHistorique(signalement));
     enfants.add(const SizedBox(height: 24));
     if (_depuisCache) {
@@ -558,6 +717,16 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       );
     }
     enfants.add(_zoneConfirmation(signalement, moi));
+    // (D3) Leader ou admin, signalement ouvert, ordures ou travaux
+    if (SignalementRepository.peutOrganiserEvenement(moi, signalement)) {
+      enfants.add(const SizedBox(height: 12));
+      enfants.add(SecondaryButton(
+        key: const ValueKey('organiser_evenement'),
+        texte: tr('Organiser un événement', 'Nadhem événement'),
+        icone: Icons.event_available_outlined,
+        onPressed: _actionEnCours ? null : _organiserEvenement,
+      ));
+    }
     enfants.addAll(_actionsAuteur(signalement, moi));
     if (moi.estAdmin) {
       enfants.add(const SizedBox(height: 24));
