@@ -16,7 +16,7 @@ Légende : ✅ nécessaire dès maintenant (le code l'utilise déjà) ·
 | 2 | Champ `danger` (bool) | `firestore.rules` | Case « Danger pour les personnes » (création + modification) | ✅ 2 |
 | 3 | Pas de confirmation sur un signalement clôturé | `firestore.rules` | Le serveur vérifie ce que l'app refuse déjà | 💡 2 |
 | 4 | Création : liste blanche des champs + types | `firestore.rules` | Aujourd'hui n'importe quel champ passe | 💡 2 |
-| 5 | Champ `position` (GeoPoint) | `firestore.rules` | GPS, carte, anti-doublon | 🕓 5 |
+| 5 | Champ `position` (GeoPoint, optionnel) | `firestore.rules` | « Utiliser ma position », carte, anti-doublon | ✅ 5 |
 | 6 | Champ `photoUrl` (texte) | `firestore.rules` | Photo Cloudinary | 🕓 6 |
 | 7 | Sous-collection `historique` + note admin | `firestore.rules` | Historique des statuts | 🕓 8 |
 | 8 | Champ `photoApresUrl` (admin, à la résolution) | `firestore.rules` | Photo avant / après | 🕓 8 |
@@ -112,13 +112,49 @@ allow create: if membreDe(q)
 ```
 
 Mêmes limites que `SignalementRepository.refusSignalement` dans l'app.
+Depuis l'étape 5 : ajouter `'position'` à la liste `hasOnly([...])`.
 
-## 5. Champ `position` (GeoPoint) 🕓 étape 5
+## 5. Champ `position` (GeoPoint, optionnel) ✅
 
-Rempli par « Utiliser ma position » (Localisation du module 1). À ajouter :
-- dans la liste blanche de création, avec
-  `request.resource.data.get('position', null) == null || request.resource.data.position is latlng` ;
-- dans `changeSeulement([...])` de la modification par l'auteur.
+Rempli par « Utiliser ma position » (`Localisation.positionActuelle()` du
+module 1). L'app ne l'écrit **que s'il existe** (jamais `position: null`).
+`lieu` reste le texte lisible (adresse Nominatim ou saisie).
+
+- Création : déjà acceptée aujourd'hui (pas de liste blanche), mais on
+  vérifie le type si le champ est là.
+- Modification par l'auteur : `position` doit entrer dans `changeSeulement`,
+  sinon ajouter ou déplacer le point est refusé.
+
+```
+allow create: if membreDe(q)
+  && request.resource.data.auteurId == monUid()
+  && request.resource.data.statut == 'enAttente'
+  && request.resource.data.nbConfirmations == 0
+  && request.resource.data.get('danger', false) is bool
+  && (!('position' in request.resource.data)
+      || request.resource.data.position is latlng);
+
+allow update: if membreDe(q)
+  && resource.data.auteurId == monUid()
+  && resource.data.statut == 'enAttente'
+  && changeSeulement(['titre', 'description', 'categorieId', 'lieu',
+       'danger', 'position'])
+  && request.resource.data.get('danger', false) is bool
+  && (!('position' in request.resource.data)
+      || request.resource.data.position is latlng);
+```
+
+Avec la liste blanche (section 4), ajouter `'position'` à `hasOnly([...])`.
+
+`docs/schema_firestore.md`, section 5, ajouter la ligne :
+
+| Champ Dart | Champ Firestore | Type | Remarque |
+|---|---|---|---|
+| `position` (`PointGps?`) | `position` | geopoint | Optionnel ; absent si l'utilisateur n'a pas utilisé le GPS |
+
+Limite : retirer le point d'un signalement déjà publié n'efface pas le
+champ dans Firestore (il faudrait `FieldValue.delete()`, que la règle
+devrait aussi accepter). Pas prévu pour l'instant.
 
 ## 6. Champ `photoUrl` 🕓 étape 6
 

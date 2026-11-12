@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart' show GeoPoint, Timestamp;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 // PAS d'import de package:houmani/main.dart : ce fichier compile même sans
 // lib/firebase_options.dart (fichier Firebase absent du dépôt).
 import 'package:houmani/data/models/signalement.dart';
+import 'package:houmani/data/models/quartier.dart' show PointGps;
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/signalement_repository.dart';
@@ -172,6 +173,20 @@ void main() {
       expect(relu.nbConfirmations, 7);
       expect(relu.danger, isTrue);
       expect(relu.photoUrl, isNull);
+      expect(relu.position, isNull);
+      expect(map.containsKey('position'), isFalse); // champ optionnel
+    });
+
+    test('Position : écrite en GeoPoint, relue en PointGps', () {
+      final Signalement avecPoint =
+          exemple().copyWith(position: const PointGps(36.8625, 10.17));
+      final Map<String, dynamic> map = avecPoint.toMap();
+      expect(map['position'], isA<GeoPoint>());
+      expect((map['position'] as GeoPoint).latitude, 36.8625);
+
+      final Signalement relu = Signalement.fromMap('s1', map);
+      expect(relu.position!.latitude, 36.8625);
+      expect(relu.position!.longitude, 10.17);
     });
 
     test('fromMap d\'un document incomplet : valeurs par défaut', () {
@@ -577,7 +592,11 @@ void main() {
       await tester.enterText(
           find.byType(TextFormField).at(1), 'Le lampadaire ne marche plus');
       await tester.tap(find.text('Danger pour les personnes'));
+      // GPS et adresse simulés (voir outils_test_m3.dart)
+      fauxGps(const PointGps(36.8625, 10.17));
+      fausseAdresse('Rue Hédi Nouira, Ennasr 2');
       await tester.tap(find.text('Utiliser ma position'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Publier le signalement'));
       await tester.pumpAndSettle();
 
@@ -587,7 +606,8 @@ void main() {
       expect(cree.titre, 'Lampadaire');
       expect(cree.categorieId, 'eau');
       expect(cree.danger, isTrue);
-      expect(cree.lieu, 'Résidence El Yasmine, Bloc B');
+      expect(cree.lieu, 'Rue Hédi Nouira, Ennasr 2');
+      expect(cree.position!.latitude, 36.8625);
     });
 
     testWidgets('Mode modification : champs pré-remplis',

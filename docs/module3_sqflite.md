@@ -60,6 +60,24 @@ mises_a_jour_cache  (quartier_id PK, date)
 SQLite n'a ni booléen ni date : `danger` vaut 0 ou 1, les dates sont en
 millisecondes (`millisecondsSinceEpoch`).
 
+### Version 2 (étape 5 : GPS et adresse) : une vraie migration
+
+```sql
+ALTER TABLE brouillons         ADD COLUMN latitude REAL;  -- + longitude
+ALTER TABLE envois_en_attente  ADD COLUMN latitude REAL;  -- + longitude
+ALTER TABLE signalements_cache ADD COLUMN latitude REAL;  -- + longitude
+CREATE TABLE adresses_cache (cle TEXT PRIMARY KEY, adresse TEXT, date INTEGER)
+```
+
+- Nouveau téléphone : `onCreate` crée la version 1 puis applique la
+  version 2.
+- Téléphone déjà en version 1 : `onUpgrade(1 → 2)` ajoute seulement les
+  colonnes et la table : **les brouillons et la file d'envoi sont gardés**
+  (testé dans `test/module3_adresse_test.dart`).
+- `adresses_cache` : la clé est le point arrondi à 4 décimales (environ
+  11 m), ex. `36.8625,10.1700`. La politique de Nominatim demande de ne pas
+  redemander le même endroit ; et une adresse déjà trouvée marche hors ligne.
+
 ## 4. Les parcours
 
 ### 4.1 Publier
