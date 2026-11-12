@@ -28,7 +28,9 @@ Les voisins d'une même houma **signalent les problèmes du quotidien**
   cartes du téléphone ;
 - l'**admin** du quartier fait avancer le statut : en attente → en cours →
   résolu (ou refusé), avec une **note** ; chaque étape reste dans
-  l'**historique** du signalement.
+  l'**historique** du signalement ;
+- un **leader ou l'admin** **organise un événement** (nettoyage, réunion)
+  à partir d'un signalement d'ordures ou de travaux (D3, avec le module 4).
 
 Le module écrit dans `quartiers/{q}/signalements` et ses sous-collections
 `confirmations` et `historique`. Il lit l'utilisateur connecté du module 1
@@ -48,6 +50,7 @@ Seul un membre **actif** du quartier voit le module.
 | … sur un signalement **résolu ou refusé** | ❌ | ❌ | ❌ |
 | Changer le statut (avec une note ; obligatoire pour refuser) | ❌ | ❌ | ✅ |
 | Voir l'historique, la carte, partager, appeler | ✅ | ✅ | ✅ |
+| Organiser un événement (ordures, travaux ouverts) | ❌ (sauf leader) | ❌ (sauf leader) | ✅ |
 
 Les mêmes règles sont vérifiées **deux fois** : dans l'app (méthodes
 `static refus...` de `SignalementRepository`, messages en français) et par
@@ -206,6 +209,39 @@ parNom }` par changement.
 - Les règles n'acceptent une étape que pendant une création ou un vrai
   changement de statut par l'admin ; une étape n'est jamais modifiée.
 
+### Organiser un événement depuis un signalement (D3, avec le module 4)
+
+Proposé par le module 4, sur le modèle du lien événement → service commun
+(D4). Pour les problèmes qu'on règle **ensemble** :
+
+| Catégorie du signalement | Événement proposé | Titre |
+|---|---|---|
+| Ordures | Nettoyage | « Nettoyage : titre du signalement » |
+| Travaux | Réunion | « Réunion : titre du signalement » |
+
+- Bouton « **Organiser un événement** » du détail : seulement pour un
+  **leader ou l'admin** (comme la règle `organisateurDe` du module 4), un
+  signalement **ouvert** (en attente ou en cours), catégorie ordures ou
+  travaux ; caché hors ligne. Les règles sont des fonctions pures testées
+  (`SignalementRepository.peutOrganiserEvenement`,
+  `categorieEvenementPour`, `titreEvenementPour` : titre raccourci à 80
+  caractères, la limite du module 4).
+- Il ouvre le **formulaire du module 4** pré-rempli : type, titre, lieu,
+  point GPS, et le lien (`signalementId` / `signalementTitre` dans
+  l'événement). Après la publication, la section ci-dessous se met à jour.
+- Section « **Événement organisé** » : date, titre, nombre de participants
+  (et « Annulé ») ; toucher ouvre l'événement. Elle est lue avec
+  `EvenementRepository.getEvenementsDuSignalement` (un seul filtre
+  d'égalité, pas d'index) ; hors ligne ou en erreur, elle est simplement
+  cachée.
+- **Conseil à l'admin** : si un événement lié a eu lieu (et n'est pas
+  annulé) et que le signalement est encore ouvert : « L'événement a eu
+  lieu — marquer comme résolu ? » → la même fenêtre de statut (avec note).
+- Côté module 4 : ligne « **Suite au signalement** » dans le détail de
+  l'événement, qui ouvre le signalement. Le lien ne change plus après la
+  création (la règle de modification d'un événement ne l'accepte pas) ;
+  aucune règle Firestore n'a été modifiée pour D3.
+
 ### Partager
 
 Icône « Partager » du détail (`share_plus`, même version que le module 4) :
@@ -230,7 +266,7 @@ Une seule constante, `SignalementRepository.numerosUtiles` :
 | Module | Ce que M3 utilise / change |
 |---|---|
 | M1 | Utilisateur connecté (quartier, rôle admin), `Localisation.positionActuelle()`, `PointGps`, le quartier et son contour, `fondOpenStreetMap` / `contourRouge` / `attributionOpenStreetMap` (import seulement) ; dans le Profil : lien « Mes signalements » et statistique « Signalements » (comptée par M3) |
-| M4 | Même compte Cloudinary (preset différent), mêmes versions de paquets (`http`, `image_picker`, `sqflite`, `share_plus`) ; bases SQLite séparées (`houmani_m3.db` / `houmani_m4.db`) |
+| M4 | (D3) Le détail d'un signalement ouvre le formulaire d'événement pré-rempli et liste les événements liés ; le détail d'un événement ouvre le signalement (« Suite au signalement ») ; `EvenementRepository.peutOrganiser` réutilisé. Même compte Cloudinary (preset différent), mêmes versions de paquets (`http`, `image_picker`, `sqflite`, `share_plus`) ; bases SQLite séparées (`houmani_m3.db` / `houmani_m4.db`) |
 | Commun | Onglet `/signalements` du routeur (paramètres `onglet` et `action`), « Nouveau signalement » du menu, envoi de la file depuis l'Accueil et `main.dart` |
 
 ## 7. Tests
@@ -246,6 +282,7 @@ Une seule constante, `SignalementRepository.numerosUtiles` :
 | `test/module3_carte_test.dart` | 13 | Repères, urgents, filtres, fiche, centrage, hors ligne, erreur, mode sombre |
 | `test/module3_doublon_test.dart` | 18 | Haversine, règle des 100 m / 24 h, cache, toutes les réponses de la fenêtre |
 | `test/module3_historique_test.dart` | 15 | Étapes, note obligatoire pour refuser, frise, ancien signalement, hors ligne |
+| `test/module3_d3_test.dart` | 20 | (D3) Modèle et dépôt M4, formulaire pré-rempli, ligne « Suite au signalement », visibilité du bouton (rôle, catégorie, statut), correspondances, section, conseil à l'admin |
 | `test/widget_test.dart` | 3 (M3) | Profil → Mes signalements et statistique, menu → Nouveau signalement |
 | `test_regles/regles_m3.test.js` | 38 | Règles Firestore sur l'émulateur (dont l'historique) |
 
@@ -255,7 +292,7 @@ de carte remplacé). Les fichiers M3 n'importent pas `main.dart` : ils
 compilent même sans `lib/firebase_options.dart`.
 
 ```
-flutter test test/module3_signalements_test.dart test/module3_sqflite_test.dart test/module3_adresse_test.dart test/module3_photos_test.dart test/module3_numeros_test.dart test/module3_partage_test.dart test/module3_carte_test.dart test/module3_doublon_test.dart test/module3_historique_test.dart
+flutter test test/module3_signalements_test.dart test/module3_sqflite_test.dart test/module3_adresse_test.dart test/module3_photos_test.dart test/module3_numeros_test.dart test/module3_partage_test.dart test/module3_carte_test.dart test/module3_doublon_test.dart test/module3_historique_test.dart test/module3_d3_test.dart
 ```
 
 ## 8. Limites connues
