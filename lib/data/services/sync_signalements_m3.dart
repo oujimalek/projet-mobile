@@ -489,6 +489,39 @@ class SyncSignalementsM3 {
     return Resultat.echec(erreur ?? messageHorsLigne);
   }
 
+  /// Le nombre de MES signalements (statistique du Profil) :
+  ///   - en ligne : Firestore count() ;
+  ///   - hors ligne (ou Firestore en échec) : le cache SQLite ;
+  ///   - + mes signalements encore dans la file d'envoi (ils sont à moi,
+  ///     même s'ils ne sont pas encore partis).
+  /// null : impossible à savoir (ni réseau, ni cache).
+  Future<int?> compterMesSignalements() async {
+    final Utilisateur moi = _moi;
+    int? publies;
+    if (await estEnLigne()) {
+      final Resultat<int> resultat =
+          await _avecDelai(_repository.compterMesSignalements());
+      publies = resultat.donnee;
+    }
+    if (publies == null) {
+      try {
+        if (await _base.dateMiseAJour(moi.quartierId ?? '') != null) {
+          publies = (await _base.lireCache(
+            moi.quartierId ?? '',
+            auteurId: moi.id,
+          ))
+              .length;
+        }
+      } catch (e) {
+        // pas de cache
+      }
+    }
+    if (publies == null) {
+      return null;
+    }
+    return publies + (await getEnvois()).length;
+  }
+
   /// Après une suppression : le signalement quitte aussi le cache.
   Future<void> oublier(String id) async {
     try {

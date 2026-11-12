@@ -362,6 +362,10 @@ abstract class SignalementRepository {
   /// Un signalement (échec s'il n'existe plus).
   Future<Resultat<Signalement>> getSignalement(String id);
 
+  /// Le NOMBRE de signalements de l'utilisateur connecté (statistique du
+  /// Profil), sans télécharger les documents.
+  Future<Resultat<int>> compterMesSignalements();
+
   // =====================================================================
   // Écriture
   // =====================================================================

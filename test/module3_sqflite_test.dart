@@ -445,6 +445,38 @@ void main() {
   });
 
   // =====================================================================
+  group('Sync : nombre de mes signalements (Profil)', () {
+    test('En ligne : le count() de Firestore (+ ma file d\'envoi)', () async {
+      expect(await sync().compterMesSignalements(), 1); // r1 d'Amira
+      expect((await depot.compterMesSignalements()).donnee, 1);
+
+      connexion.enLigne = false;
+      await sync().publier(saisie()); // gardé dans la file
+      connexion.enLigne = true;
+      depot.erreurReseau = FirestoreCommun.messageErreur('unavailable');
+      await sync().envoyerFile(); // échec : reste dans la file
+      depot.erreurReseau = null;
+      expect(await sync().compterMesSignalements(), 2);
+    });
+
+    test('Hors ligne : compté dans le cache SQLite', () async {
+      await sync().chargerSignalements(); // cache rempli en ligne
+      connexion.enLigne = false;
+      expect(await sync().compterMesSignalements(), 1);
+    });
+
+    test('Firestore en échec : le cache ; sans cache : inconnu (null)',
+        () async {
+      depot.erreurReseau = FirestoreCommun.messageErreur('unavailable');
+      expect(await sync().compterMesSignalements(), isNull);
+      depot.erreurReseau = null;
+      await sync().chargerSignalements();
+      depot.erreurReseau = FirestoreCommun.messageErreur('unavailable');
+      expect(await sync().compterMesSignalements(), 1);
+    });
+  });
+
+  // =====================================================================
   group('Écrans hors ligne', () {
     testWidgets('Liste hors ligne : bandeau et signalements du cache',
         (WidgetTester tester) async {

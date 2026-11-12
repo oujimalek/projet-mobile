@@ -93,6 +93,25 @@ class FirebaseSignalementRepository implements SignalementRepository {
   }
 
   @override
+  Future<Resultat<int>> compterMesSignalements() async {
+    final Utilisateur moi = _moi;
+    final String? refus = SignalementRepository.refusUtilisateur(moi);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    return FirestoreCommun.executer(() async {
+      // count() : Firestore renvoie seulement le nombre (1 lecture facturée
+      // par tranche de 1000), pas les documents. Un seul filtre d'égalité :
+      // pas besoin d'index composite.
+      final AggregateQuerySnapshot resultat = await _signalements
+          .where('auteurId', isEqualTo: moi.id)
+          .count()
+          .get();
+      return resultat.count ?? 0;
+    });
+  }
+
+  @override
   Future<Resultat<Signalement>> getSignalement(String id) async {
     final String? refus = SignalementRepository.refusUtilisateur(_moi);
     if (refus != null) {

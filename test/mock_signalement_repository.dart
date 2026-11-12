@@ -155,6 +155,18 @@ class MockSignalementRepository implements SignalementRepository {
   }
 
   @override
+  Future<Resultat<int>> compterMesSignalements() async {
+    final String? refus = _refusDeBase();
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final String moiId = _moi.id;
+    return Resultat.succes(
+      _signalements.where((s) => s.auteurId == moiId).length,
+    );
+  }
+
+  @override
   Future<Resultat<Signalement>> getSignalement(String id) async {
     final String? refus = _refusDeBase();
     if (refus != null) {
