@@ -368,6 +368,33 @@ class SyncSignalementsM3 {
     }
   }
 
+  /// Déconnexion : temps laissé pour envoyer la file avant de l'effacer.
+  static Duration delaiEnvoiDeconnexion = const Duration(seconds: 3);
+
+  /// Le nombre de mes signalements pas encore envoyés.
+  Future<int> nombreEnAttente() async {
+    return (await getEnvois()).length;
+  }
+
+  /// Déconnexion : envoie d'abord ce qui peut l'être (au plus
+  /// [delaiEnvoiDeconnexion]), puis efface le brouillon, la file d'envoi
+  /// et le cache de [utilisateurId], et les photos locales qui ne servent
+  /// plus. Ne lève jamais d'exception.
+  Future<void> viderUtilisateur(String utilisateurId) async {
+    try {
+      await envoyerFile().timeout(delaiEnvoiDeconnexion);
+    } catch (e) {
+      // trop lent ou pas de réseau : ce qui reste sera perdu
+    }
+    try {
+      await _base.viderUtilisateur(utilisateurId);
+    } catch (e) {
+      // pas de base locale : rien à effacer
+    }
+    await nettoyerPhotos();
+    _prevenir();
+  }
+
   /// Bouton "Annuler" : le signalement ne sera jamais envoyé (sa photo
   /// locale est supprimée aussi).
   Future<void> annuler(int id) async {

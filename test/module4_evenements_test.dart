@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:houmani/data/models/evenement.dart';
+import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/services/assistant_ia_m4.dart';
 import 'package:houmani/screens/module4/push_m4.dart';
 import 'package:houmani/data/models/sondage.dart';
@@ -1220,6 +1223,85 @@ void main() {
       expect(depot.evenements, isEmpty);
     });
 
+    group('annonce push après création', () {
+      final List<String> annonces = [];
+      String? limite; // message de limite renvoyé par le faux serveur
+
+      setUp(() {
+        annonces.clear();
+        limite = null;
+        EvenementFormScreen.annoncerPush = (evenement, quartierId, {siLimite}) async {
+          annonces.add('${evenement.titre} @ $quartierId');
+          final String? message = limite;
+          if (message != null) {
+            siLimite?.call(message);
+          }
+          return message == null;
+        };
+      });
+
+      tearDown(() {
+        EvenementFormScreen.annoncerPush = PushM4.annoncer;
+      });
+
+      // Un formulaire pré-rempli, ouvert PAR-DESSUS un écran (comme dans l'app)
+      Future<void> ouvrirFormulaire(WidgetTester tester) async {
+        tester.view.physicalSize = const Size(800, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: Builder(
+              builder: (contexte) => TextButton(
+                onPressed: () => Navigator.of(contexte).push(MaterialPageRoute<bool>(
+                  builder: (_) => EvenementFormScreen(
+                    titreInitial: 'Fête des voisins',
+                    lieuInitial: 'Jardin',
+                    dateInitiale: demain,
+                  ),
+                )),
+                child: const Text('ouvrir'),
+              ),
+            ),
+          ),
+        ));
+        await tester.tap(find.text('ouvrir'));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('écran quitté pendant la création : l\'annonce part quand même',
+          (tester) async {
+        final DepotLent lent = DepotLent();
+        EvenementRepository.instance = lent;
+        await ouvrirFormulaire(tester);
+        await tester.tap(find.text('Publier l\'événement'));
+        await tester.pump();
+
+        // L'utilisateur quitte l'application (l'écran disparaît)...
+        await tester.pumpWidget(const SizedBox());
+        // ... puis Firestore confirme la création
+        lent.fin.complete(const Resultat.succes(null));
+        await tester.pump();
+
+        expect(annonces, ['Fête des voisins @ q1']);
+      });
+
+      testWidgets('limite du jour : événement publié, message affiché', (tester) async {
+        limite = 'Ton quartier a déjà reçu 10 annonces de ta part aujourd\'hui.';
+        await ouvrirFormulaire(tester);
+        await tester.tap(find.text('Publier l\'événement'));
+        await tester.pumpAndSettle();
+
+        expect(annonces, ['Fête des voisins @ q1']);
+        expect(depot.evenements.single.titre, 'Fête des voisins');
+        expect(
+          find.text('Événement publié, mais sans notification : $limite'),
+          findsOneWidget,
+        );
+      });
+    });
+
     testWidgets('sondage : ajouter un choix, au moins 2 choix remplis', (tester) async {
       await afficher(tester, const SondageFormScreen());
       await tester.enterText(find.byType(TextFormField).at(0), 'Quelle date ?');
@@ -1400,4 +1482,28 @@ void main() {
       expect(find.text('Vendredi'), findsOneWidget);
     });
   });
+}
+
+/// Un dépôt dont la création d'événement attend [fin] (Firestore lent).
+class DepotLent extends MockEvenementRepository {
+  final Completer<Resultat<void>> fin = Completer<Resultat<void>>();
+
+  @override
+  Future<Resultat<void>> creerEvenement({
+    required String titre,
+    required String description,
+    required DateTime date,
+    DateTime? dateFin,
+    required String lieu,
+    required CategorieEvenement categorie,
+    int placesMax = 0,
+    PointGps? position,
+    String? photoUrl,
+    String? serviceId,
+    String? serviceNom,
+    String? signalementId,
+    String? signalementTitre,
+  }) {
+    return fin.future;
+  }
 }

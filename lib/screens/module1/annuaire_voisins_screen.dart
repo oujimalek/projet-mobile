@@ -313,10 +313,18 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
             Text(
               reponse.parIA
                   ? tr('Suggestions de l\'IA', 'Ra2y el IA')
-                  : tr(
-                      'IA indisponible : recherche simple par mots-clés',
-                      'El IA mech mawjouda : lawajna bel kelmet',
-                    ),
+                  : reponse.limite != null
+                      // Limite du jour du serveur : son message (français)
+                      ? tr(
+                          '${reponse.limite} En attendant : recherche simple '
+                              'par mots-clés.',
+                          'Woselt lel 7ad mta3 el youm, 3awed ghodwa. '
+                              'Taw : lawajna bel kelmet.',
+                        )
+                      : tr(
+                          'IA indisponible : recherche simple par mots-clés',
+                          'El IA mech mawjouda : lawajna bel kelmet',
+                        ),
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
             ...lignes,

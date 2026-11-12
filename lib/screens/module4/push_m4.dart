@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../../data/models/evenement.dart';
 import '../../data/services/evenement_repository.dart';
+import '../../data/services/limite_ia.dart';
 import 'notifications_m4.dart';
 
 /// M4 - (C4) Les notifications PUSH : un nouvel événement est annoncé sur
@@ -76,6 +77,31 @@ class PushM4 {
     }
   }
 
+  /// Déconnexion (ou compte bloqué, refusé, supprimé) : plus aucune annonce
+  /// du quartier ni idée de l'assistant sur ce téléphone. Contrairement à
+  /// [abonner], ne demande pas la permission de notifier.
+  static Future<void> desabonner() async {
+    try {
+      Box<dynamic> boite;
+      if (Hive.isBoxOpen(_nomBoite)) {
+        boite = Hive.box<dynamic>(_nomBoite);
+      } else {
+        await Hive.initFlutter();
+        boite = await Hive.openBox<dynamic>(_nomBoite);
+      }
+      final FirebaseMessaging messagerie = FirebaseMessaging.instance;
+      for (final String cle in const ['sujetPush', 'sujetLeaders']) {
+        final String? sujet = boite.get(cle) as String?;
+        if (sujet != null) {
+          await messagerie.unsubscribeFromTopic(sujet);
+        }
+        await boite.put(cle, null);
+      }
+    } catch (e) {
+      // pas de Firebase (tests), pas de réseau... : rien à faire
+    }
+  }
+
   /// Application ouverte : Android n'affiche pas la notification tout
   /// seul, on la montre nous-mêmes (sauf pour celle qui l'a publiée).
   static void _ecouterAuPremierPlan() {
@@ -98,7 +124,13 @@ class PushM4 {
 
   /// Annonce un nouvel événement à tout le quartier. Renvoie true si le
   /// serveur a accepté (sinon l'événement est créé quand même).
-  static Future<bool> annoncer(Evenement evenement, String quartierId) async {
+  /// [siLimite] : appelé avec le message du serveur si la limite du jour
+  /// (10 annonces) est atteinte.
+  static Future<bool> annoncer(
+    Evenement evenement,
+    String quartierId, {
+    void Function(String message)? siLimite,
+  }) async {
     try {
       final String? jeton = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (jeton == null) {
@@ -117,6 +149,10 @@ class PushM4 {
             }),
           )
           .timeout(const Duration(seconds: 15));
+      final String? limite = LimiteIA.message(reponse);
+      if (limite != null) {
+        siLimite?.call(limite);
+      }
       return reponse.statusCode == 200;
     } catch (e) {
       return false;

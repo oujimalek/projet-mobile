@@ -64,11 +64,15 @@ Sans réseau (ou si l'IA ne répond pas), recherche locale : mots proches
 |---|---|---|
 | `favoris` | Services mis de côté (étoile) | Détail (étoile), liste (filtre « Favoris ») |
 | `consultations` | Services ouverts (100 dernières) | « Vus récemment » (`GROUP BY` + `MAX`), catégories préférées (`COUNT`) |
-| `brouillon_service` | La publication commencée (une seule ligne, `CHECK (id = 1)`) | Formulaire : « Brouillon restauré » |
+| `brouillon_service` | La publication commencée (une ligne par utilisateur) | Formulaire : « Brouillon restauré » |
 | `jours_feries` | Cache des jours fériés, par année | Planning des services communs |
 
-Version 2 de la base : `onUpgrade` ajoute `jours_feries` sur un téléphone
-qui avait la version 1.
+Version 2 : `onUpgrade` ajoute `jours_feries`. Version 3 : colonne
+`utilisateur_id` dans `favoris`, `consultations` et `brouillon_service`.
+Pourquoi : un téléphone peut servir à plusieurs comptes ; chacun ne voit que
+ses lignes (`WHERE utilisateur_id = ?`) et les retrouve après reconnexion.
+Les anciennes lignes sont données au premier compte connecté après la mise
+à jour. `jours_feries` (public) reste partagé.
 
 ### Service web : Nager.Date (`jours_feries_m2.dart`)
 

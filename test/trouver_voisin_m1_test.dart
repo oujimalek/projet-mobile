@@ -225,6 +225,19 @@ void main() {
       expect(r.donnee!.parIA, isFalse);
     });
 
+    test('limite du jour (429) : recherche locale + message du serveur',
+        () async {
+      reponse = http.Response.bytes(
+        utf8.encode(jsonEncode({'erreur': 'Limite atteinte. Réessaie demain.'})),
+        429,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+      final Resultat<ReponseBesoin> r = await trouver('mon robinet fuit');
+      expect(r.donnee!.parIA, isFalse);
+      expect(r.donnee!.correspondances.map((c) => c.competence), ['Plomberie']);
+      expect(r.donnee!.limite, 'Limite atteinte. Réessaie demain.');
+    });
+
     test('réponse mal formée : recherche locale', () async {
       reponse = http.Response('{"autre":1}', 200);
       final Resultat<ReponseBesoin> r = await trouver('mon robinet fuit');

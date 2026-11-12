@@ -8,6 +8,7 @@ import '../models/utilisateur.dart';
 import '../resultat.dart';
 import 'cache_local.dart';
 import 'firestore_commun.dart';
+import 'nettoyage_local.dart';
 import 'utilisateur_repository.dart';
 
 /// M1 - Implémentation "réelle" de UtilisateurRepository.
@@ -61,6 +62,11 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   Future<void> _memoriser(Utilisateur utilisateur) async {
     _connecte = utilisateur;
     await _cache.enregistrerUtilisateur(utilisateur);
+    // Demande refusée : il reste connecté (pour choisir un autre quartier),
+    // mais ne garde plus rien du quartier qui l'a refusé
+    if (utilisateur.statut == StatutUtilisateur.refuse) {
+      await NettoyageLocal.viderTout(utilisateur.id);
+    }
   }
 
   // =====================================================================
@@ -218,7 +224,13 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<void> deconnexion() async {
+    final String uid = _auth.currentUser?.uid ?? _connecte.id;
     try {
+      // AVANT signOut : encore connecté, M3 peut envoyer sa file d'attente
+      // avant de l'effacer (NettoyageLocal ne lève jamais d'exception)
+      if (uid.isNotEmpty) {
+        await NettoyageLocal.viderTout(uid);
+      }
       await _auth.signOut();
     } finally {
       // Même si signOut échoue : le téléphone peut être prêté,
@@ -598,6 +610,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       await compte.delete();
       _connecte = _invite;
       await _cache.vider();
+      await NettoyageLocal.viderTout(compte.uid);
       return const Resultat.succes(null);
     } on FirebaseAuthException catch (e) {
       return Resultat.echec(_messageSecurite(e.code));
@@ -977,6 +990,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         await _utilisateurs.doc(compte.uid).get();
     if (!document.exists) {
       await _auth.signOut();
+      await NettoyageLocal.viderTout(compte.uid);
       return const Resultat.echec('Profil introuvable, contacte l\'administrateur');
     }
     final Utilisateur utilisateur = await _synchroniserEmail(
@@ -986,6 +1000,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     // Compte bloqué : on ne le laisse pas connecté
     if (utilisateur.statut == StatutUtilisateur.bloque) {
       await _auth.signOut();
+      await NettoyageLocal.viderTout(compte.uid);
       return Resultat.echec(
         UtilisateurRepository.messageBloque(utilisateur.motif),
       );

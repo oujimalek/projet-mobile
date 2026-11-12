@@ -9,11 +9,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
+import 'package:houmani/data/services/base_locale_m2.dart';
+import 'package:houmani/data/services/base_locale_m3.dart';
+import 'package:houmani/data/services/base_locale_m4.dart';
 import 'package:houmani/data/services/cache_local.dart';
 import 'package:houmani/data/services/connexion_m3.dart';
 import 'package:houmani/data/services/localisation.dart';
+import 'package:houmani/data/services/meteo_m1.dart';
 import 'package:houmani/data/services/signalement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
+import 'package:houmani/data/services/verification_adresse_m1.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
 import 'package:houmani/screens/accueil_screen.dart';
@@ -40,6 +45,7 @@ import 'package:houmani/theme/preference_langue.dart';
 import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
 import 'package:houmani/widgets/primary_button.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'fausse_connexion_m3.dart';
 import 'mock_signalement_repository.dart';
@@ -107,8 +113,34 @@ Future<void> lancerApp(WidgetTester tester) async {
 
 void main() {
   // Pas de téléchargement de police pendant les tests (pas d'Internet)
+  // Les bases SQLite ouvertes par les écrans (météo et adresses M1,
+  // services M2, signalements M3, événements M4) : sur l'ordinateur
+  // (sqflite_common_ffi), dans un dossier temporaire. Sans ça, chaque
+  // test affiche "CacheLocal : Bad state: databaseFactory not initialized".
+  late Directory dossierBases;
+
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    // "NoIsolate" : SQLite tourne dans le même fil que le test (temps simulé)
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfiNoIsolate;
+    dossierBases = Directory.systemTemp.createTempSync('houmani_widget_');
+    MeteoM1.cache = CacheLocal(dossier: dossierBases.path);
+    VerificationAdresseM1.cache = CacheLocal(dossier: dossierBases.path);
+    // M3 en mémoire (comme ses propres tests : avec un fichier, la liste
+    // des signalements bloque pumpAndSettle). M2 et M4 : un fichier chacun,
+    // car deux bases ":memory:" seraient la MÊME base pour sqflite.
+    BaseLocaleM3.instance = BaseLocaleM3(chemin: inMemoryDatabasePath);
+    BaseLocaleM2.cheminPourTests = '${dossierBases.path}/houmani_m2.db';
+    BaseLocaleM4.cheminPourTests = '${dossierBases.path}/houmani_m4.db';
+  });
+
+  tearDownAll(() {
+    try {
+      dossierBases.deleteSync(recursive: true);
+    } catch (erreur) {
+      // fichier encore ouvert (Windows) : c'est un dossier temporaire
+    }
   });
 
   // Le routeur et les données sont globaux : avant chaque test, on repart
@@ -471,6 +503,42 @@ void main() {
     expect(find.byType(ConnexionScreen), findsOneWidget);
   });
 
+  testWidgets(
+      'M3 : se déconnecter avec des signalements pas envoyés demande confirmation',
+      (WidgetTester tester) async {
+    // Hors ligne, un signalement d'Amira (u1, q1) attend dans la file
+    (ConnexionM3.instance as FausseConnexionM3).enLigne = false;
+    final int idEnvoi = await BaseLocaleM3.instance.ajouterEnvoi(EnvoiEnAttente(
+      idDocument: 'deconnexion1', utilisateurId: 'u1', quartierId: 'q1',
+      titre: 'Fuite', description: 'Fuite au parking', categorieId: 'eau',
+      lieu: 'Parking', dateCreation: DateTime(2026, 11, 12),
+    ));
+    addTearDown(() => BaseLocaleM3.instance.supprimerEnvoi(idEnvoi));
+
+    appRouter.go('/profil');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Se déconnecter'));
+    expect(find.text('1 signalement(s) pas encore envoyé(s) seront perdus.'),
+        findsOneWidget);
+
+    // Annuler : on reste connecté, sur le Profil
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilScreen), findsOneWidget);
+    expect(UtilisateurRepository().getUtilisateurConnecte().id, 'u1');
+
+    // Menu → Se déconnecter → "quand même" : déconnecté
+    cleCoquille.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 signalement(s) pas encore envoyé(s) seront perdus.'),
+        findsOneWidget);
+    await tester.tap(find.text('Se déconnecter quand même'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
   testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
       (WidgetTester tester) async {
     appRouter.go('/connexion');
@@ -526,9 +594,15 @@ void main() {
     expect(find.text('Ahla Amira !'), findsOneWidget);
     expect(find.text('3 demandes d\'adhésion en attente'), findsOneWidget);
 
-    // Un raccourci ouvre l'onglet du module
+    // "Signaler" ouvre le formulaire de création, par-dessus la liste
     await toucher(tester, find.text('Signaler'));
+    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+
+    // Retour : la liste des signalements (onglet Signalements)
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
     expect(find.byType(SignalementsScreen), findsOneWidget);
+    expect(find.byType(CreateSignalementScreen), findsNothing);
   });
 
   testWidgets('Menu latéral : modules, sous-rubriques et déconnexion',

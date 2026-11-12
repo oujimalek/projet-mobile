@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/evenement.dart';
 import '../resultat.dart';
 import 'firestore_commun.dart';
+import 'limite_ia.dart';
 
 /// M4 - (IA) Une idée de l'assistant du leader : un événement à organiser,
 /// un sondage à lancer, ou un conseil. [raison] explique pourquoi (avec les
@@ -167,6 +168,10 @@ class AssistantIAM4 {
             body: jsonEncode({'idToken': jeton, 'quartierId': quartierId}),
           )
           .timeout(const Duration(seconds: 60));
+      final String? limite = LimiteIA.message(reponse);
+      if (limite != null) {
+        return Resultat.echec(limite);
+      }
       if (reponse.statusCode == 403) {
         return const Resultat.echec('L\'assistant est réservé aux leaders et à l\'admin');
       }

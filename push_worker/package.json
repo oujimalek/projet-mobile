@@ -4,7 +4,8 @@
   "description": "M4 - Notifications push gratuites (Cloudflare Worker + Firebase Cloud Messaging)",
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "node --test"
   },
   "dependencies": {
     "jose": "^5.9.6"

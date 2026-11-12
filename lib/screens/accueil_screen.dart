@@ -162,7 +162,9 @@ class _AccueilScreenState extends State<AccueilScreen> {
           _raccourci(Icons.handshake_outlined, 'Services', '/services',
               AppColors.primary, AppColors.primaryLight),
           const SizedBox(width: 10),
-          _raccourci(Icons.campaign_outlined, 'Signaler', '/signalements',
+          // M3 : "Signaler" ouvre directement le formulaire de création
+          _raccourci(Icons.campaign_outlined, 'Signaler',
+              '/signalements?action=nouveau',
               AppColors.incident, AppColors.incidentLight),
         ],
       ),

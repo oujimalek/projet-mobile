@@ -97,6 +97,12 @@ Seul un membre **actif** du quartier voit le module.
   statistiques admin, derja, mode sombre, sélecteurs de
   date et d'heure en français (24 h).
 
+**SQLite sur le téléphone** (`houmani_m4.db`, `base_locale_m4.dart`) : tables
+`brouillons` et `historique` (« Mon historique » : `COUNT`, `AVG`, `GROUP BY`).
+Version 2 : colonne `utilisateur_id` dans les deux tables, car un téléphone
+peut servir à plusieurs comptes ; chaque requête filtre `WHERE utilisateur_id = ?`.
+Les anciennes lignes sont données au premier compte connecté après la mise à jour.
+
 ## 5. Notifications push (gratuites)
 
 - Le dossier [`push_worker/`](../push_worker) est un Worker **Cloudflare**
