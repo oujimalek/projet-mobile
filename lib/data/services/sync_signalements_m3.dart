@@ -258,8 +258,14 @@ class SyncSignalementsM3 {
     }
   }
 
-  /// Envoie toute ma file (au démarrage, au retour du réseau). Renvoie le
+  /// Envoie toute ma file (démarrage, Accueil, retour du réseau). Renvoie le
   /// nombre de signalements envoyés.
+  ///
+  /// Appels simultanés (main.dart + Accueil + réseau qui revient) : le
+  /// verrou [_envoiEnCours] est testé PUIS pris avant le premier `await`.
+  /// Dart exécute ce code sur un seul fil : rien ne peut se glisser entre
+  /// les deux, donc le second appel repart aussitôt (0) et rien n'est
+  /// envoyé deux fois.
   Future<int> envoyerFile() async {
     if (_envoiEnCours) {
       return 0;
@@ -331,12 +337,21 @@ class SyncSignalementsM3 {
     return resultat;
   }
 
-  /// Bouton "Réessayer" d'un envoi.
+  static const String messageEnvoiEnCours =
+      'Envoi déjà en cours, réessaie dans un instant';
+
+  /// Bouton "Réessayer" d'un envoi. Même verrou que [envoyerFile] : un
+  /// envoi n'est jamais traité deux fois en même temps (sinon sa photo
+  /// pourrait partir deux fois sur Cloudinary).
   Future<Resultat<void>> reessayer(int id) async {
-    if (!await estEnLigne()) {
-      return const Resultat.echec(messageHorsLigne);
+    if (_envoiEnCours) {
+      return const Resultat.echec(messageEnvoiEnCours);
     }
+    _envoiEnCours = true; // pris AVANT le premier await
     try {
+      if (!await estEnLigne()) {
+        return const Resultat.echec(messageHorsLigne);
+      }
       final EnvoiEnAttente? envoi = await _base.lireEnvoi(id);
       if (envoi == null) {
         return const Resultat.succes(null); // déjà envoyé entre-temps
@@ -346,6 +361,8 @@ class SyncSignalementsM3 {
       return resultat;
     } catch (e) {
       return const Resultat.echec('Base locale indisponible');
+    } finally {
+      _envoiEnCours = false;
     }
   }
 

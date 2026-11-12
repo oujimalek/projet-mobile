@@ -336,6 +336,44 @@ void main() {
       expect(envoisPhoto, isEmpty);
     });
 
+    test('Appels simultanés (démarrage + Accueil + réseau) : un seul envoi',
+        () async {
+      connexion.enLigne = false;
+      await SyncSignalementsM3.instance
+          .publier(saisie(), photoLocale: await photoGardee());
+      connexion.enLigne = true;
+
+      final SyncSignalementsM3 sync = SyncSignalementsM3.instance;
+      final List<int> envoyes = await Future.wait([
+        sync.envoyerFile(),
+        sync.envoyerFile(),
+        sync.envoyerFile(),
+      ]);
+      expect(envoyes, [1, 0, 0]); // seul le premier travaille
+      expect(envoisPhoto.length, 1);
+      expect(depot.nombreEnvois, 1);
+    });
+
+    test('"Réessayer" pendant un envoi : refusé, rien n\'est envoyé deux fois',
+        () async {
+      connexion.enLigne = false;
+      await SyncSignalementsM3.instance
+          .publier(saisie(), photoLocale: await photoGardee());
+      connexion.enLigne = true;
+      final int id = (await SyncSignalementsM3.instance.getEnvois()).single.id!;
+
+      final SyncSignalementsM3 sync = SyncSignalementsM3.instance;
+      final Future<int> file = sync.envoyerFile();
+      final Resultat<void> reessai = await sync.reessayer(id);
+      expect(reessai.erreur, SyncSignalementsM3.messageEnvoiEnCours);
+      expect(await file, 1);
+      expect(envoisPhoto.length, 1);
+      expect(depot.nombreEnvois, 1);
+
+      // Une fois fini, le verrou est rendu
+      expect((await sync.reessayer(id)).estSucces, isTrue); // déjà envoyé
+    });
+
     test('"Annuler" un envoi supprime aussi sa photo locale', () async {
       final String photo = await photoGardee();
       connexion.enLigne = false;
