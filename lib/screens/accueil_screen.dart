@@ -8,6 +8,7 @@ import '../data/models/utilisateur.dart';
 import '../data/resultat.dart';
 import '../data/services/evenement_repository.dart';
 import '../data/services/service_repository.dart';
+import '../data/services/sync_signalements_m3.dart';
 import '../data/services/utilisateur_repository.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_card.dart';
@@ -55,6 +56,9 @@ class _AccueilScreenState extends State<AccueilScreen> {
       moi.quartierId,
       organisateur: EvenementRepository.peutOrganiser(moi), // (IA) idées du lundi
     );
+    // M3 : envoie les signalements gardés hors ligne (l'utilisateur est
+    // connu ici, ce qui n'est pas toujours le cas au lancement)
+    SyncSignalementsM3.instance.envoyerFile();
   }
 
   Future<void> _chargerDemandesEnAttente() async {
