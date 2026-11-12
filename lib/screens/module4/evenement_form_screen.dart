@@ -28,6 +28,12 @@ class EvenementFormScreen extends StatefulWidget {
   final DateTime? dateInitiale;
   final CategorieEvenement? categorieInitiale; // (IA) idée de l'assistant
   final BrouillonEvenement? brouillon; // (SQLite) reprendre un brouillon
+  // (D3) Événement organisé à la suite d'un signalement (module 3) : son
+  // lieu, son point GPS, et le lien vers lui (nouvel événement seulement)
+  final String? lieuInitial;
+  final PointGps? positionInitiale;
+  final String? signalementId;
+  final String? signalementTitre;
 
   const EvenementFormScreen({
     super.key,
@@ -36,6 +42,10 @@ class EvenementFormScreen extends StatefulWidget {
     this.dateInitiale,
     this.categorieInitiale,
     this.brouillon,
+    this.lieuInitial,
+    this.positionInitiale,
+    this.signalementId,
+    this.signalementTitre,
   });
 
   @override
@@ -117,6 +127,15 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       final CategorieEvenement? categorie = widget.categorieInitiale;
       if (categorie != null) {
         _categorie = categorie;
+      }
+      // (D3) Suite à un signalement : son lieu et son point GPS
+      final String? lieuInitial = widget.lieuInitial;
+      if (lieuInitial != null) {
+        _lieu.text = lieuInitial;
+      }
+      final PointGps? positionInitiale = widget.positionInitiale;
+      if (positionInitiale != null) {
+        _position = positionInitiale;
       }
     }
     // (SQLite) Reprise d'un brouillon gardé sur le téléphone
@@ -274,6 +293,9 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
         photoUrl: _photoUrl,
         serviceId: _serviceId,
         serviceNom: _serviceNom,
+        // (D3) lien vers le signalement à l'origine (null : aucun)
+        signalementId: widget.signalementId,
+        signalementTitre: widget.signalementTitre,
       );
       // (C4) Annonce à tout le quartier (notification push), sans attendre
       final String? quartierId =
