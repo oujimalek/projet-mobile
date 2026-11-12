@@ -9,6 +9,7 @@ import '../resultat.dart';
 import 'base_locale_m3.dart';
 import 'connexion_m3.dart';
 import 'firestore_commun.dart';
+import 'photos_m3.dart';
 import 'signalement_repository.dart';
 import 'utilisateur_repository.dart';
 
@@ -96,6 +97,17 @@ class SyncSignalementsM3 {
       }
     });
     envoyerFile();
+    nettoyerPhotos();
+  }
+
+  /// Supprime les photos locales que plus rien n'utilise (ni brouillon, ni
+  /// file d'envoi) : ex. l'application fermée au mauvais moment.
+  Future<int> nettoyerPhotos() async {
+    try {
+      return await PhotosM3.nettoyer(await _base.cheminsPhotosUtilises());
+    } catch (e) {
+      return 0; // base locale indisponible : on ne supprime rien
+    }
   }
 
   /// Arrête l'écoute (tests).
@@ -122,6 +134,7 @@ class SyncSignalementsM3 {
   static bool estErreurReseau(String? erreur) {
     return erreur == messageDelai ||
         erreur == messageHorsLigne ||
+        erreur == PhotosM3.messageReseau ||
         erreur == FirestoreCommun.messageErreur('unavailable') ||
         erreur == FirestoreCommun.messageErreur('deadline-exceeded');
   }
@@ -142,11 +155,18 @@ class SyncSignalementsM3 {
   // Publier
   // =====================================================================
 
-  /// Publie un signalement :
+  /// Publie un signalement, avec une photo locale optionnelle
+  /// ([photoLocale], déjà copiée par PhotosM3.garderSurTelephone) :
   ///   - formulaire ou compte refusé → échec (message) ;
-  ///   - hors ligne → file SQLite, sans appeler Firestore ;
-  ///   - en ligne → Firestore ; si le réseau lâche pendant l'envoi → file.
-  Future<Resultat<EtatPublicationM3>> publier(Signalement saisi) async {
+  ///   - hors ligne → file SQLite (avec le chemin de la photo), sans appeler
+  ///     Firestore ni Cloudinary ;
+  ///   - en ligne → photo sur Cloudinary, puis Firestore ; si le réseau
+  ///     lâche à l'une des deux étapes → file (la photo déjà envoyée n'est
+  ///     pas renvoyée).
+  Future<Resultat<EtatPublicationM3>> publier(
+    Signalement saisi, {
+    String? photoLocale,
+  }) async {
     final Utilisateur moi = _moi;
     final String? refus = SignalementRepository.refusUtilisateur(moi) ??
         SignalementRepository.refusSignalement(
@@ -159,28 +179,46 @@ class SyncSignalementsM3 {
       return Resultat.echec(refus);
     }
     // L'id est choisi MAINTENANT : un renvoi ne fera jamais de doublon
-    final Signalement signalement = saisi.copyWith(
+    Signalement signalement = saisi.copyWith(
       id: saisi.id.isEmpty ? nouvelIdDocument() : saisi.id,
     );
 
     if (!await estEnLigne()) {
-      return _mettreEnFile(signalement, moi, null);
+      return _mettreEnFile(signalement, moi, null, photoLocale);
     }
+
+    // 1) La photo d'abord : Firestore ne garde que son adresse
+    if (photoLocale != null) {
+      final Resultat<String> photo = await PhotosM3.envoyerFichier(photoLocale);
+      if (!photo.estSucces) {
+        if (estErreurReseau(photo.erreur)) {
+          return _mettreEnFile(signalement, moi, photo.erreur, photoLocale);
+        }
+        return Resultat.echec(photo.erreur!); // trop lourde, refusée...
+      }
+      signalement = signalement.copyWith(photoUrl: photo.donnee);
+    }
+
+    // 2) Le signalement
     final Resultat<void> envoi =
         await _avecDelai(_repository.ajouterSignalement(signalement));
     if (envoi.estSucces) {
+      await PhotosM3.supprimerLocale(photoLocale); // envoyée : plus utile
       return const Resultat.succes(EtatPublicationM3.envoye);
     }
     if (estErreurReseau(envoi.erreur)) {
-      return _mettreEnFile(signalement, moi, envoi.erreur);
+      return _mettreEnFile(signalement, moi, envoi.erreur, photoLocale);
     }
     return Resultat.echec(envoi.erreur!);
   }
 
+  /// Garde le signalement dans la file SQLite. Si la photo est déjà sur
+  /// Cloudinary, son adresse est gardée aussi (`signalement.photoUrl`).
   Future<Resultat<EtatPublicationM3>> _mettreEnFile(
     Signalement signalement,
     Utilisateur moi,
     String? erreur,
+    String? photoLocale,
   ) async {
     try {
       await _base.ajouterEnvoi(EnvoiEnAttente(
@@ -193,6 +231,8 @@ class SyncSignalementsM3 {
         lieu: signalement.lieu.trim(),
         danger: signalement.danger,
         position: signalement.position, // le point GPS est gardé hors ligne
+        photoLocale: photoLocale,
+        photoUrl: signalement.photoUrl,
         dateCreation: DateTime.now(),
         derniereErreur: erreur,
       ));
@@ -261,12 +301,30 @@ class SyncSignalementsM3 {
   }
 
   /// Envoie UN envoi : succès → retiré de la file ; échec → +1 essai.
+  ///   1. la photo, si elle n'est pas encore sur Cloudinary (son adresse
+  ///      est alors notée dans la file : jamais envoyée deux fois) ;
+  ///   2. le signalement.
+  /// Photo supprimée du téléphone entre-temps : le signalement part sans
+  /// photo (le problème signalé compte plus que l'image).
   Future<Resultat<void>> _envoyer(EnvoiEnAttente envoi) async {
-    final Resultat<void> resultat = await _avecDelai(
-      _repository.ajouterSignalement(envoi.versSignalement()),
-    );
+    Signalement signalement = envoi.versSignalement();
+    final String? photoLocale = envoi.photoLocale;
+    if (envoi.photoUrl == null && photoLocale != null) {
+      final Resultat<String> photo = await PhotosM3.envoyerFichier(photoLocale);
+      if (photo.estSucces) {
+        await _base.enregistrerPhotoEnvoyee(envoi.id!, photo.donnee!);
+        signalement = signalement.copyWith(photoUrl: photo.donnee);
+      } else if (photo.erreur != PhotosM3.messageIntrouvable) {
+        await _base.marquerEchec(envoi.id!, photo.erreur!);
+        return Resultat.echec(photo.erreur!);
+      }
+    }
+
+    final Resultat<void> resultat =
+        await _avecDelai(_repository.ajouterSignalement(signalement));
     if (resultat.estSucces) {
       await _base.supprimerEnvoi(envoi.id!);
+      await PhotosM3.supprimerLocale(photoLocale);
     } else {
       await _base.marquerEchec(envoi.id!, resultat.erreur!);
     }
@@ -291,10 +349,13 @@ class SyncSignalementsM3 {
     }
   }
 
-  /// Bouton "Annuler" : le signalement ne sera jamais envoyé.
+  /// Bouton "Annuler" : le signalement ne sera jamais envoyé (sa photo
+  /// locale est supprimée aussi).
   Future<void> annuler(int id) async {
     try {
+      final EnvoiEnAttente? envoi = await _base.lireEnvoi(id);
       await _base.supprimerEnvoi(id);
+      await PhotosM3.supprimerLocale(envoi?.photoLocale);
     } catch (e) {
       // rien à annuler
     }
@@ -432,22 +493,37 @@ class SyncSignalementsM3 {
     }
   }
 
-  /// Enregistre le brouillon (ou l'efface s'il est vide).
+  /// Enregistre le brouillon (ou l'efface s'il est vide). Si l'ancien
+  /// brouillon avait une AUTRE photo, elle ne sert plus : supprimée.
   Future<void> enregistrerBrouillon(Brouillon brouillon) async {
     try {
+      final Brouillon? ancien =
+          await _base.lireBrouillon(brouillon.utilisateurId);
       if (brouillon.estVide) {
         await _base.supprimerBrouillon(brouillon.utilisateurId);
       } else {
         await _base.enregistrerBrouillon(brouillon);
+      }
+      final String? anciennePhoto = ancien?.photoLocale;
+      if (anciennePhoto != null && anciennePhoto != brouillon.photoLocale) {
+        await PhotosM3.supprimerLocale(anciennePhoto);
       }
     } catch (e) {
       // pas de base locale : pas de brouillon
     }
   }
 
-  Future<void> supprimerBrouillon() async {
+  /// Supprime le brouillon.
+  /// [avecPhoto] : true quand l'utilisateur JETTE le brouillon (sa photo
+  /// est supprimée) ; false après une publication (la photo a été envoyée,
+  /// ou attend dans la file d'envoi).
+  Future<void> supprimerBrouillon({bool avecPhoto = false}) async {
     try {
+      final Brouillon? brouillon = await _base.lireBrouillon(_moi.id);
       await _base.supprimerBrouillon(_moi.id);
+      if (avecPhoto) {
+        await PhotosM3.supprimerLocale(brouillon?.photoLocale);
+      }
     } catch (e) {
       // rien à effacer
     }

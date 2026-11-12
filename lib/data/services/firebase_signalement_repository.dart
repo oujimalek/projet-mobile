@@ -140,7 +140,8 @@ class FirebaseSignalementRepository implements SignalementRepository {
           description: signalement.description,
           lieu: signalement.lieu,
           categorieId: signalement.categorieId,
-        );
+        ) ??
+        SignalementRepository.refusPhoto(signalement.photoUrl);
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -178,24 +179,24 @@ class FirebaseSignalementRepository implements SignalementRepository {
     if (!lecture.estSucces) {
       return Resultat.echec(lecture.erreur!);
     }
-    final String? refus = SignalementRepository.refusModification(
-          lecture.donnee!,
-          _moi.id,
-        ) ??
-        SignalementRepository.refusSignalement(
-          titre: signalement.titre,
-          description: signalement.description,
-          lieu: signalement.lieu,
-          categorieId: signalement.categorieId,
-        );
+    final Signalement actuel = lecture.donnee!;
+    final String? refus =
+        SignalementRepository.refusModification(actuel, _moi.id) ??
+            SignalementRepository.refusSignalement(
+              titre: signalement.titre,
+              description: signalement.description,
+              lieu: signalement.lieu,
+              categorieId: signalement.categorieId,
+            ) ??
+            SignalementRepository.refusPhoto(signalement.photoUrl);
     if (refus != null) {
       return Resultat.echec(refus);
     }
     return FirestoreCommun.executer(() async {
       // Seulement ces champs (firestore.rules : changeSeulement).
       // Un champ réécrit avec la même valeur ne compte pas comme changé :
-      // tant que la règle n'accepte pas 'danger' et 'position', seul le
-      // fait de les CHANGER est refusé.
+      // tant que la règle n'accepte pas 'danger', 'position' et 'photoUrl',
+      // seul le fait de les CHANGER est refusé.
       final Map<String, dynamic> champs = {
         'titre': signalement.titre.trim(),
         'description': signalement.description.trim(),
@@ -203,10 +204,18 @@ class FirebaseSignalementRepository implements SignalementRepository {
         'lieu': signalement.lieu.trim(),
         'danger': signalement.danger,
       };
-      // position : écrite seulement si elle existe (jamais null dans Firestore)
-      final Object? position = signalement.toMap()['position'];
-      if (position != null) {
-        champs['position'] = position;
+      // Champs optionnels : jamais null dans Firestore. Présent → écrit ;
+      // retiré par l'auteur → effacé du document (FieldValue.delete).
+      final Map<String, dynamic> nouveau = signalement.toMap();
+      if (nouveau.containsKey('position')) {
+        champs['position'] = nouveau['position'];
+      } else if (actuel.position != null) {
+        champs['position'] = FieldValue.delete();
+      }
+      if (nouveau.containsKey('photoUrl')) {
+        champs['photoUrl'] = nouveau['photoUrl'];
+      } else if (actuel.photoUrl != null) {
+        champs['photoUrl'] = FieldValue.delete();
       }
       await _signalements.doc(signalement.id).update(champs);
     });

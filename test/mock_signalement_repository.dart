@@ -190,7 +190,8 @@ class MockSignalementRepository implements SignalementRepository {
           description: signalement.description,
           lieu: signalement.lieu,
           categorieId: signalement.categorieId,
-        );
+        ) ??
+        SignalementRepository.refusPhoto(signalement.photoUrl);
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -230,17 +231,27 @@ class MockSignalementRepository implements SignalementRepository {
               description: signalement.description,
               lieu: signalement.lieu,
               categorieId: signalement.categorieId,
-            );
+            ) ??
+            SignalementRepository.refusPhoto(signalement.photoUrl);
     if (refus != null) {
       return Resultat.echec(refus);
     }
-    // Seulement les champs autorisés (firestore.rules, avec 'danger')
-    _signalements[_position(actuel.id)] = actuel.copyWith(
+    // Seulement les champs autorisés (firestore.rules) ; position et photo
+    // peuvent redevenir null (retirées par l'auteur), d'où le constructeur
+    // plutôt que copyWith
+    _signalements[_position(actuel.id)] = Signalement(
+      id: actuel.id,
       titre: signalement.titre.trim(),
       description: signalement.description.trim(),
       categorieId: signalement.categorieId,
+      statut: actuel.statut,
+      date: actuel.date,
       lieu: signalement.lieu.trim(),
+      auteurId: actuel.auteurId,
+      auteurNom: actuel.auteurNom,
+      nbConfirmations: actuel.nbConfirmations,
       danger: signalement.danger,
+      photoUrl: signalement.photoUrl,
       position: signalement.position,
     );
     return const Resultat.succes(null);

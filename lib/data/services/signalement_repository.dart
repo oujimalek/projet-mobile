@@ -5,6 +5,7 @@ import '../models/signalement.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
 import 'firebase_signalement_repository.dart';
+import 'photos_m3.dart';
 
 /// M3 - Accès aux signalements du quartier : le CONTRAT.
 ///
@@ -122,6 +123,15 @@ abstract class SignalementRepository {
       return 'Choisis une catégorie';
     }
     return refusTitre(titre) ?? refusDescription(description) ?? refusLieu(lieu);
+  }
+
+  /// La photo : absente, ou une adresse de NOTRE compte Cloudinary (comme
+  /// la règle firestore.rules).
+  static String? refusPhoto(String? photoUrl) {
+    if (photoUrl != null && !PhotosM3.estPhotoValide(photoUrl)) {
+      return 'Photo invalide';
+    }
+    return null;
   }
 
   /// Le titre : 3 à 80 caractères (aussi le validator du formulaire).

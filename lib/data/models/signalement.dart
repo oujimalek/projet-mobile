@@ -45,7 +45,7 @@ class Signalement {
   final String auteurNom; // nom recopié pour l'affichage, ex : "Amira B."
   final int nbConfirmations; // nombre de voisins qui ont dit "Sa7, ena zeda"
   final bool danger; // "Danger pour les personnes" (compte dans l'urgence)
-  final String? photoUrl; // pour plus tard (pas encore enregistrée)
+  final String? photoUrl; // adresse Cloudinary de la photo (optionnelle)
   // Point GPS ("Utiliser ma position"), optionnel. `lieu` reste le texte
   // lisible (adresse trouvée ou écrite par l'utilisateur).
   final PointGps? position;
@@ -107,8 +107,7 @@ class Signalement {
   }
 
   /// Le document Firestore. L'id n'est pas écrit : c'est le nom du document.
-  /// photoUrl n'est pas encore écrit (l'envoi de photo n'existe pas encore).
-  /// position n'est écrite que si elle existe (champ optionnel).
+  /// photoUrl et position ne sont écrits que s'ils existent (optionnels).
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> map = {
       'titre': titre,
@@ -122,6 +121,10 @@ class Signalement {
       'nbConfirmations': nbConfirmations,
       'danger': danger,
     };
+    final String? photo = photoUrl;
+    if (photo != null) {
+      map['photoUrl'] = photo; // adresse Cloudinary (https)
+    }
     final PointGps? point = position;
     if (point != null) {
       // GeoPoint : le type "point GPS" de Firestore (latlng dans les règles)

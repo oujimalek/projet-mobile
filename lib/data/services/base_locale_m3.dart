@@ -25,6 +25,7 @@
 //   signalements_cache  : derniers signalements chargés, par quartier
 //   mises_a_jour_cache  : heure du dernier chargement complet, par quartier
 //   adresses_cache      : adresses déjà trouvées par Nominatim (version 2)
+// Version 3 : envois_en_attente.photo_url (photo déjà sur Cloudinary)
 // =====================================================================
 
 import 'package:path/path.dart';
@@ -131,6 +132,9 @@ class EnvoiEnAttente {
   final bool danger;
   final String? photoLocale; // étape 6 : photo à envoyer avant le signalement
   final PointGps? position; // point GPS gardé hors ligne (version 2)
+  // Adresse Cloudinary de la photo, dès qu'elle est envoyée (version 3) :
+  // si Firestore échoue ensuite, on ne renvoie pas la photo une 2e fois.
+  final String? photoUrl;
   final DateTime dateCreation;
   final String etat; // EtatEnvoi.enAttente ou EtatEnvoi.echec
   final int nbTentatives;
@@ -148,6 +152,7 @@ class EnvoiEnAttente {
     this.danger = false,
     this.photoLocale,
     this.position,
+    this.photoUrl,
     required this.dateCreation,
     this.etat = EtatEnvoi.enAttente,
     this.nbTentatives = 0,
@@ -171,6 +176,7 @@ class EnvoiEnAttente {
       auteurNom: '',
       danger: danger,
       position: position,
+      photoUrl: photoUrl,
     );
   }
 
@@ -192,6 +198,7 @@ class EnvoiEnAttente {
       'etat': etat,
       'nb_tentatives': nbTentatives,
       'derniere_erreur': derniereErreur,
+      'photo_url': photoUrl,
     };
   }
 
@@ -214,6 +221,7 @@ class EnvoiEnAttente {
       etat: ligne['etat'] as String,
       nbTentatives: ligne['nb_tentatives'] as int,
       derniereErreur: ligne['derniere_erreur'] as String?,
+      photoUrl: ligne['photo_url'] as String?,
     );
   }
 }
@@ -231,7 +239,8 @@ class BaseLocaleM3 {
   /// Version du schéma :
   ///   1 : brouillons, envois_en_attente, signalements_cache, mises_a_jour_cache
   ///   2 : + colonnes latitude / longitude (GPS) et table adresses_cache
-  static const int version = 2;
+  ///   3 : + colonne photo_url dans envois_en_attente (photo déjà envoyée)
+  static const int version = 3;
 
   /// Chemin de la base (null : le dossier des bases de l'application).
   final String? chemin;
@@ -262,15 +271,25 @@ class BaseLocaleM3 {
       onCreate: (db, version) async {
         await creerTablesVersion1(db);
         await _migrerVersVersion2(db);
+        await _migrerVersVersion3(db);
       },
-      // Téléphone qui avait déjà la version 1 : on ajoute seulement ce qui
-      // manque, SANS effacer ses brouillons ni sa file d'envoi.
+      // Téléphone qui avait une version plus ancienne : on ajoute seulement
+      // ce qui manque, SANS effacer ses brouillons ni sa file d'envoi.
+      // (1 → 3 passe par 2 : chaque étape une seule fois, dans l'ordre)
       onUpgrade: (db, ancienne, nouvelle) async {
         if (ancienne < 2) {
           await _migrerVersVersion2(db);
         }
+        if (ancienne < 3) {
+          await _migrerVersVersion3(db);
+        }
       },
     );
+  }
+
+  /// Version 3 : l'adresse Cloudinary d'une photo déjà envoyée.
+  Future<void> _migrerVersVersion3(Database db) async {
+    await db.execute('ALTER TABLE envois_en_attente ADD COLUMN photo_url TEXT');
   }
 
   /// Version 2 : le point GPS (deux colonnes REAL, NULL si pas de point) et
@@ -455,6 +474,33 @@ class BaseLocaleM3 {
   }
 
   /// Un essai a échoué : état "echec", un essai de plus, l'erreur gardée.
+  /// La photo de cet envoi est sur Cloudinary : on garde son adresse.
+  Future<void> enregistrerPhotoEnvoyee(int id, String url) async {
+    final Database db = await base;
+    await db.update(
+      'envois_en_attente',
+      {'photo_url': url},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Toutes les photos locales encore utiles (brouillons + file d'envoi),
+  /// en une requête : UNION enlève les doublons.
+  Future<Set<String>> cheminsPhotosUtilises() async {
+    final Database db = await base;
+    final List<Map<String, Object?>> lignes = await db.rawQuery(
+      'SELECT photo_locale FROM brouillons WHERE photo_locale IS NOT NULL '
+      'UNION '
+      'SELECT photo_locale FROM envois_en_attente WHERE photo_locale IS NOT NULL',
+    );
+    final Set<String> chemins = {};
+    for (final Map<String, Object?> ligne in lignes) {
+      chemins.add(ligne['photo_locale'] as String);
+    }
+    return chemins;
+  }
+
   Future<void> marquerEchec(int id, String erreur) async {
     final Database db = await base;
     await db.rawUpdate(
