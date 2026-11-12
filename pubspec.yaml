@@ -60,6 +60,14 @@ dependencies:
   # M3 : adresse à partir du GPS (API Nominatim d'OpenStreetMap).
   # Même version que le module 4.
   http: ^1.6.0
+  # M3 : photo du signalement (appareil photo ou galerie), même version
+  # que le module 4.
+  image_picker: ^1.2.4
+  # M3 : dossier de l'application, où la photo attend d'être envoyée
+  # (le cache d'image_picker peut être vidé par Android).
+  path_provider: ^2.1.5
+  # M3 : ouvrir le point dans l'application de cartes, appeler un numéro utile.
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
