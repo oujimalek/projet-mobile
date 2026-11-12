@@ -67,7 +67,15 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/signalements',
           builder: (context, state) {
-            return const SignalementsScreen(); // M3
+            // M3 : ?onglet=mes (Profil → Mes signalements),
+            // ?action=nouveau (menu → Nouveau signalement).
+            // La clé change avec l'adresse : un nouveau lien = un écran neuf.
+            final Map<String, String> parametres = state.uri.queryParameters;
+            return SignalementsScreen(
+              key: ValueKey(state.uri.toString()),
+              mesSignalements: parametres['onglet'] == 'mes',
+              ouvrirCreation: parametres['action'] == 'nouveau',
+            );
           },
         ),
         GoRoute(

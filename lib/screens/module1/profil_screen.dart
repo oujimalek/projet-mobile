@@ -352,7 +352,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
     lignes.add(
       _ligneLien(
         tr('Mes signalements', 'Signalements mte3i'),
-        onTap: () => context.go('/signalements'),
+        onTap: () => context.go('/signalements?onglet=mes'),
       ),
     );
     lignes.add(Divider(height: 1, color: AppColors.border));

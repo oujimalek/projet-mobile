@@ -174,7 +174,8 @@ class _AppDrawerState extends State<AppDrawer> {
                     actif: widget.chemin.startsWith('/signalements'),
                     sousRubriques: [
                       _sousRubrique(
-                          'Nouveau signalement', () => _allerA('/signalements')),
+                          'Nouveau signalement',
+                          () => _allerA('/signalements?action=nouveau')),
                     ],
                   ),
                   _module(

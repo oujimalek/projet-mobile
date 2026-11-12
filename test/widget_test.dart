@@ -10,6 +10,7 @@ import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/cache_local.dart';
+import 'package:houmani/data/services/connexion_m3.dart';
 import 'package:houmani/data/services/localisation.dart';
 import 'package:houmani/data/services/signalement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
@@ -31,6 +32,7 @@ import 'package:houmani/screens/module1/profil_screen.dart';
 import 'package:houmani/screens/module1/tracer_limites_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
 import 'package:houmani/screens/module2/services_list_screen.dart';
+import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module3/signalements_screen.dart';
 import 'package:houmani/screens/module4/evenements_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
@@ -40,6 +42,7 @@ import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
 import 'package:houmani/widgets/primary_button.dart';
 
+import 'fausse_connexion_m3.dart';
 import 'mock_signalement_repository.dart';
 import 'mock_utilisateur_repository.dart';
 
@@ -117,6 +120,8 @@ void main() {
   setUp(() {
     UtilisateurRepository.instance = MockUtilisateurRepository();
     SignalementRepository.instance = MockSignalementRepository();
+    // M3 : réseau simulé (le plugin connectivity_plus ne répond pas en test)
+    ConnexionM3.instance = FausseConnexionM3();
     appRouter.go('/accueil');
   });
 
@@ -553,6 +558,38 @@ void main() {
     await tester.tap(find.byTooltip('Se déconnecter'));
     await tester.pumpAndSettle();
     expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
+  testWidgets('M3 : Profil → "Mes signalements" ouvre la liste sur cet onglet',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await toucherOnglet(tester, 'Profil');
+    await toucher(tester, find.text('Mes signalements'));
+    expect(find.byType(SignalementsScreen), findsOneWidget);
+    // Amira n'a qu'un signalement dans le mock M3 : "Coupure d'électricité"
+    expect(find.text('1 signalement'), findsOneWidget);
+    expect(find.text('Coupure d\'électricité'), findsOneWidget);
+  });
+
+  testWidgets('M3 : Menu → "Nouveau signalement" ouvre la création',
+      (WidgetTester tester) async {
+    await lancerApp(tester);
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+          of: find.byType(Drawer), matching: find.text('Signalements')),
+    );
+    await tester.pumpAndSettle();
+    await toucherDansMenu(tester, find.text('Nouveau signalement'));
+    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+    expect(find.byType(Drawer), findsNothing);
+
+    // Retour : la liste des signalements (onglet Signalements)
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.byType(SignalementsScreen), findsOneWidget);
+    expect(find.byType(CreateSignalementScreen), findsNothing);
   });
 
   testWidgets('Menu : ni démo ni "Modifier mon profil"',
