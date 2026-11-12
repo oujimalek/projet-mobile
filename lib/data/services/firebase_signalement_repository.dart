@@ -194,15 +194,21 @@ class FirebaseSignalementRepository implements SignalementRepository {
     return FirestoreCommun.executer(() async {
       // Seulement ces champs (firestore.rules : changeSeulement).
       // Un champ réécrit avec la même valeur ne compte pas comme changé :
-      // tant que la règle n'accepte pas 'danger', seul le fait de COCHER
-      // ou DÉCOCHER la case est refusé.
-      await _signalements.doc(signalement.id).update({
+      // tant que la règle n'accepte pas 'danger' et 'position', seul le
+      // fait de les CHANGER est refusé.
+      final Map<String, dynamic> champs = {
         'titre': signalement.titre.trim(),
         'description': signalement.description.trim(),
         'categorieId': signalement.categorieId,
         'lieu': signalement.lieu.trim(),
         'danger': signalement.danger,
-      });
+      };
+      // position : écrite seulement si elle existe (jamais null dans Firestore)
+      final Object? position = signalement.toMap()['position'];
+      if (position != null) {
+        champs['position'] = position;
+      }
+      await _signalements.doc(signalement.id).update(champs);
     });
   }
 

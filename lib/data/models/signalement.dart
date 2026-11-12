@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show GeoPoint;
 import 'package:flutter/material.dart';
 
 import '../services/firestore_commun.dart';
+import 'quartier.dart' show PointGps; // M1 : point GPS (import seulement)
 
 /// Les 4 statuts possibles d'un signalement (affichés avec StatusBadge).
 enum StatutSignalement { enAttente, enCours, resolu, refuse }
@@ -44,6 +46,9 @@ class Signalement {
   final int nbConfirmations; // nombre de voisins qui ont dit "Sa7, ena zeda"
   final bool danger; // "Danger pour les personnes" (compte dans l'urgence)
   final String? photoUrl; // pour plus tard (pas encore enregistrée)
+  // Point GPS ("Utiliser ma position"), optionnel. `lieu` reste le texte
+  // lisible (adresse trouvée ou écrite par l'utilisateur).
+  final PointGps? position;
 
   const Signalement({
     required this.id,
@@ -58,6 +63,7 @@ class Signalement {
     this.nbConfirmations = 0,
     this.danger = false,
     this.photoUrl,
+    this.position,
   });
 
   /// L'auteur peut encore modifier ou supprimer son signalement.
@@ -81,6 +87,7 @@ class Signalement {
     int? nbConfirmations,
     bool? danger,
     String? photoUrl,
+    PointGps? position,
   }) {
     return Signalement(
       id: id ?? this.id,
@@ -95,13 +102,15 @@ class Signalement {
       nbConfirmations: nbConfirmations ?? this.nbConfirmations,
       danger: danger ?? this.danger,
       photoUrl: photoUrl ?? this.photoUrl,
+      position: position ?? this.position,
     );
   }
 
   /// Le document Firestore. L'id n'est pas écrit : c'est le nom du document.
   /// photoUrl n'est pas encore écrit (l'envoi de photo n'existe pas encore).
+  /// position n'est écrite que si elle existe (champ optionnel).
   Map<String, dynamic> toMap() {
-    return {
+    final Map<String, dynamic> map = {
       'titre': titre,
       'description': description,
       'categorieId': categorieId,
@@ -113,12 +122,19 @@ class Signalement {
       'nbConfirmations': nbConfirmations,
       'danger': danger,
     };
+    final PointGps? point = position;
+    if (point != null) {
+      // GeoPoint : le type "point GPS" de Firestore (latlng dans les règles)
+      map['position'] = GeoPoint(point.latitude, point.longitude);
+    }
+    return map;
   }
 
   /// Lit un document Firestore. Champ absent : valeur par défaut.
   factory Signalement.fromMap(String id, Map<String, dynamic> map) {
     final Object? nombre = map['nbConfirmations'];
     final Object? photo = map['photoUrl'];
+    final Object? point = map['position'];
     return Signalement(
       id: id,
       titre: map['titre'] is String ? map['titre'] : '',
@@ -136,6 +152,9 @@ class Signalement {
       nbConfirmations: nombre is num ? nombre.toInt() : 0,
       danger: map['danger'] == true, // absent (anciens documents) : false
       photoUrl: photo is String && photo.isNotEmpty ? photo : null,
+      position: point is GeoPoint
+          ? PointGps(point.latitude, point.longitude)
+          : null,
     );
   }
 }

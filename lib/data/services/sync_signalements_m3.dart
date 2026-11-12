@@ -192,6 +192,7 @@ class SyncSignalementsM3 {
         categorieId: signalement.categorieId,
         lieu: signalement.lieu.trim(),
         danger: signalement.danger,
+        position: signalement.position, // le point GPS est gardé hors ligne
         dateCreation: DateTime.now(),
         derniereErreur: erreur,
       ));

@@ -241,6 +241,7 @@ class MockSignalementRepository implements SignalementRepository {
       categorieId: signalement.categorieId,
       lieu: signalement.lieu.trim(),
       danger: signalement.danger,
+      position: signalement.position,
     );
     return const Resultat.succes(null);
   }

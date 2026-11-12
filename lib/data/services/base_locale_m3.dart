@@ -24,12 +24,24 @@
 //   envois_en_attente   : signalements créés hors ligne, à envoyer
 //   signalements_cache  : derniers signalements chargés, par quartier
 //   mises_a_jour_cache  : heure du dernier chargement complet, par quartier
+//   adresses_cache      : adresses déjà trouvées par Nominatim (version 2)
 // =====================================================================
 
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/quartier.dart' show PointGps;
 import '../models/signalement.dart';
+
+/// Lit un point GPS rangé en deux colonnes REAL (null si pas de point).
+PointGps? lirePosition(Map<String, Object?> ligne) {
+  final Object? latitude = ligne['latitude'];
+  final Object? longitude = ligne['longitude'];
+  if (latitude is num && longitude is num) {
+    return PointGps(latitude.toDouble(), longitude.toDouble());
+  }
+  return null;
+}
 
 /// Un brouillon : le formulaire de création pas encore envoyé.
 class Brouillon {
@@ -40,6 +52,7 @@ class Brouillon {
   final String lieu;
   final bool danger;
   final String? photoLocale; // chemin d'une photo sur le téléphone (étape 6)
+  final PointGps? position; // "Utiliser ma position" (version 2)
   final DateTime dateModification;
 
   const Brouillon({
@@ -50,6 +63,7 @@ class Brouillon {
     this.lieu = '',
     this.danger = false,
     this.photoLocale,
+    this.position,
     required this.dateModification,
   });
 
@@ -60,7 +74,8 @@ class Brouillon {
       lieu.trim().isEmpty &&
       categorieId == null &&
       !danger &&
-      photoLocale == null;
+      photoLocale == null &&
+      position == null;
 
   Map<String, Object?> toMap() {
     return {
@@ -71,6 +86,8 @@ class Brouillon {
       'lieu': lieu,
       'danger': danger ? 1 : 0, // SQLite n'a pas de booléen : 0 / 1
       'photo_locale': photoLocale,
+      'latitude': position?.latitude,
+      'longitude': position?.longitude,
       'date_modification': dateModification.millisecondsSinceEpoch,
     };
   }
@@ -84,6 +101,7 @@ class Brouillon {
       lieu: ligne['lieu'] as String? ?? '',
       danger: ligne['danger'] == 1,
       photoLocale: ligne['photo_locale'] as String?,
+      position: lirePosition(ligne),
       dateModification: DateTime.fromMillisecondsSinceEpoch(
         ligne['date_modification'] as int,
       ),
@@ -112,6 +130,7 @@ class EnvoiEnAttente {
   final String lieu;
   final bool danger;
   final String? photoLocale; // étape 6 : photo à envoyer avant le signalement
+  final PointGps? position; // point GPS gardé hors ligne (version 2)
   final DateTime dateCreation;
   final String etat; // EtatEnvoi.enAttente ou EtatEnvoi.echec
   final int nbTentatives;
@@ -128,6 +147,7 @@ class EnvoiEnAttente {
     required this.lieu,
     this.danger = false,
     this.photoLocale,
+    this.position,
     required this.dateCreation,
     this.etat = EtatEnvoi.enAttente,
     this.nbTentatives = 0,
@@ -150,6 +170,7 @@ class EnvoiEnAttente {
       auteurId: utilisateurId,
       auteurNom: '',
       danger: danger,
+      position: position,
     );
   }
 
@@ -165,6 +186,8 @@ class EnvoiEnAttente {
       'lieu': lieu,
       'danger': danger ? 1 : 0,
       'photo_locale': photoLocale,
+      'latitude': position?.latitude,
+      'longitude': position?.longitude,
       'date_creation': dateCreation.millisecondsSinceEpoch,
       'etat': etat,
       'nb_tentatives': nbTentatives,
@@ -184,6 +207,7 @@ class EnvoiEnAttente {
       lieu: ligne['lieu'] as String,
       danger: ligne['danger'] == 1,
       photoLocale: ligne['photo_locale'] as String?,
+      position: lirePosition(ligne),
       dateCreation: DateTime.fromMillisecondsSinceEpoch(
         ligne['date_creation'] as int,
       ),
@@ -204,7 +228,10 @@ class BaseLocaleM3 {
   static BaseLocaleM3 instance = BaseLocaleM3();
 
   static const String nomFichier = 'houmani_m3.db';
-  static const int version = 1;
+  /// Version du schéma :
+  ///   1 : brouillons, envois_en_attente, signalements_cache, mises_a_jour_cache
+  ///   2 : + colonnes latitude / longitude (GPS) et table adresses_cache
+  static const int version = 2;
 
   /// Chemin de la base (null : le dossier des bases de l'application).
   final String? chemin;
@@ -231,13 +258,45 @@ class BaseLocaleM3 {
     return openDatabase(
       fichier,
       version: version,
-      onCreate: _creerTables,
+      // Nouveau téléphone : on crée tout (version 1 puis les ajouts)
+      onCreate: (db, version) async {
+        await creerTablesVersion1(db);
+        await _migrerVersVersion2(db);
+      },
+      // Téléphone qui avait déjà la version 1 : on ajoute seulement ce qui
+      // manque, SANS effacer ses brouillons ni sa file d'envoi.
+      onUpgrade: (db, ancienne, nouvelle) async {
+        if (ancienne < 2) {
+          await _migrerVersVersion2(db);
+        }
+      },
     );
   }
 
-  /// Appelé une seule fois, quand le fichier de la base n'existe pas encore.
-  /// Plus tard, une nouvelle colonne = version 2 + onUpgrade (ALTER TABLE).
-  Future<void> _creerTables(Database db, int version) async {
+  /// Version 2 : le point GPS (deux colonnes REAL, NULL si pas de point) et
+  /// le cache des adresses de Nominatim.
+  Future<void> _migrerVersVersion2(Database db) async {
+    for (final String table in [
+      'brouillons',
+      'envois_en_attente',
+      'signalements_cache',
+    ]) {
+      await db.execute('ALTER TABLE $table ADD COLUMN latitude REAL');
+      await db.execute('ALTER TABLE $table ADD COLUMN longitude REAL');
+    }
+    // cle = latitude,longitude arrondies à 4 décimales (environ 11 m)
+    await db.execute('''
+      CREATE TABLE adresses_cache (
+        cle TEXT PRIMARY KEY,
+        adresse TEXT NOT NULL,
+        date INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  /// Les tables de la version 1 (publique : les tests s'en servent pour
+  /// simuler un téléphone resté en version 1).
+  static Future<void> creerTablesVersion1(Database db) async {
     await db.execute('''
       CREATE TABLE brouillons (
         utilisateur_id TEXT PRIMARY KEY,
@@ -431,6 +490,8 @@ class BaseLocaleM3 {
       'nb_confirmations': s.nbConfirmations,
       'danger': s.danger ? 1 : 0,
       'photo_url': s.photoUrl,
+      'latitude': s.position?.latitude,
+      'longitude': s.position?.longitude,
     };
   }
 
@@ -454,6 +515,7 @@ class BaseLocaleM3 {
       nbConfirmations: ligne['nb_confirmations'] as int,
       danger: ligne['danger'] == 1,
       photoUrl: ligne['photo_url'] as String?,
+      position: lirePosition(ligne),
     );
   }
 
@@ -560,6 +622,38 @@ class BaseLocaleM3 {
       'signalements_cache',
       where: 'quartier_id = ? AND id = ?',
       whereArgs: [quartierId, id],
+    );
+  }
+
+  // =====================================================================
+  // adresses_cache (version 2) : réponses de Nominatim déjà reçues
+  // =====================================================================
+
+  /// L'adresse déjà trouvée pour cette clé (null : jamais demandée).
+  Future<String?> lireAdresse(String cle) async {
+    final Database db = await base;
+    final List<Map<String, Object?>> lignes = await db.query(
+      'adresses_cache',
+      columns: ['adresse'],
+      where: 'cle = ?',
+      whereArgs: [cle],
+    );
+    if (lignes.isEmpty) {
+      return null;
+    }
+    return lignes.first['adresse'] as String;
+  }
+
+  Future<void> enregistrerAdresse(String cle, String adresse) async {
+    final Database db = await base;
+    await db.insert(
+      'adresses_cache',
+      {
+        'cle': cle,
+        'adresse': adresse,
+        'date': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
