@@ -48,6 +48,13 @@ class EvenementFormScreen extends StatefulWidget {
     this.signalementTitre,
   });
 
+  /// (C4) L'annonce push d'un nouvel événement. Les tests la remplacent.
+  static Future<bool> Function(
+    Evenement evenement,
+    String quartierId, {
+    void Function(String message)? siLimite,
+  }) annoncerPush = PushM4.annoncer;
+
   @override
   State<EvenementFormScreen> createState() {
     return _EvenementFormScreenState();
@@ -300,10 +307,13 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
       // (C4) Annonce à tout le quartier (notification push), sans attendre
       final String? quartierId =
           UtilisateurRepository().getUtilisateurConnecte().quartierId;
-      if (resultat.estSucces && quartierId != null && mounted) {
-        // Gardé maintenant : l'écran sera fermé quand le serveur répondra
-        final ScaffoldMessengerState messager = ScaffoldMessenger.of(context);
-        PushM4.annoncer(
+      if (resultat.estSucces && quartierId != null) {
+        // L'événement est créé : l'annonce part TOUJOURS, même si l'écran a
+        // été quitté pendant la création. Seul le message (limite du jour)
+        // a besoin de l'écran : son messager est gardé maintenant, s'il existe.
+        final ScaffoldMessengerState? messager =
+            mounted ? ScaffoldMessenger.maybeOf(context) : null;
+        EvenementFormScreen.annoncerPush(
           Evenement(
             id: '',
             titre: _titre.text.trim(),
@@ -315,7 +325,7 @@ class _EvenementFormScreenState extends State<EvenementFormScreen> {
           quartierId,
           // Limite du jour atteinte : l'événement est publié, sans annonce
           siLimite: (message) {
-            messager.showSnackBar(SnackBar(
+            messager?.showSnackBar(SnackBar(
               content: Text(tr(
                 'Événement publié, mais sans notification : $message',
                 'El 7adath tnachar, ama bla notification : woselt lel 7ad '
