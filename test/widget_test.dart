@@ -9,11 +9,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:houmani/data/models/quartier.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
+import 'package:houmani/data/services/base_locale_m2.dart';
+import 'package:houmani/data/services/base_locale_m3.dart';
+import 'package:houmani/data/services/base_locale_m4.dart';
 import 'package:houmani/data/services/cache_local.dart';
 import 'package:houmani/data/services/connexion_m3.dart';
 import 'package:houmani/data/services/localisation.dart';
+import 'package:houmani/data/services/meteo_m1.dart';
 import 'package:houmani/data/services/signalement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
+import 'package:houmani/data/services/verification_adresse_m1.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
 import 'package:houmani/screens/accueil_screen.dart';
@@ -40,6 +45,7 @@ import 'package:houmani/theme/preference_langue.dart';
 import 'package:houmani/theme/preference_theme.dart';
 import 'package:houmani/widgets/app_drawer.dart';
 import 'package:houmani/widgets/primary_button.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'fausse_connexion_m3.dart';
 import 'mock_signalement_repository.dart';
@@ -107,8 +113,34 @@ Future<void> lancerApp(WidgetTester tester) async {
 
 void main() {
   // Pas de téléchargement de police pendant les tests (pas d'Internet)
+  // Les bases SQLite ouvertes par les écrans (météo et adresses M1,
+  // services M2, signalements M3, événements M4) : sur l'ordinateur
+  // (sqflite_common_ffi), dans un dossier temporaire. Sans ça, chaque
+  // test affiche "CacheLocal : Bad state: databaseFactory not initialized".
+  late Directory dossierBases;
+
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    // "NoIsolate" : SQLite tourne dans le même fil que le test (temps simulé)
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfiNoIsolate;
+    dossierBases = Directory.systemTemp.createTempSync('houmani_widget_');
+    MeteoM1.cache = CacheLocal(dossier: dossierBases.path);
+    VerificationAdresseM1.cache = CacheLocal(dossier: dossierBases.path);
+    // M3 en mémoire (comme ses propres tests : avec un fichier, la liste
+    // des signalements bloque pumpAndSettle). M2 et M4 : un fichier chacun,
+    // car deux bases ":memory:" seraient la MÊME base pour sqflite.
+    BaseLocaleM3.instance = BaseLocaleM3(chemin: inMemoryDatabasePath);
+    BaseLocaleM2.cheminPourTests = '${dossierBases.path}/houmani_m2.db';
+    BaseLocaleM4.cheminPourTests = '${dossierBases.path}/houmani_m4.db';
+  });
+
+  tearDownAll(() {
+    try {
+      dossierBases.deleteSync(recursive: true);
+    } catch (erreur) {
+      // fichier encore ouvert (Windows) : c'est un dossier temporaire
+    }
   });
 
   // Le routeur et les données sont globaux : avant chaque test, on repart
