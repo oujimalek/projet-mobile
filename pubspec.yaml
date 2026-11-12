@@ -57,6 +57,9 @@ dependencies:
   path: ^1.9.1
   # M3 : savoir si le téléphone a du réseau (envoi automatique au retour).
   connectivity_plus: ^7.3.1
+  # M3 : adresse à partir du GPS (API Nominatim d'OpenStreetMap).
+  # Même version que le module 4.
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
