@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -36,6 +37,12 @@ String depuisQuandM3(DateTime date) {
     return tr('hier', 'lbere7');
   }
   return '${date.day}/${date.month}';
+}
+
+/// Coordonnées GPS lisibles : "36.86250, 10.17000".
+String texteCoordonnees(PointGps point) {
+  return '${point.latitude.toStringAsFixed(5)}, '
+      '${point.longitude.toStringAsFixed(5)}';
 }
 
 /// Heure courte : "14:05" aujourd'hui, sinon "1/10 à 14:05".

@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
 import '../../data/resultat.dart';
+import '../../data/services/adresse_m3.dart';
 import '../../data/services/base_locale_m3.dart';
+import '../../data/services/localisation.dart'; // M1 (import seulement)
 import '../../data/services/signalement_repository.dart';
 import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
@@ -55,6 +58,8 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   bool _erreurCategorie = false; // true = afficher "Choisis une catégorie"
   bool _danger = false; // case "Danger pour les personnes"
   bool _enChargement = false; // true pendant l'envoi
+  bool _localisationEnCours = false; // GPS + adresse en cours
+  PointGps? _position; // point GPS ("Utiliser ma position"), optionnel
 
   // Brouillon (création seulement)
   final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
@@ -76,6 +81,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       _localisationController.text = existant.lieu;
       _categorieChoisie = existant.categorieId;
       _danger = existant.danger;
+      _position = existant.position;
       return;
     }
     // Création : brouillon automatique à chaque frappe
@@ -122,6 +128,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       categorieId: _categorieChoisie,
       lieu: _localisationController.text,
       danger: _danger,
+      position: _position,
       dateModification: DateTime.now(),
     );
   }
@@ -150,6 +157,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     setState(() {
       _categorieChoisie = brouillon.categorieId;
       _danger = brouillon.danger;
+      _position = brouillon.position;
       _brouillonTrouve = null;
     });
   }
@@ -162,11 +170,52 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     await _sync.supprimerBrouillon();
   }
 
-  /// "Utiliser ma position" : on remplit le lieu avec la résidence
-  /// de l'utilisateur connecté (en attendant la vraie géolocalisation).
-  void _utiliserMaPosition() {
-    _localisationController.text =
-        UtilisateurRepository().getUtilisateurConnecte().residence;
+  /// "Utiliser ma position" :
+  ///   1. le GPS du téléphone (Localisation du module 1, ses messages d'erreur) ;
+  ///   2. l'adresse de ce point (AdresseM3 : cache SQLite, puis Nominatim).
+  /// Le point est gardé même si l'adresse n'est pas trouvée (hors ligne) :
+  /// l'utilisateur écrit alors le lieu lui-même.
+  Future<void> _utiliserMaPosition() async {
+    setState(() {
+      _localisationEnCours = true;
+    });
+    final Resultat<PointGps> gps = await Localisation.positionActuelle();
+    if (!mounted) {
+      return;
+    }
+    if (!gps.estSucces) {
+      setState(() {
+        _localisationEnCours = false;
+      });
+      afficherMessageM3(context, gps.erreur!); // message du module 1
+      return;
+    }
+    final PointGps point = gps.donnee!;
+    setState(() {
+      _position = point;
+    });
+    _formulaireModifie(); // le brouillon garde aussi le point
+
+    final Resultat<String> adresse = await AdresseM3.adresseDe(point);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _localisationEnCours = false;
+    });
+    if (adresse.estSucces) {
+      _localisationController.text = adresse.donnee!;
+    } else {
+      afficherMessageM3(context, adresse.erreur!);
+    }
+  }
+
+  /// La croix : on retire le point GPS (le texte du lieu reste).
+  void _retirerPosition() {
+    setState(() {
+      _position = null;
+    });
+    _formulaireModifie();
   }
 
   /// Appelé quand on touche "Publier" (ou "Enregistrer").
@@ -197,6 +246,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       auteurNom: existant?.auteurNom ?? '',
       nbConfirmations: existant?.nbConfirmations ?? 0,
       danger: _danger,
+      position: _position,
     );
 
     setState(() {
@@ -346,14 +396,26 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: _utiliserMaPosition,
-                      child: Text(
-                        tr('Utiliser ma position', 'Esta3mel blasti'),
+                    child: TextButton.icon(
+                      onPressed:
+                          _localisationEnCours ? null : _utiliserMaPosition,
+                      // Petit indicateur de chargement à la place de l'icône
+                      icon: _localisationEnCours
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location, size: 18),
+                      label: Text(
+                        _localisationEnCours
+                            ? tr('Localisation...', 'Nlawej...')
+                            : tr('Utiliser ma position', 'Esta3mel blasti'),
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
+                  if (_position != null) _lignePosition(),
                 ],
               ),
             ),
@@ -382,6 +444,29 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// "Position GPS enregistrée (36.86250, 10.17000)" + croix pour la retirer.
+  Widget _lignePosition() {
+    final PointGps point = _position!;
+    return Row(
+      children: [
+        Icon(Icons.location_on, size: 18, color: AppColors.success),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            '${tr('Position GPS enregistrée', 'Blasa GPS msajla')} '
+            '(${texteCoordonnees(point)})',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ),
+        IconButton(
+          tooltip: tr('Retirer la position', 'Na77i el blasa'),
+          onPressed: _retirerPosition,
+          icon: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+        ),
+      ],
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
@@ -386,10 +387,16 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
         : nb == 1
             ? tr('1 voisin a confirmé', 'Jar wa7ed akked')
             : tr('$nb voisins ont confirmé', '$nb jiran akkdou');
+    final List<Widget> lignesPosition = [];
+    final PointGps? position = signalement.position;
+    if (position != null) {
+      lignesPosition.add(_lignePosition(position));
+    }
     return AppCard(
       child: Column(
         children: [
           _ligneInfo(Icons.place_outlined, signalement.lieu),
+          ...lignesPosition,
           _ligneInfo(Icons.schedule, dateCompleteM3(signalement.date)),
           _ligneInfo(
             Icons.person_outline,
@@ -400,6 +407,40 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
             Icons.speed,
             '${tr('Score d\'urgence', 'Score el isti3jal')} : '
             '${SignalementRepository.scoreUrgence(signalement)}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Le point GPS + "Voir sur la carte" (la carte arrive à l'étape 10).
+  Widget _lignePosition(PointGps position) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.my_location, size: 20, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  texteCoordonnees(position),
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    _message(tr('La carte des signalements arrive bientôt',
+                        'El carte mta3 it-tablighat jeya'));
+                  },
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: Text(tr('Voir sur la carte', 'Chouf fel carte')),
+                ),
+              ],
+            ),
           ),
         ],
       ),
