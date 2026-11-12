@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/utilisateur.dart';
+import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -31,6 +32,51 @@ String? cheminSelonStatut(Utilisateur utilisateur) {
   }
 }
 
+/// Avant « Se déconnecter » (menu, Profil, écrans de l'inscription) :
+/// M3 essaie d'envoyer les signalements gardés hors ligne. S'il en reste,
+/// ils seront perdus : on demande confirmation.
+/// true : on peut se déconnecter ; false : l'utilisateur a annulé.
+/// (Les déconnexions automatiques — compte bloqué, refusé, supprimé — ne
+/// passent pas par ici : elles ne demandent rien.)
+Future<bool> confirmerDeconnexion(BuildContext context) async {
+  final SyncSignalementsM3 sync = SyncSignalementsM3.instance;
+  if (await sync.nombreEnAttente() > 0) {
+    try {
+      await sync.envoyerFile().timeout(SyncSignalementsM3.delaiEnvoiDeconnexion);
+    } catch (e) {
+      // trop lent : on compte ce qui reste
+    }
+  }
+  final int restants = await sync.nombreEnAttente();
+  if (restants == 0) {
+    return true;
+  }
+  if (!context.mounted) {
+    return false;
+  }
+  final bool? confirme = await showDialog<bool>(
+    context: context,
+    builder: (contexte) => AlertDialog(
+      title: Text(tr('Signalements pas envoyés', 'Signalements ma tba3thouch')),
+      content: Text(tr(
+        '$restants signalement(s) pas encore envoyé(s) seront perdus.',
+        '$restants signalement(s) mazelou ma tba3thouch, bech yetfas5ou.',
+      )),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(contexte).pop(false),
+          child: Text(tr('Annuler', 'Batel')),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(contexte).pop(true),
+          child: Text(tr('Se déconnecter quand même', 'O5rej ama')),
+        ),
+      ],
+    ),
+  );
+  return confirme == true;
+}
+
 /// Bouton "Se déconnecter" des écrans de l'inscription (vérification,
 /// code du quartier, attente) : ils n'ont ni menu ni flèche retour,
 /// c'est leur seule sortie vers la connexion.
@@ -43,6 +89,9 @@ class BoutonDeconnexion extends StatelessWidget {
       onPressed: () async {
         // On garde le routeur avant l'attente (l'écran peut changer)
         final GoRouter routeur = GoRouter.of(context);
+        if (!await confirmerDeconnexion(context)) {
+          return;
+        }
         await UtilisateurRepository().deconnexion();
         routeur.go('/connexion'); // go : pas de retour possible
       },

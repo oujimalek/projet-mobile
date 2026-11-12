@@ -10,10 +10,23 @@ import 'package:houmani/data/services/base_locale_m3.dart';
 import 'package:houmani/data/services/base_locale_m4.dart';
 import 'package:houmani/data/services/nettoyage_local.dart';
 import 'package:houmani/data/services/photos_m3.dart';
+import 'package:houmani/data/services/signalement_repository.dart';
 import 'package:houmani/data/services/sync_signalements_m3.dart';
+import 'package:houmani/data/services/utilisateur_repository.dart';
+import 'package:houmani/data/resultat.dart';
 
 import 'fausse_connexion_m3.dart';
+import 'mock_signalement_repository.dart';
+import 'mock_utilisateur_repository.dart';
 import 'outils_test_m3.dart';
+
+/// Firestore qui ne répond jamais (réseau "présent" mais muet).
+class RepositoryMuetNettoyage extends MockSignalementRepository {
+  @override
+  Future<Resultat<void>> ajouterSignalement(Signalement signalement) {
+    return Completer<Resultat<void>>().future;
+  }
+}
 
 /// Commun - Nettoyage des données locales à la déconnexion (et quand le
 /// compte est bloqué, refusé ou supprimé) : le nettoyage M3, puis la
@@ -125,6 +138,68 @@ void main() {
       await BaseLocaleM3.instance.fermer();
       BaseLocaleM3.instance = BaseLocaleM3(chemin: '/dossier/introuvable/x.db');
       await SyncSignalementsM3.instance.viderUtilisateur('u1');
+    });
+  });
+
+  group('M3 : la file part avant d\'être effacée', () {
+    late UtilisateurRepository utilisateursAvant;
+    late SignalementRepository signalementsAvant;
+    late MockSignalementRepository depot;
+
+    Signalement saisie() {
+      return Signalement(
+        id: '', titre: 'Fuite au parking', description: 'Une fuite au parking',
+        categorieId: 'eau', statut: StatutSignalement.enAttente,
+        date: DateTime(2026, 11, 12), lieu: 'Parking', auteurId: '', auteurNom: '',
+      );
+    }
+
+    setUp(() {
+      utilisateursAvant = UtilisateurRepository.instance;
+      signalementsAvant = SignalementRepository.instance;
+      UtilisateurRepository.instance = MockUtilisateurRepository(); // Amira (u1, q1)
+      depot = MockSignalementRepository();
+      SignalementRepository.instance = depot;
+    });
+
+    tearDown(() {
+      UtilisateurRepository.instance = utilisateursAvant;
+      SignalementRepository.instance = signalementsAvant;
+      SyncSignalementsM3.delaiEnvoiDeconnexion = const Duration(seconds: 3);
+    });
+
+    test('réseau revenu : envoyée à Firestore, puis la file est vide', () async {
+      connexion.enLigne = false;
+      await SyncSignalementsM3.instance.publier(saisie());
+      expect(await SyncSignalementsM3.instance.nombreEnAttente(), 1);
+      connexion.enLigne = true;
+
+      await SyncSignalementsM3.instance.viderUtilisateur('u1');
+
+      expect(await SyncSignalementsM3.instance.nombreEnAttente(), 0);
+      expect(depot.tous.where((s) => s.titre == 'Fuite au parking'), hasLength(1));
+    });
+
+    test('toujours hors ligne : la file est effacée (perdue)', () async {
+      connexion.enLigne = false;
+      await SyncSignalementsM3.instance.publier(saisie());
+
+      await SyncSignalementsM3.instance.viderUtilisateur('u1');
+
+      expect(await SyncSignalementsM3.instance.nombreEnAttente(), 0);
+      expect(depot.tous.where((s) => s.titre == 'Fuite au parking'), isEmpty);
+    });
+
+    test('serveur qui ne répond pas : effacée après le délai court', () async {
+      connexion.enLigne = false;
+      await SyncSignalementsM3.instance.publier(saisie());
+      connexion.enLigne = true;
+      SignalementRepository.instance = RepositoryMuetNettoyage();
+      SyncSignalementsM3.delaiEnvoiDeconnexion = const Duration(milliseconds: 50);
+
+      await SyncSignalementsM3.instance.viderUtilisateur('u1');
+
+      expect(await SyncSignalementsM3.instance.nombreEnAttente(), 0);
     });
   });
 

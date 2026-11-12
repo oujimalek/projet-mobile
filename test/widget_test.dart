@@ -503,6 +503,42 @@ void main() {
     expect(find.byType(ConnexionScreen), findsOneWidget);
   });
 
+  testWidgets(
+      'M3 : se déconnecter avec des signalements pas envoyés demande confirmation',
+      (WidgetTester tester) async {
+    // Hors ligne, un signalement d'Amira (u1, q1) attend dans la file
+    (ConnexionM3.instance as FausseConnexionM3).enLigne = false;
+    final int idEnvoi = await BaseLocaleM3.instance.ajouterEnvoi(EnvoiEnAttente(
+      idDocument: 'deconnexion1', utilisateurId: 'u1', quartierId: 'q1',
+      titre: 'Fuite', description: 'Fuite au parking', categorieId: 'eau',
+      lieu: 'Parking', dateCreation: DateTime(2026, 11, 12),
+    ));
+    addTearDown(() => BaseLocaleM3.instance.supprimerEnvoi(idEnvoi));
+
+    appRouter.go('/profil');
+    await lancerApp(tester);
+    await toucher(tester, find.text('Se déconnecter'));
+    expect(find.text('1 signalement(s) pas encore envoyé(s) seront perdus.'),
+        findsOneWidget);
+
+    // Annuler : on reste connecté, sur le Profil
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilScreen), findsOneWidget);
+    expect(UtilisateurRepository().getUtilisateurConnecte().id, 'u1');
+
+    // Menu → Se déconnecter → "quand même" : déconnecté
+    cleCoquille.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Se déconnecter'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 signalement(s) pas encore envoyé(s) seront perdus.'),
+        findsOneWidget);
+    await tester.tap(find.text('Se déconnecter quand même'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnexionScreen), findsOneWidget);
+  });
+
   testWidgets('Mot de passe oublié : envoi du lien puis retour à la connexion',
       (WidgetTester tester) async {
     appRouter.go('/connexion');

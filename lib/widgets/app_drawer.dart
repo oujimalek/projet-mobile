@@ -88,6 +88,10 @@ class _AppDrawerState extends State<AppDrawer> {
     // On garde le routeur AVANT de fermer le menu : une fois fermé,
     // le menu disparaît et son context n'est plus utilisable
     final GoRouter routeur = GoRouter.of(context);
+    // M3 : signalements pas encore envoyés → confirmation (menu encore ouvert)
+    if (!await confirmerDeconnexion(context) || !mounted) {
+      return;
+    }
     Navigator.of(context).pop();
     await _repository.deconnexion();
     // go : on remplace tout, pas de retour possible

@@ -77,6 +77,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
   }
 
   Future<void> _seDeconnecter() async {
+    // M3 : signalements pas encore envoyés → confirmation
+    if (!await confirmerDeconnexion(context)) {
+      return;
+    }
     await _repository.deconnexion();
     if (mounted) {
       // go : on remplace tout, pas de retour vers le profil

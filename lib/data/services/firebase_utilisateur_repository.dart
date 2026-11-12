@@ -224,18 +224,19 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<void> deconnexion() async {
-    // Gardé AVANT signOut : le nettoyage des modules a besoin de l'uid
     final String uid = _auth.currentUser?.uid ?? _connecte.id;
     try {
-      await _auth.signOut();
-    } finally {
-      // Même si signOut échoue : le téléphone peut être prêté,
-      // on n'y laisse pas le profil, ni les données locales des modules
-      _connecte = _invite;
-      await _cache.vider();
+      // AVANT signOut : encore connecté, M3 peut envoyer sa file d'attente
+      // avant de l'effacer (NettoyageLocal ne lève jamais d'exception)
       if (uid.isNotEmpty) {
         await NettoyageLocal.viderTout(uid);
       }
+      await _auth.signOut();
+    } finally {
+      // Même si signOut échoue : le téléphone peut être prêté,
+      // on n'y laisse pas le profil
+      _connecte = _invite;
+      await _cache.vider();
     }
   }
 
