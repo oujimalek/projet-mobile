@@ -112,7 +112,7 @@ Les règles se testent à part, sur l'émulateur Firebase : voir
 |---|---|---|
 | M1 · Utilisateurs | `lib/screens/module1/` | 9 écrans : inscription, vérification de l'e-mail, connexion, mot de passe oublié, code du quartier, attente de validation, profil, modification du profil, membres (admin) — voir ci-dessous |
 | M2 · Services | `lib/screens/module2/` | `services_list_screen.dart` · `ServicesListScreen` (liste + filtres) |
-| M3 · Signalements | `lib/screens/module3/` | `create_signalement_screen.dart` · `CreateSignalementScreen` (GridView des catégories) |
+| M3 · Signalements | `lib/screens/module3/` | `signalements_screen.dart` · `SignalementsScreen` (liste, filtres, urgence, hors ligne), `create_signalement_screen.dart` (création / modification, photo, GPS), `signalement_detail_screen.dart` (confirmer, carte, appeler, statut admin) — voir [`docs/module3_signalements.md`](docs/module3_signalements.md) |
 | M4 · Événements | `lib/screens/module4/` | `sondage_screen.dart` · `SondageScreen` (sondage avec vote) |
 
 ## Les fichiers communs (la fondation)
@@ -122,7 +122,7 @@ Les règles se testent à part, sur l'émulateur Firebase : voir
 | `lib/theme/app_theme.dart` | Toutes les couleurs (`AppColors`) et le thème de l'app |
 | `lib/widgets/` | Composants réutilisables : bouton principal (bleu cobalt) et secondaire (bordure dorée), champ de saisie, carte, badge de statut, séparateur en clous, date en arc, barre du bas, en-tête (avec une action optionnelle à droite), logo |
 | `lib/data/models/` | Les modèles de données (Utilisateur, Quartier, Service, Signalement, Evenement, Sondage) |
-| `lib/data/services/` | Les classes qui fournissent les données. M1 est sur Firebase. M2 à M4 sont encore en dur, à brancher en suivant [`docs/guide_modules_firebase.md`](docs/guide_modules_firebase.md). `firestore_commun.dart` regroupe les outils Firestore communs aux modules. |
+| `lib/data/services/` | Les classes qui fournissent les données. Les 4 modules sont sur Firebase (Firestore), chacun avec son repository (contrat abstrait + version Firebase + mock dans `test/`), selon [`docs/guide_modules_firebase.md`](docs/guide_modules_firebase.md). `firestore_commun.dart` regroupe les outils Firestore communs aux modules. Données sur le téléphone : Hive pour le profil (M1), SQLite pour M3 (`base_locale_m3.dart`) et M4 (`base_locale_m4.dart`). |
 | `lib/data/resultat.dart` | `Resultat<T>` : la réponse d'un repository, succès (avec la donnée) ou échec (avec un message à afficher) |
 | `lib/router/app_router.dart` | La navigation (go_router) : les 5 onglets de la barre du bas (Accueil, Services, Signalements, Événements, Profil) et les écrans en plein écran (splash, connexion, inscription, démo...) |
 | `lib/screens/splash_screen.dart` | Écran de lancement : logo blanc sur fond bleu cobalt, puis la connexion |
