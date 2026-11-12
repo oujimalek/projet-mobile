@@ -19,10 +19,18 @@ autres modules (M1, M2, M4) n'ont pas été modifiées.
 | 8 | Pas de confirmation sur un signalement résolu ou refusé | `firestore.rules` | Le serveur vérifie ce que l'app refuse déjà |
 | 9 | Sous-collection `historique` (étapes des statuts + note de l'admin) | `firestore.rules` | Frise de l'historique dans le détail |
 
-⚠️ **À déployer AVANT (ou avec) la version de l'app qui a l'historique** :
-l'app écrit la 1re étape dans le même lot que la création. Avec les
+⚠️ **Ordre de déploiement : les règles AVANT d'utiliser une version de
+l'app qui contient l'historique** (commits du 12/11/2026 et suivants).
+L'app écrit la 1re étape dans le même lot que la création ; avec les
 anciennes règles (sans `historique`), ce lot est refusé et **plus aucun
-signalement ne peut être créé**.
+signalement ne peut être créé**. Donc :
+
+1. déployer les règles et l'index (section 3) ;
+2. attendre que le déploiement soit terminé (quelques secondes) ;
+3. seulement ensuite, installer / lancer la nouvelle version de l'app.
+
+Les nouvelles règles acceptent aussi l'ANCIENNE version de l'app (sans
+historique) : déployer les règles en premier ne casse rien.
 
 ### L'historique (n° 9)
 
@@ -88,7 +96,9 @@ firebase deploy --only firestore:rules,firestore:indexes
 2. Être sur la branche qui contient les règles de **tous** les modules
    (M1, M2, M3, M4) : un déploiement remplace le fichier entier.
 3. Lancer les tests de l'émulateur (section 2) : `fail 0`.
-4. Déployer avec la commande ci-dessus.
+4. Déployer avec la commande ci-dessus, **avant** d'installer ou de
+   lancer une version de l'app qui contient l'historique (voir l'ordre de
+   déploiement en section 1).
 5. Si la commande propose de **supprimer des index** qui existent en ligne
    mais pas dans `firestore.indexes.json` : répondre **N** (non). Ils
    servent peut-être à un autre module ; on les ajoutera au fichier.
