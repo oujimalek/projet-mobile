@@ -341,11 +341,24 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 4),
-      Text(
-        '${envoi.lieu} · ${depuisQuandM3(envoi.dateCreation)}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${envoi.lieu} · ${depuisQuandM3(envoi.dateCreation)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          if (envoi.photoLocale != null || envoi.photoUrl != null)
+            Icon(
+              Icons.photo_camera_outlined,
+              key: const ValueKey('icone_photo_envoi'),
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+        ],
       ),
       const SizedBox(height: 8),
       // Badge d'état
@@ -745,6 +758,16 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      if (signalement.photoUrl != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(
+                            Icons.photo_camera_outlined,
+                            key: const ValueKey('icone_photo'),
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       Icon(
                         Icons.people_alt_outlined,
                         size: 16,

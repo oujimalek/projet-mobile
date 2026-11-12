@@ -4,6 +4,8 @@ import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
+import '../../data/services/liens_m3.dart';
+import '../../data/services/photos_m3.dart';
 import '../../data/services/signalement_repository.dart';
 import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
@@ -291,15 +293,7 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     final String? photo = signalement.photoUrl;
     if (photo != null) {
       enfants.add(const SizedBox(height: 12));
-      enfants.add(ClipRRect(
-        borderRadius: BorderRadius.circular(AppTheme.radius),
-        child: Image.network(
-          photo,
-          height: 200,
-          fit: BoxFit.cover,
-          errorBuilder: (context, erreur, trace) => const SizedBox.shrink(),
-        ),
-      ));
+      enfants.add(_photo(photo));
     }
     enfants.add(const SizedBox(height: 24));
     if (_depuisCache) {
@@ -390,7 +384,7 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     final List<Widget> lignesPosition = [];
     final PointGps? position = signalement.position;
     if (position != null) {
-      lignesPosition.add(_lignePosition(position));
+      lignesPosition.add(_lignePosition(position, signalement.titre));
     }
     return AppCard(
       child: Column(
@@ -413,8 +407,58 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     );
   }
 
-  /// Le point GPS + "Voir sur la carte" (la carte arrive à l'étape 10).
-  Widget _lignePosition(PointGps position) {
+  /// La photo : miniature Cloudinary (légère) ; toucher l'ouvre en grand.
+  Widget _photo(String url) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppTheme.radius),
+      child: InkWell(
+        onTap: () => ouvrirEcranM3<void>(context, PhotoPleinEcranM3(url: url)),
+        child: Image.network(
+          PhotosM3.miniature(url, largeur: 800, hauteur: 450),
+          key: const ValueKey('photo_signalement'),
+          height: 200,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, image, progression) {
+            if (progression == null) {
+              return image;
+            }
+            return Container(
+              height: 200,
+              color: AppColors.backgroundSecondary,
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator(),
+            );
+          },
+          // Hors ligne ou photo supprimée : un cadre neutre, pas d'erreur
+          errorBuilder: (context, erreur, trace) => Container(
+            height: 200,
+            color: AppColors.backgroundSecondary,
+            alignment: Alignment.center,
+            child: Text(
+              tr('Photo indisponible', 'Taswira mouch mawjouda'),
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// "Voir sur la carte" : l'application de cartes du téléphone (lien
+  /// geo:), sinon OpenStreetMap dans le navigateur.
+  Future<void> _voirSurLaCarte(PointGps position, String libelle) async {
+    final Resultat<void> resultat = await LiensM3.ouvrirCarte(position, libelle);
+    if (!mounted) {
+      return;
+    }
+    if (!resultat.estSucces) {
+      _message(resultat.erreur!);
+    }
+  }
+
+  /// Le point GPS + "Voir sur la carte".
+  Widget _lignePosition(PointGps position, String libelle) {
     return Padding(
       padding: const EdgeInsets.only(top: 5),
       child: Row(
@@ -431,10 +475,7 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
                   style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
                 TextButton.icon(
-                  onPressed: () {
-                    _message(tr('La carte des signalements arrive bientôt',
-                        'El carte mta3 it-tablighat jeya'));
-                  },
+                  onPressed: () => _voirSurLaCarte(position, libelle),
                   style: TextButton.styleFrom(padding: EdgeInsets.zero),
                   icon: const Icon(Icons.map_outlined, size: 18),
                   label: Text(tr('Voir sur la carte', 'Chouf fel carte')),

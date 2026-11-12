@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart' show ImageSource;
 
 import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
@@ -8,6 +10,7 @@ import '../../data/resultat.dart';
 import '../../data/services/adresse_m3.dart';
 import '../../data/services/base_locale_m3.dart';
 import '../../data/services/localisation.dart'; // M1 (import seulement)
+import '../../data/services/photos_m3.dart';
 import '../../data/services/signalement_repository.dart';
 import '../../data/services/sync_signalements_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
@@ -22,7 +25,8 @@ import 'widgets_module3.dart';
 ///
 /// L'utilisateur choisit une catégorie dans une GridView, donne un titre,
 /// décrit le problème, coche "Danger pour les personnes" si besoin, peut
-/// ajouter une photo (bouton visuel pour l'instant) et indique le lieu.
+/// ajoute une photo (appareil photo ou galerie, envoyée sur Cloudinary) et
+/// indique le lieu (texte, ou "Utiliser ma position" : GPS + adresse).
 ///
 /// - `CreateSignalementScreen()` : nouveau signalement ;
 /// - `CreateSignalementScreen(signalement: s)` : l'auteur modifie [s]
@@ -61,6 +65,12 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   bool _localisationEnCours = false; // GPS + adresse en cours
   PointGps? _position; // point GPS ("Utiliser ma position"), optionnel
 
+  // Photo : un fichier choisi sur le téléphone (pas encore envoyé), ou la
+  // photo déjà en ligne d'un signalement modifié
+  String? _photoLocale; // copie dans le dossier de l'application
+  String? _photoUrlExistante; // modification : null après "Retirer"
+  bool _photoEnCours = false; // appareil photo / galerie ouverts
+
   // Brouillon (création seulement)
   final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
   Brouillon? _brouillonTrouve; // proposé avec "Reprendre le brouillon"
@@ -82,6 +92,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       _categorieChoisie = existant.categorieId;
       _danger = existant.danger;
       _position = existant.position;
+      _photoUrlExistante = existant.photoUrl;
       return;
     }
     // Création : brouillon automatique à chaque frappe
@@ -97,6 +108,11 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     // On quitte sans publier : le brouillon est gardé (lu AVANT dispose)
     if (!_modeModification && !_termine) {
       _sync.enregistrerBrouillon(_brouillonActuel());
+    }
+    // Modification abandonnée : la nouvelle photo choisie ne sert plus
+    // (pas de brouillon en modification)
+    if (_modeModification) {
+      PhotosM3.supprimerLocale(_photoLocale);
     }
     _titreController.dispose();
     _descriptionController.dispose();
@@ -129,6 +145,7 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       lieu: _localisationController.text,
       danger: _danger,
       position: _position,
+      photoLocale: _photoLocale,
       dateModification: DateTime.now(),
     );
   }
@@ -158,6 +175,9 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       _categorieChoisie = brouillon.categorieId;
       _danger = brouillon.danger;
       _position = brouillon.position;
+      // La photo du brouillon, si elle est toujours sur le téléphone
+      final String? photo = brouillon.photoLocale;
+      _photoLocale = photo != null && File(photo).existsSync() ? photo : null;
       _brouillonTrouve = null;
     });
   }
@@ -167,7 +187,87 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     setState(() {
       _brouillonTrouve = null;
     });
-    await _sync.supprimerBrouillon();
+    await _sync.supprimerBrouillon(avecPhoto: true); // sa photo aussi
+  }
+
+  // =====================================================================
+  // Photo (PhotosM3 : image_picker + Cloudinary)
+  // =====================================================================
+
+  /// "Prendre une photo" ou "Choisir dans la galerie".
+  Future<void> _choisirSource() async {
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: Text(tr('Prendre une photo', 'Sawwer')),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: Text(tr('Choisir dans la galerie', 'Ikhtar mel galerie')),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (source != null) {
+      await _choisirPhoto(source);
+    }
+  }
+
+  /// Ouvre l'appareil photo / la galerie, puis garde une copie de la photo
+  /// dans le dossier de l'application (elle peut attendre l'envoi).
+  Future<void> _choisirPhoto(ImageSource source) async {
+    setState(() {
+      _photoEnCours = true;
+    });
+    final Resultat<String?> choix = await PhotosM3.choisir(source);
+    String? erreur = choix.erreur;
+    String? copie;
+    final String? chemin = choix.donnee;
+    if (choix.estSucces && chemin != null) {
+      final Resultat<String> gardee = await PhotosM3.garderSurTelephone(chemin);
+      erreur = gardee.erreur;
+      copie = gardee.donnee;
+    }
+    if (!mounted) {
+      await PhotosM3.supprimerLocale(copie);
+      return;
+    }
+    final String? ancienne = _photoLocale;
+    setState(() {
+      _photoEnCours = false;
+      if (copie != null) {
+        _photoLocale = copie;
+      }
+    });
+    if (erreur != null) {
+      afficherMessageM3(context, erreur);
+      return;
+    }
+    if (copie != null) {
+      await PhotosM3.supprimerLocale(ancienne); // remplacée
+      _formulaireModifie();
+    }
+  }
+
+  /// "Retirer" : plus de photo (la copie locale est supprimée).
+  Future<void> _retirerPhoto() async {
+    final String? ancienne = _photoLocale;
+    setState(() {
+      _photoLocale = null;
+      _photoUrlExistante = null;
+    });
+    await PhotosM3.supprimerLocale(ancienne);
+    _formulaireModifie();
   }
 
   /// "Utiliser ma position" :
@@ -247,6 +347,9 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       nbConfirmations: existant?.nbConfirmations ?? 0,
       danger: _danger,
       position: _position,
+      // Modification : la photo en ligne gardée (null si "Retirer") ;
+      // une nouvelle photo locale est envoyée au moment d'enregistrer
+      photoUrl: _photoUrlExistante,
     );
 
     setState(() {
@@ -263,13 +366,25 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   /// suite, et l'écran attendrait).
   Future<void> _enregistrerModification(Signalement saisi) async {
     Resultat<void> resultat;
-    if (await _sync.estEnLigne()) {
-      resultat = await SignalementRepository().modifierSignalement(saisi);
-    } else {
+    final String? nouvellePhoto = _photoLocale;
+    if (!await _sync.estEnLigne()) {
       resultat = Resultat.echec(tr(
         'Pas de connexion Internet : la modification se fait en ligne',
         'Ma famech connexion : el ta3dil yetsna3 en ligne',
       ));
+    } else if (nouvellePhoto != null) {
+      // Nouvelle photo : d'abord sur Cloudinary, puis son adresse dans Firestore
+      final Resultat<String> photo = await PhotosM3.envoyerFichier(nouvellePhoto);
+      resultat = photo.estSucces
+          ? await SignalementRepository()
+              .modifierSignalement(saisi.copyWith(photoUrl: photo.donnee))
+          : Resultat.echec(photo.erreur!);
+    } else {
+      resultat = await SignalementRepository().modifierSignalement(saisi);
+    }
+    if (resultat.estSucces) {
+      _photoLocale = null; // envoyée : la copie locale ne sert plus
+      await PhotosM3.supprimerLocale(nouvellePhoto);
     }
     if (!mounted) {
       return; // l'écran a été fermé pendant l'attente
@@ -287,7 +402,8 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   /// Création : SyncSignalementsM3 envoie à Firestore, ou garde dans la
   /// file SQLite s'il n'y a pas de réseau.
   Future<void> _publierNouveau(Signalement saisi) async {
-    final Resultat<EtatPublicationM3> resultat = await _sync.publier(saisi);
+    final Resultat<EtatPublicationM3> resultat =
+        await _sync.publier(saisi, photoLocale: _photoLocale);
     if (!mounted) {
       return;
     }
@@ -328,6 +444,8 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     setState(() {
       _categorieChoisie = null;
       _danger = false;
+      _position = null;
+      _photoLocale = null; // envoyée, ou gardée par la file d'envoi
     });
   }
 
@@ -467,6 +585,61 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
           icon: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
         ),
       ],
+    );
+  }
+
+  /// L'aperçu : la photo choisie (fichier) ou celle déjà en ligne
+  /// (miniature Cloudinary), avec "Changer" et "Retirer".
+  Widget _apercuPhoto(String? locale, String? enLigne) {
+    final Widget image = locale != null
+        ? Image.file(
+            File(locale),
+            key: const ValueKey('photo_apercu'),
+            height: 180,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, erreur, trace) => _photoIndisponible(),
+          )
+        : Image.network(
+            PhotosM3.miniature(enLigne!, largeur: 800, hauteur: 450),
+            key: const ValueKey('photo_apercu'),
+            height: 180,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, erreur, trace) => _photoIndisponible(),
+          );
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          child: image,
+        ),
+        Wrap(
+          alignment: WrapAlignment.end,
+          children: [
+            TextButton.icon(
+              onPressed: _choisirSource,
+              icon: const Icon(Icons.photo_camera_outlined, size: 18),
+              label: Text(tr('Changer', 'Badel')),
+            ),
+            TextButton.icon(
+              onPressed: _retirerPhoto,
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: Text(tr('Retirer la photo', 'Na77i it-taswira')),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _photoIndisponible() {
+    return Container(
+      height: 180,
+      color: AppColors.backgroundSecondary,
+      alignment: Alignment.center,
+      child: Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
     );
   }
 
@@ -643,16 +816,31 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
     );
   }
 
-  /// Zone "+ Ajouter une photo" en pointillés (bouton visuel pour l'instant).
+  /// La zone photo : chargement, aperçu (Changer / Retirer), ou le bouton
+  /// "+ Ajouter une photo" en pointillés.
   Widget _boutonPhoto() {
+    if (_photoEnCours) {
+      return Container(
+        height: 120,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        ),
+        child: const CircularProgressIndicator(),
+      );
+    }
+    final String? locale = _photoLocale;
+    final String? enLigne = _photoUrlExistante;
+    if (locale != null || enLigne != null) {
+      return _apercuPhoto(locale, enLigne);
+    }
     return CustomPaint(
       painter: _BordurePointillee(),
       child: SizedBox(
         width: double.infinity,
         child: TextButton(
-          onPressed: () {
-            // Choix d'une photo : à venir (étape photo du module 3)
-          },
+          onPressed: _choisirSource,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 22),
             shape: RoundedRectangleBorder(

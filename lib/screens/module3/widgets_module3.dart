@@ -227,6 +227,39 @@ class EtiquetteDanger extends StatelessWidget {
   }
 }
 
+/// La photo d'un signalement en plein écran, avec zoom (deux doigts).
+class PhotoPleinEcranM3 extends StatelessWidget {
+  final String url; // l'image originale (pas la miniature)
+
+  const PhotoPleinEcranM3({super.key, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(tr('Photo', 'Taswira')),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          maxScale: 5,
+          child: Image.network(
+            url,
+            key: const ValueKey('photo_plein_ecran'),
+            fit: BoxFit.contain,
+            errorBuilder: (context, erreur, trace) => Text(
+              tr('Photo indisponible', 'Taswira mouch mawjouda'),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Message centré (liste vide, erreur), avec un bouton optionnel.
 class MessageEtatM3 extends StatelessWidget {
   final IconData icone;
