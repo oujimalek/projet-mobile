@@ -24,8 +24,20 @@ enum TriSignalements { recents, urgents }
 ///   - le filtre de statut et le filtre de catégorie ;
 ///   - le tri : plus récents ou plus urgents.
 /// Toucher une carte ouvre le détail ; le bouton "Signaler" ouvre la création.
+///
+/// Ouvert depuis un autre module (lien du routeur) :
+///   - `/signalements?onglet=mes` → directement "Mes signalements" (Profil) ;
+///   - `/signalements?action=nouveau` → ouvre tout de suite la création
+///     (menu latéral "Nouveau signalement").
 class SignalementsScreen extends StatefulWidget {
-  const SignalementsScreen({super.key});
+  final bool mesSignalements; // ouvrir sur l'onglet "Mes signalements"
+  final bool ouvrirCreation; // ouvrir la création dès l'arrivée
+
+  const SignalementsScreen({
+    super.key,
+    this.mesSignalements = false,
+    this.ouvrirCreation = false,
+  });
 
   @override
   State<SignalementsScreen> createState() {
@@ -57,6 +69,16 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
   @override
   void initState() {
     super.initState();
+    _mesSignalements = widget.mesSignalements;
+    if (widget.ouvrirCreation) {
+      // Après le premier affichage : la création s'ouvre par-dessus la
+      // liste (au retour, message et liste à jour comme d'habitude)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _ouvrirCreation();
+        }
+      });
+    }
     // Écoute la file d'envoi (ex : envoyée au retour du réseau)
     _sync.changements.addListener(_fileChangee);
     // Envoie la file maintenant et à chaque retour du réseau

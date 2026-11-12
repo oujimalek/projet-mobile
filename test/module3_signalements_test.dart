@@ -493,6 +493,47 @@ void main() {
   });
 
   // =====================================================================
+  group('Écran : liste ouverte depuis un autre module', () {
+    testWidgets('mesSignalements : directement sur "Mes signalements"',
+        (WidgetTester tester) async {
+      await afficher(tester, const SignalementsScreen(mesSignalements: true));
+      expect(find.text('1 signalement'), findsOneWidget);
+      expect(find.text('Coupure d\'électricité'), findsOneWidget); // r1 d'Amira
+      expect(find.text('Fuite d\'eau devant l\'entrée'), findsNothing);
+
+      // On peut toujours revenir sur "Tous"
+      await tester.tap(find.text('Tous'));
+      await tester.pumpAndSettle();
+      expect(find.text('4 signalements'), findsOneWidget);
+    });
+
+    testWidgets('ouvrirCreation : la création s\'ouvre, puis retour à la liste',
+        (WidgetTester tester) async {
+      await afficher(tester, const SignalementsScreen(ouvrirCreation: true));
+      expect(find.text('Nouveau signalement'), findsOneWidget);
+
+      await tester.tap(find.text('Eau'));
+      await tester.enterText(find.byType(TextFormField).at(0), 'Fuite au parking');
+      await tester.enterText(
+          find.byType(TextFormField).at(1), 'Une fuite au niveau du parking');
+      await tester.enterText(find.byType(TextFormField).at(2), 'Parking');
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pumpAndSettle();
+
+      // Retour sur la liste, avec le message et le nouveau signalement
+      expect(find.text('Yaatik saha ! Signalement publié.'), findsOneWidget);
+      expect(find.text('5 signalements'), findsOneWidget);
+      expect(find.text('Nouveau signalement'), findsNothing);
+    });
+
+    testWidgets('Sans paramètre : "Tous", pas de création',
+        (WidgetTester tester) async {
+      await afficher(tester, const SignalementsScreen());
+      expect(find.text('4 signalements'), findsOneWidget);
+      expect(find.text('Nouveau signalement'), findsNothing);
+    });
+  });
+
   group('Écran : liste', () {
     testWidgets('Affiche les 4 signalements et filtre par statut',
         (WidgetTester tester) async {
