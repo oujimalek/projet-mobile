@@ -209,17 +209,27 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
     if (!mounted || etat == null) {
       return;
     }
-    if (etat == EtatPublicationM3.envoye) {
-      afficherMessageM3(
-        context,
-        tr('Yaatik saha ! Signalement publié.', 'Yaatik saha ! Tablighek tbaath.'),
-      );
-    } else {
-      afficherMessageM3(
-        context,
-        tr('Pas de connexion : ton signalement sera envoyé automatiquement.',
-            'Ma famech connexion : tablighek yetb3ath wa7dou ba3d.'),
-      );
+    switch (etat) {
+      case EtatPublicationM3.envoye:
+        afficherMessageM3(
+          context,
+          tr('Yaatik saha ! Signalement publié.', 'Yaatik saha ! Tablighek tbaath.'),
+        );
+      case EtatPublicationM3.misEnFile:
+        afficherMessageM3(
+          context,
+          tr('Pas de connexion : ton signalement sera envoyé automatiquement.',
+              'Ma famech connexion : tablighek yetb3ath wa7dou ba3d.'),
+        );
+      case EtatPublicationM3.doublonConfirme:
+        // Le détail du signalement existant est ouvert par-dessus la liste
+        afficherMessageM3(
+          context,
+          tr('Merci ! Tu as confirmé le signalement existant.',
+              'Ya3tik saha ! Akkedt it-tabligh elli mawjoud.'),
+        );
+      case EtatPublicationM3.doublonOuvert:
+        break; // le détail est ouvert, rien à ajouter
     }
     _charger();
   }

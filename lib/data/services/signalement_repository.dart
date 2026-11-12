@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../models/quartier.dart' show PointGps;
 import '../models/signalement.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
@@ -21,6 +24,20 @@ class NumeroUtile {
     }
     return '${numero.substring(0, 2)} ${numero.substring(2, 5)} '
         '${numero.substring(5)}';
+  }
+}
+
+/// M3 - Un signalement existant qui ressemble à celui qu'on va publier.
+class DoublonPossible {
+  final Signalement signalement;
+  final double distanceMetres;
+
+  const DoublonPossible(this.signalement, this.distanceMetres);
+
+  /// "45 m" (au moins 1 m).
+  String get distanceLisible {
+    final int metres = distanceMetres.round();
+    return '${metres < 1 ? 1 : metres} m';
   }
 }
 
@@ -332,6 +349,64 @@ abstract class SignalementRepository {
     final List<Signalement> triee = List.of(liste);
     triee.sort((a, b) => b.date.compareTo(a.date));
     return triee;
+  }
+
+  // =====================================================================
+  // Anti-doublon : même problème, même endroit, même jour
+  // =====================================================================
+
+  static const double rayonDoublonMetres = 100;
+  static const Duration delaiDoublon = Duration(hours: 24);
+
+  /// Distance en mètres entre deux points GPS (formule de haversine : la
+  /// Terre est une sphère de rayon 6 371 km).
+  static double distanceMetres(PointGps a, PointGps b) {
+    const double rayonTerre = 6371000;
+    double radians(double degres) => degres * pi / 180;
+    final double dLat = radians(b.latitude - a.latitude);
+    final double dLon = radians(b.longitude - a.longitude);
+    final double h = sin(dLat / 2) * sin(dLat / 2) +
+        cos(radians(a.latitude)) *
+            cos(radians(b.latitude)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    return 2 * rayonTerre * atan2(sqrt(h), sqrt(1 - h));
+  }
+
+  /// Le signalement existant le plus proche qui ressemble à [nouveau]
+  /// (null : aucun) :
+  ///   - même catégorie, toujours ouvert (en attente ou en cours) ;
+  ///   - créé dans les dernières 24 h avant [maintenant] ;
+  ///   - à 100 m au plus (les deux ont un point GPS).
+  static DoublonPossible? doublonProbable(
+    Signalement nouveau,
+    List<Signalement> existants,
+    DateTime maintenant,
+  ) {
+    final PointGps? ici = nouveau.position;
+    if (ici == null) {
+      return null; // pas de point GPS : pas de vérification
+    }
+    DoublonPossible? plusProche;
+    for (final Signalement existant in existants) {
+      final PointGps? la = existant.position;
+      if (la == null ||
+          existant.id == nouveau.id ||
+          existant.categorieId != nouveau.categorieId ||
+          existant.estCloture ||
+          maintenant.difference(existant.date) > delaiDoublon ||
+          existant.date.isAfter(maintenant)) {
+        continue;
+      }
+      final double distance = distanceMetres(ici, la);
+      if (distance > rayonDoublonMetres) {
+        continue;
+      }
+      if (plusProche == null || distance < plusProche.distanceMetres) {
+        plusProche = DoublonPossible(existant, distance);
+      }
+    }
+    return plusProche;
   }
 
   /// Garde les signalements d'une catégorie (null : tous).

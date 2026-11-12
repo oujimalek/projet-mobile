@@ -17,6 +17,8 @@ import 'utilisateur_repository.dart';
 enum EtatPublicationM3 {
   envoye, // il est dans Firestore
   misEnFile, // pas de réseau : gardé dans SQLite, envoyé plus tard
+  doublonConfirme, // pas publié : j'ai confirmé le signalement similaire
+  doublonOuvert, // pas publié : le signalement similaire est ouvert
 }
 
 /// Une liste de signalements, et d'où elle vient.
@@ -520,6 +522,28 @@ class SyncSignalementsM3 {
       return null;
     }
     return publies + (await getEnvois()).length;
+  }
+
+  /// Anti-doublon : cherche dans le cache SQLite (rempli par la liste) un
+  /// signalement ouvert de la même catégorie, des dernières 24 h, à 100 m.
+  /// Aucune requête Firestore (donc pas de nouvel index), marche hors ligne.
+  Future<DoublonPossible?> chercherDoublon(Signalement nouveau) async {
+    if (nouveau.position == null) {
+      return null;
+    }
+    try {
+      final List<Signalement> memeCategorie = await _base.lireCache(
+        _moi.quartierId ?? '',
+        categorieId: nouveau.categorieId,
+      );
+      return SignalementRepository.doublonProbable(
+        nouveau,
+        memeCategorie,
+        DateTime.now(),
+      );
+    } catch (e) {
+      return null; // pas de cache : on publie sans vérifier
+    }
   }
 
   /// Après une suppression : le signalement quitte aussi le cache.

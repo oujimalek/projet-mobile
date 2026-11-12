@@ -19,6 +19,7 @@ import '../../theme/preference_langue.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
+import 'signalement_detail_screen.dart';
 import 'widgets_module3.dart';
 
 /// M3 - Signalements : création OU modification d'un signalement.
@@ -402,6 +403,31 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
   /// Création : SyncSignalementsM3 envoie à Firestore, ou garde dans la
   /// file SQLite s'il n'y a pas de réseau.
   Future<void> _publierNouveau(Signalement saisi) async {
+    // Anti-doublon (seulement avec un point GPS) : le même problème a-t-il
+    // déjà été signalé tout près, aujourd'hui ?
+    final DoublonPossible? doublon = await _sync.chercherDoublon(saisi);
+    if (!mounted) {
+      return;
+    }
+    if (doublon != null) {
+      final bool? memeProbleme = await _demanderDoublon(doublon);
+      if (!mounted) {
+        return;
+      }
+      if (memeProbleme == null) {
+        // Fenêtre fermée sans choisir : on reste sur le formulaire
+        setState(() {
+          _enChargement = false;
+        });
+        return;
+      }
+      if (memeProbleme) {
+        await _rejoindreDoublon(doublon.signalement);
+        return;
+      }
+      // "Non, publier quand même" : on continue
+    }
+
     final Resultat<EtatPublicationM3> resultat =
         await _sync.publier(saisi, photoLocale: _photoLocale);
     if (!mounted) {
@@ -641,6 +667,86 @@ class _CreateSignalementScreenState extends State<CreateSignalementScreen> {
       alignment: Alignment.center,
       child: Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
     );
+  }
+
+  /// "Un signalement similaire existe à 45 m : « titre ». C'est le même
+  /// problème ?" → true (oui), false (publier quand même), null (fermée).
+  Future<bool?> _demanderDoublon(DoublonPossible doublon) {
+    final bool estLeMien = doublon.signalement.auteurId ==
+        UtilisateurRepository().getUtilisateurConnecte().id;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(tr('Déjà signalé ?', 'Deja mballagh 3lih ?')),
+          content: Text(
+            tr(
+              'Un signalement similaire existe à ${doublon.distanceLisible} : '
+                  '« ${doublon.signalement.titre} ». C\'est le même problème ?',
+              'Famma tabligh kifou 3la ${doublon.distanceLisible} : '
+                  '« ${doublon.signalement.titre} ». Nafs el machkel ?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(tr('Non, publier quand même', 'Le, ab3ath')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(estLeMien
+                  ? tr('Oui, voir mon signalement', 'Ey, chouf tablighi')
+                  : tr('Oui, Sa7 ena zeda', 'Ey, Sa7 ena zeda')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// "Oui" : au lieu de publier, on confirme le signalement existant (s'il
+  /// n'est pas à moi) puis on ouvre son détail À LA PLACE de ce formulaire.
+  /// Le brouillon (et sa photo) ne sert plus.
+  Future<void> _rejoindreDoublon(Signalement existant) async {
+    final String moiId = UtilisateurRepository().getUtilisateurConnecte().id;
+    EtatPublicationM3 etat = EtatPublicationM3.doublonOuvert;
+    if (existant.auteurId != moiId) {
+      if (await _sync.estEnLigne()) {
+        final Resultat<void> confirmation =
+            await SignalementRepository().confirmer(existant.id);
+        if (confirmation.estSucces) {
+          etat = EtatPublicationM3.doublonConfirme;
+        } else if (mounted) {
+          afficherMessageM3(context, confirmation.erreur!); // ex : déjà confirmé
+        }
+      } else if (mounted) {
+        afficherMessageM3(
+          context,
+          tr('Pas de connexion : tu pourras le confirmer quand le réseau revient',
+              'Ma famech connexion : akkdou ki yerja3 el réseau'),
+        );
+      }
+    }
+    _termine = true;
+    _minuteurBrouillon?.cancel();
+    final String? photo = _photoLocale;
+    _photoLocale = null;
+    await _sync.supprimerBrouillon(avecPhoto: true);
+    await PhotosM3.supprimerLocale(photo);
+    if (!mounted) {
+      return;
+    }
+    final MaterialPageRoute<bool> detail = MaterialPageRoute<bool>(
+      builder: (context) => SignalementDetailScreen(signalementId: existant.id),
+    );
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pushReplacement(detail, result: etat);
+    } else {
+      setState(() {
+        _enChargement = false;
+      });
+      Navigator.of(context).push(detail);
+    }
   }
 
   /// "Tu as un brouillon" : Reprendre / Supprimer.
