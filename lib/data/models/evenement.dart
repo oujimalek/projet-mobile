@@ -58,6 +58,8 @@ class Evenement {
   final String? photoUrl; // la photo de l'événement (Cloudinary), optionnelle
   final String? serviceId; // (D4) service commun lié (module 2), optionnel
   final String? serviceNom; // son titre, recopié pour l'affichage
+  final String? signalementId; // (D3) signalement à l'origine (module 3), optionnel
+  final String? signalementTitre; // son titre, recopié pour l'affichage
 
   const Evenement({
     required this.id,
@@ -79,6 +81,8 @@ class Evenement {
     this.photoUrl,
     this.serviceId,
     this.serviceNom,
+    this.signalementId,
+    this.signalementTitre,
   });
 
   /// true si l'événement est terminé (sa fin, ou son début s'il n'a pas de fin).
@@ -114,6 +118,8 @@ class Evenement {
       'photoUrl': photoUrl,
       'serviceId': serviceId,
       'serviceNom': serviceNom,
+      'signalementId': signalementId,
+      'signalementTitre': signalementTitre,
     };
   }
 
@@ -142,6 +148,8 @@ class Evenement {
       photoUrl: map['photoUrl'],
       serviceId: map['serviceId'],
       serviceNom: map['serviceNom'],
+      signalementId: map['signalementId'],
+      signalementTitre: map['signalementTitre'],
     );
   }
 
@@ -167,6 +175,8 @@ class Evenement {
     String? serviceId,
     String? serviceNom,
     bool sansService = false,
+    String? signalementId,
+    String? signalementTitre,
   }) {
     return Evenement(
       id: id,
@@ -188,6 +198,10 @@ class Evenement {
       photoUrl: sansPhoto ? null : (photoUrl ?? this.photoUrl),
       serviceId: sansService ? null : (serviceId ?? this.serviceId),
       serviceNom: sansService ? null : (serviceNom ?? this.serviceNom),
+      // (D3) le lien au signalement est gardé (il ne change pas après la
+      // création : les règles ne le laissent pas modifier)
+      signalementId: signalementId ?? this.signalementId,
+      signalementTitre: signalementTitre ?? this.signalementTitre,
     );
   }
 }

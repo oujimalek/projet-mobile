@@ -134,6 +134,8 @@ class FirebaseEvenementRepository implements EvenementRepository {
     String? photoUrl,
     String? serviceId,
     String? serviceNom,
+    String? signalementId,
+    String? signalementTitre,
   }) {
     return _executer(() async {
       final String? refus = EvenementRepository.refusEvenement(
@@ -168,8 +170,30 @@ class FirebaseEvenementRepository implements EvenementRepository {
         photoUrl: photoUrl,
         serviceId: serviceId,
         serviceNom: serviceNom,
+        signalementId: signalementId,
+        signalementTitre: signalementTitre,
       );
       await _collectionEvenements.add(evenement.toMap());
+    });
+  }
+
+  @override
+  Future<Resultat<List<Evenement>>> getEvenementsDuSignalement(
+    String signalementId,
+  ) {
+    return _executer(() async {
+      // (D3) Un seul filtre d'égalité : pas d'index composite ; le tri par
+      // date est fait ici
+      final QuerySnapshot<Map<String, dynamic>> resultat =
+          await _collectionEvenements
+              .where('signalementId', isEqualTo: signalementId)
+              .get();
+      final List<Evenement> evenements = [];
+      for (final document in resultat.docs) {
+        evenements.add(Evenement.fromMap(document.id, document.data()));
+      }
+      evenements.sort((a, b) => a.date.compareTo(b.date));
+      return evenements;
     });
   }
 

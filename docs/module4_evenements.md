@@ -81,7 +81,12 @@ Seul un membre **actif** du quartier voit le module.
   quoi, questions, avis après l'événement, ajout à l'agenda du téléphone,
   export de la liste, lieu sur une carte, photo (Cloudinary, offre
   gratuite, preset non signé), vue calendrier, présence par QR code, lien
-  vers un service commun du module 2.
+  vers un service commun du module 2, **événement organisé à la suite d'un
+  signalement du module 3 (D3)** : champs `signalementId` /
+  `signalementTitre` (comme `serviceId` / `serviceNom`), ligne « Suite au
+  signalement » dans le détail, `getEvenementsDuSignalement` (un seul filtre
+  d'égalité, pas d'index) ; le lien ne change plus après la création (les
+  règles de modification ne l'acceptent pas).
 - **Sondages** : résultats en direct, camembert, résultats cachés avant de
   voter, compte à rebours + participation, sondage de date → « Créer
   l'événement », sondages rattachés à un événement, votes secrets
@@ -129,5 +134,4 @@ Seul un membre **actif** du quartier voit le module.
 
 ## 8. Pour plus tard
 
-- **Événement depuis un signalement (M3)** : le module 3 n'existe pas encore
-  dans les branches ; à ajouter quand il sera fusionné.
+- ~~Événement depuis un signalement (M3)~~ : fait (D3), voir la section 4.

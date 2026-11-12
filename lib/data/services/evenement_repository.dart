@@ -455,7 +455,15 @@ abstract class EvenementRepository {
     String? photoUrl,
     String? serviceId,
     String? serviceNom,
+    String? signalementId, // (D3) signalement à l'origine (module 3)
+    String? signalementTitre,
   });
+
+  /// (D3) Les événements organisés à la suite d'un signalement (module 3).
+  /// Un seul filtre d'égalité : pas d'index composite.
+  Future<Resultat<List<Evenement>>> getEvenementsDuSignalement(
+    String signalementId,
+  );
 
   /// L'organisateur (ou l'admin) modifie titre, description, dates, lieu,
   /// catégorie et places. Le compteur de participants ne change pas.

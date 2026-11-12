@@ -17,6 +17,7 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../module1/widgets_module1.dart';
 import '../module2/service_detail_screen.dart';
+import '../module3/signalement_detail_screen.dart'; // (D3)
 import 'carte_evenement.dart';
 import 'evenement_form_screen.dart';
 import 'module4_widgets.dart';
@@ -510,6 +511,31 @@ class _EvenementDetailScreenState extends State<EvenementDetailScreen> {
                   Expanded(
                     child: Text(
                       '${tr('Service lié', 'Service marbout')} : ${evenement.serviceNom ?? 'service commun'}',
+                      style: TextStyle(
+                          color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: AppColors.primary),
+                ],
+              ),
+            ),
+          ),
+        // (D3) Le signalement à l'origine (module 3) : on ouvre son détail
+        if (evenement.signalementId != null)
+          InkWell(
+            key: const ValueKey('lien_signalement'),
+            onTap: () => ouvrirEcranM4(
+                context,
+                SignalementDetailScreen(signalementId: evenement.signalementId!)),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.campaign_outlined, color: AppColors.primary, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${tr('Suite au signalement', 'B3d it-tabligh')} : ${evenement.signalementTitre ?? tr('signalement', 'tabligh')}',
                       style: TextStyle(
                           color: AppColors.primary, fontWeight: FontWeight.w600),
                     ),

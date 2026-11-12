@@ -3,11 +3,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../models/evenement.dart' show CategorieEvenement; // M4 (D3)
 import '../models/historique_signalement.dart';
 import '../models/quartier.dart' show PointGps;
 import '../models/signalement.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
+import 'evenement_repository.dart' show EvenementRepository; // M4 (D3)
 import 'firebase_signalement_repository.dart';
 import 'photos_m3.dart';
 
@@ -366,6 +368,48 @@ abstract class SignalementRepository {
     final List<Signalement> triee = List.of(liste);
     triee.sort((a, b) => b.date.compareTo(a.date));
     return triee;
+  }
+
+  // =====================================================================
+  // (D3) Organiser un événement à partir d'un signalement (module 4)
+  // =====================================================================
+
+  /// Le type d'événement pour une catégorie de signalement (null : pas
+  /// d'événement proposé). Ordures → nettoyage ; travaux → réunion.
+  static CategorieEvenement? categorieEvenementPour(String categorieId) {
+    switch (categorieId) {
+      case 'ordures':
+        return CategorieEvenement.nettoyage;
+      case 'travaux':
+        return CategorieEvenement.reunion;
+      default:
+        return null;
+    }
+  }
+
+  /// Le titre proposé : « Nettoyage : titre » / « Réunion : titre »,
+  /// raccourci si besoin pour rester dans la limite du module 4.
+  static String titreEvenementPour(Signalement signalement) {
+    final CategorieEvenement? categorie =
+        categorieEvenementPour(signalement.categorieId);
+    final String debut = '${(categorie ?? CategorieEvenement.autre).libelle} : ';
+    final String titre = signalement.titre.trim();
+    const int max = EvenementRepository.titreMax;
+    if (debut.length + titre.length <= max) {
+      return '$debut$titre';
+    }
+    return '$debut${titre.substring(0, max - debut.length - 1).trimRight()}…';
+  }
+
+  /// Le bouton « Organiser un événement » est proposé si :
+  ///   - l'utilisateur peut organiser (leader ou admin, comme la règle
+  ///     `organisateurDe` du module 4) ;
+  ///   - le signalement est ouvert (en attente ou en cours) ;
+  ///   - sa catégorie a un type d'événement (ordures, travaux).
+  static bool peutOrganiserEvenement(Utilisateur moi, Signalement signalement) {
+    return EvenementRepository.peutOrganiser(moi) &&
+        !signalement.estCloture &&
+        categorieEvenementPour(signalement.categorieId) != null;
   }
 
   // =====================================================================
