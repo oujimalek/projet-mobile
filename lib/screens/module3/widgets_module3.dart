@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
+import '../../data/services/liens_m3.dart';
+import '../../data/services/signalement_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 
@@ -114,6 +116,24 @@ String texteStatut(StatutSignalement statut) {
     case StatutSignalement.refuse:
       return tr('Refusé', 'Martoud');
   }
+}
+
+/// Le texte partagé (WhatsApp, SMS...) : titre, catégorie, statut, lieu,
+/// et le lien OpenStreetMap si le signalement a un point GPS.
+String texteDePartageM3(Signalement signalement) {
+  final String categorie =
+      SignalementRepository.getCategorieParId(signalement.categorieId).nom;
+  final List<String> lignes = [
+    '${tr('Signalement Houmani', 'Tabligh Houmani')} : ${signalement.titre}',
+    '${tr('Catégorie', 'Naw3')} : $categorie',
+    '${tr('Statut', 'El 7ala')} : ${texteStatut(signalement.statut)}',
+    '${tr('Lieu', 'Win')} : ${signalement.lieu}',
+  ];
+  final PointGps? position = signalement.position;
+  if (position != null) {
+    lignes.add('${tr('Carte', 'Carte')} : ${LiensM3.urlOpenStreetMap(position)}');
+  }
+  return lignes.join('\n');
 }
 
 /// Badge d'urgence : pastille de couleur + texte.

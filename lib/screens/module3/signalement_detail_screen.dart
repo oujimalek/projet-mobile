@@ -248,7 +248,18 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     return Scaffold(
       body: Column(
         children: [
-          AppHeader(titre: tr('Détail du signalement', 'Tafasil it-tabligh')),
+          AppHeader(
+            titre: tr('Détail du signalement', 'Tafasil it-tabligh'),
+            // Partager : seulement quand le signalement est chargé (marche
+            // aussi hors ligne : c'est le téléphone qui partage)
+            action: _signalement == null
+                ? null
+                : IconButton(
+                    tooltip: tr('Partager', 'Charek'),
+                    onPressed: _partager,
+                    icon: Icon(Icons.share_outlined, color: AppColors.primary),
+                  ),
+          ),
           Expanded(child: _contenu()),
         ],
       ),
@@ -413,6 +424,24 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// "Partager" : la fenêtre de partage du téléphone (WhatsApp, SMS...).
+  Future<void> _partager() async {
+    final Signalement? signalement = _signalement;
+    if (signalement == null) {
+      return;
+    }
+    final Resultat<void> resultat = await LiensM3.partager(
+      texteDePartageM3(signalement),
+      signalement.titre,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!resultat.estSucces) {
+      _message(resultat.erreur!);
+    }
   }
 
   /// "Appeler" : ouvre le clavier du téléphone avec le numéro.

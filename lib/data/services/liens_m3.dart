@@ -1,3 +1,4 @@
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/quartier.dart' show PointGps;
@@ -5,7 +6,8 @@ import '../resultat.dart';
 
 /// M3 - Ouvrir une autre application du téléphone (package url_launcher) :
 ///   - l'application de cartes, sur le point GPS d'un signalement ;
-///   - le téléphone, pour appeler un numéro utile (STEG, SONEDE...).
+///   - le téléphone, pour appeler un numéro utile (STEG, SONEDE...) ;
+///   - la fenêtre de partage (WhatsApp, SMS...), pour partager un signalement.
 ///
 /// On n'appelle PAS canLaunchUrl : on essaie d'ouvrir, et si ça échoue on
 /// passe au plan B. Remplaçable dans les tests :
@@ -77,8 +79,40 @@ class LiensM3 {
     return const Resultat.echec(messageAppel);
   }
 
-  /// Remet le vrai lanceur (tests).
+  // =====================================================================
+  // Partager (package share_plus, même version que le module 4)
+  // =====================================================================
+
+  /// Ouvre la fenêtre de partage du téléphone (WhatsApp, SMS, e-mail...)
+  /// avec [texte]. false : le partage n'est pas possible. Remplaçable.
+  static Future<bool> Function(String texte, String sujet) partagerTexte =
+      _sharePlus;
+
+  static Future<bool> _sharePlus(String texte, String sujet) async {
+    try {
+      final ShareResult resultat = await SharePlus.instance.share(
+        ShareParams(text: texte, subject: sujet),
+      );
+      // "dismissed" : l'utilisateur a fermé la fenêtre, ce n'est pas une erreur
+      return resultat.status != ShareResultStatus.unavailable;
+    } catch (erreur) {
+      return false;
+    }
+  }
+
+  static const String messagePartage = 'Impossible de partager sur ce téléphone';
+
+  /// "Partager" : le texte du signalement.
+  static Future<Resultat<void>> partager(String texte, String sujet) async {
+    if (await partagerTexte(texte, sujet)) {
+      return const Resultat.succes(null);
+    }
+    return const Resultat.echec(messagePartage);
+  }
+
+  /// Remet les vraies fonctions (tests).
   static void reinitialiser() {
     ouvrirUrl = _ouvrirExterne;
+    partagerTexte = _sharePlus;
   }
 }
