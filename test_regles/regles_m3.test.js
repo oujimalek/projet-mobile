@@ -301,3 +301,99 @@ describe('supprimer un signalement', () => {
     await assertSucceeds(deleteDoc(doc(base('admin1'), `${S}/encours`)));
   });
 });
+
+// ---------------------------------------------------------------------
+// Historique des statuts : quartiers/q1/signalements/{id}/historique/{auto}
+function etape(parId, statut, extra = {}) {
+  return {
+    statut,
+    note: '',
+    date: Timestamp.now(),
+    parId,
+    parNom: 'Test T.',
+    ...extra,
+  };
+}
+
+/// Création comme l'app : le signalement ET sa 1re étape dans le même lot.
+function creerAvecHistorique(uid, id, extraEtape = {}, extraSignalement = {}) {
+  const db = base(uid);
+  const batch = writeBatch(db);
+  batch.set(doc(db, `${S}/${id}`), signalement(uid, extraSignalement));
+  batch.set(doc(db, `${S}/${id}/historique/e1`), etape(uid, 'enAttente', extraEtape));
+  return batch.commit();
+}
+
+/// Changement de statut comme l'app : le statut ET l'étape dans le même lot.
+function changerStatutAvecHistorique(uid, id, statut, note = '', statutEtape = statut) {
+  const db = base(uid);
+  const batch = writeBatch(db);
+  batch.update(doc(db, `${S}/${id}`), { statut });
+  batch.set(doc(db, `${S}/${id}/historique/e2`), etape(uid, statutEtape, { note }));
+  return batch.commit();
+}
+
+describe('historique : 1re étape à la création', () => {
+  test('l\'auteur crée le signalement et sa 1re étape ensemble', async () => {
+    await assertSucceeds(creerAvecHistorique('resident2', 'n1'));
+  });
+
+  test('une étape seule sur un signalement existant : refusée', async () => {
+    await assertFails(setDoc(doc(base('resident1'), `${S}/attente/historique/x`),
+      etape('resident1', 'enAttente')));
+  });
+
+  test('la 1re étape est "en attente", au nom de l\'auteur', async () => {
+    await assertFails(creerAvecHistorique('resident2', 'n1', { statut: 'enCours' }));
+    await assertFails(creerAvecHistorique('resident2', 'n1', { parId: 'admin1' }));
+  });
+
+  test('note de 200 caractères au plus, aucun champ inconnu', async () => {
+    await assertSucceeds(creerAvecHistorique('resident2', 'n1', { note: 'a'.repeat(200) }));
+    await assertFails(creerAvecHistorique('resident2', 'n2', { note: 'a'.repeat(201) }));
+    await assertFails(creerAvecHistorique('resident2', 'n3', { important: true }));
+  });
+});
+
+describe('historique : changement de statut par l\'admin', () => {
+  test('le statut et l\'étape ensemble, avec une note', async () => {
+    await assertSucceeds(changerStatutAvecHistorique('admin1', 'attente', 'enCours',
+      'Intervention prévue jeudi'));
+  });
+
+  test('l\'étape doit recopier le NOUVEAU statut', async () => {
+    await assertFails(changerStatutAvecHistorique('admin1', 'attente', 'enCours', '', 'resolu'));
+  });
+
+  test('pas d\'étape sans vrai changement de statut', async () => {
+    await assertFails(setDoc(doc(base('admin1'), `${S}/encours/historique/x`),
+      etape('admin1', 'enCours')));
+  });
+
+  test('refuser demande une explication (3 caractères au moins)', async () => {
+    await assertFails(changerStatutAvecHistorique('admin1', 'attente', 'refuse', ''));
+    await assertFails(changerStatutAvecHistorique('admin1', 'attente', 'refuse', 'ok'));
+    await assertSucceeds(changerStatutAvecHistorique('admin1', 'attente', 'refuse',
+      'Déjà signalé à la municipalité'));
+  });
+
+  test('un résident ne peut pas écrire d\'étape', async () => {
+    await assertFails(changerStatutAvecHistorique('resident2', 'attente', 'enCours'));
+  });
+});
+
+describe('historique : lecture, jamais modifié', () => {
+  test('un membre lit l\'historique ; un membre en attente, non', async () => {
+    await assertSucceeds(creerAvecHistorique('resident2', 'n1'));
+    await assertSucceeds(getDoc(doc(base('resident1'), `${S}/n1/historique/e1`)));
+    await assertFails(getDoc(doc(base('attente1'), `${S}/n1/historique/e1`)));
+  });
+
+  test('une étape ne se modifie ni ne se supprime', async () => {
+    await assertSucceeds(creerAvecHistorique('resident2', 'n1'));
+    const fiche = doc(base('resident2'), `${S}/n1/historique/e1`);
+    await assertFails(updateDoc(fiche, { note: 'changé' }));
+    await assertFails(deleteDoc(fiche));
+    await assertFails(deleteDoc(doc(base('admin1'), `${S}/n1/historique/e1`)));
+  });
+});

@@ -412,6 +412,43 @@ service cloud.firestore {
                == get(chemin()).data.nbConfirmations + 1;
           allow update, delete: if false;
         }
+
+        // ----- Historique des statuts (id automatique) -----
+        // Une étape = { statut, note, date, parId, parNom }. Écrite dans le
+        // même WriteBatch que :
+        //   - la création du signalement (1re étape "enAttente", par l'auteur) ;
+        //   - un changement de statut par l'admin (l'étape = le nouveau statut).
+        // Jamais modifiée ni supprimée.
+        match /historique/{entreeId} {
+          function etape() {
+            return request.resource.data;
+          }
+
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && etape().keys().hasOnly(['statut', 'note', 'date', 'parId', 'parNom'])
+            && etape().parId == monUid()
+            && etape().parNom is string
+            && etape().date is timestamp
+            && etape().note is string
+            && etape().note.size() <= 200
+            && (
+              // 1re étape : pendant la création, par l'auteur
+              (!exists(chemin())
+                && getAfter(chemin()).data.auteurId == monUid()
+                && getAfter(chemin()).data.statut == 'enAttente'
+                && etape().statut == 'enAttente')
+              ||
+              // Changement de statut par l'admin, dans le même lot : le
+              // statut change vraiment, et l'étape le recopie. Refuser
+              // demande une explication (3 caractères au moins).
+              (adminDe(q)
+                && get(chemin()).data.statut != etape().statut
+                && getAfter(chemin()).data.statut == etape().statut
+                && (etape().statut != 'refuse' || etape().note.size() >= 3))
+            );
+          allow update, delete: if false;
+        }
       }
 
       // ---------- M4 · Événements ----------
