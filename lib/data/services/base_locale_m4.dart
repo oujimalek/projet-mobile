@@ -201,6 +201,20 @@ class BaseLocaleM4 {
     _base = null;
   }
 
+  /// Déconnexion : efface les brouillons et l'historique (données
+  /// personnelles de l'utilisateur qui quitte le téléphone).
+  static Future<void> vider() async {
+    try {
+      final Database db = await _ouvrir();
+      await db.transaction((txn) async {
+        await txn.delete('brouillons');
+        await txn.delete('historique');
+      });
+    } catch (e) {
+      // pas de base locale : rien à effacer
+    }
+  }
+
   // =====================================================================
   // Brouillons (CRUD)
   // =====================================================================

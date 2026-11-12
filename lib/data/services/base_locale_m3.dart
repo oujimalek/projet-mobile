@@ -386,6 +386,28 @@ class BaseLocaleM3 {
     }
   }
 
+  /// Déconnexion : efface le brouillon et la file d'envoi de
+  /// [utilisateurId], et le cache des signalements (données du quartier,
+  /// réservées à ses membres). Le cache des adresses (public) reste.
+  /// Une transaction : tout ou rien.
+  Future<void> viderUtilisateur(String utilisateurId) async {
+    final Database db = await base;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'brouillons',
+        where: 'utilisateur_id = ?',
+        whereArgs: [utilisateurId],
+      );
+      await txn.delete(
+        'envois_en_attente',
+        where: 'utilisateur_id = ?',
+        whereArgs: [utilisateurId],
+      );
+      await txn.delete('signalements_cache');
+      await txn.delete('mises_a_jour_cache');
+    });
+  }
+
   // =====================================================================
   // brouillons
   // =====================================================================

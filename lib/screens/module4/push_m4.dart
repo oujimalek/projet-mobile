@@ -76,6 +76,31 @@ class PushM4 {
     }
   }
 
+  /// Déconnexion (ou compte bloqué, refusé, supprimé) : plus aucune annonce
+  /// du quartier ni idée de l'assistant sur ce téléphone. Contrairement à
+  /// [abonner], ne demande pas la permission de notifier.
+  static Future<void> desabonner() async {
+    try {
+      Box<dynamic> boite;
+      if (Hive.isBoxOpen(_nomBoite)) {
+        boite = Hive.box<dynamic>(_nomBoite);
+      } else {
+        await Hive.initFlutter();
+        boite = await Hive.openBox<dynamic>(_nomBoite);
+      }
+      final FirebaseMessaging messagerie = FirebaseMessaging.instance;
+      for (final String cle in const ['sujetPush', 'sujetLeaders']) {
+        final String? sujet = boite.get(cle) as String?;
+        if (sujet != null) {
+          await messagerie.unsubscribeFromTopic(sujet);
+        }
+        await boite.put(cle, null);
+      }
+    } catch (e) {
+      // pas de Firebase (tests), pas de réseau... : rien à faire
+    }
+  }
+
   /// Application ouverte : Android n'affiche pas la notification tout
   /// seul, on la montre nous-mêmes (sauf pour celle qui l'a publiée).
   static void _ecouterAuPremierPlan() {

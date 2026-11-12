@@ -368,6 +368,19 @@ class SyncSignalementsM3 {
     }
   }
 
+  /// Déconnexion : efface le brouillon, la file d'envoi et le cache de
+  /// [utilisateurId], puis les photos locales qui ne servent plus.
+  /// Ne lève jamais d'exception.
+  Future<void> viderUtilisateur(String utilisateurId) async {
+    try {
+      await _base.viderUtilisateur(utilisateurId);
+    } catch (e) {
+      // pas de base locale : rien à effacer
+    }
+    await nettoyerPhotos();
+    _prevenir();
+  }
+
   /// Bouton "Annuler" : le signalement ne sera jamais envoyé (sa photo
   /// locale est supprimée aussi).
   Future<void> annuler(int id) async {

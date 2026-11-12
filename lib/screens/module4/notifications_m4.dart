@@ -110,6 +110,23 @@ class NotificationsM4 {
     }
   }
 
+  /// Déconnexion : annule TOUS les rappels programmés (ceux de l'utilisateur
+  /// qui quitte le téléphone). Sans demander la permission de notifier.
+  static Future<void> annulerTout() async {
+    try {
+      if (!_pret) {
+        await _plugin.initialize(
+          const InitializationSettings(
+            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          ),
+        );
+      }
+      await _plugin.cancelAll();
+    } catch (erreur) {
+      // Notifications indisponibles (tests) : rien à annuler
+    }
+  }
+
   /// Annule les rappels de cet événement (je me retire, il est annulé...).
   static Future<void> annuler(String evenementId) async {
     try {

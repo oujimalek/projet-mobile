@@ -177,6 +177,21 @@ class BaseLocaleM2 {
     _base = null;
   }
 
+  /// Déconnexion : efface les données PERSONNELLES (favoris, services
+  /// consultés, brouillon d'annonce). Les jours fériés, publics, restent.
+  static Future<void> vider() async {
+    try {
+      final Database db = await _ouvrir();
+      await db.transaction((txn) async {
+        await txn.delete('favoris');
+        await txn.delete('consultations');
+        await txn.delete('brouillon_service');
+      });
+    } catch (e) {
+      // pas de base locale : rien à effacer
+    }
+  }
+
   // =====================================================================
   // Jours fériés (cache du service web Nager.Date)
   // =====================================================================
