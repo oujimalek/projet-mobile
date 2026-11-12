@@ -295,6 +295,14 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       enfants.add(const SizedBox(height: 12));
       enfants.add(_photo(photo));
     }
+    // Numéro utile de la catégorie (aussi hors ligne : un appel n'a pas
+    // besoin d'Internet)
+    final NumeroUtile? numero =
+        SignalementRepository.numeroUtile(signalement.categorieId);
+    if (numero != null) {
+      enfants.add(const SizedBox(height: 12));
+      enfants.add(_carteNumeroUtile(numero));
+    }
     enfants.add(const SizedBox(height: 24));
     if (_depuisCache) {
       // Hors ligne : les actions passent par Firestore, on les cache
@@ -401,6 +409,65 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
             Icons.speed,
             '${tr('Score d\'urgence', 'Score el isti3jal')} : '
             '${SignalementRepository.scoreUrgence(signalement)}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "Appeler" : ouvre le clavier du téléphone avec le numéro.
+  Future<void> _appeler(NumeroUtile numero) async {
+    final Resultat<void> resultat = await LiensM3.appeler(numero.numero);
+    if (!mounted) {
+      return;
+    }
+    if (!resultat.estSucces) {
+      _message(resultat.erreur!);
+    }
+  }
+
+  /// Le numéro utile de la catégorie, avec le bouton "Appeler".
+  Widget _carteNumeroUtile(NumeroUtile numero) {
+    return AppCard(
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.phone_in_talk_outlined, color: AppColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr('Numéro utile', 'Noumrou mouhem'),
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                Text(
+                  numero.nom,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  numero.numeroLisible,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () => _appeler(numero),
+            icon: const Icon(Icons.call, size: 18),
+            label: Text(tr('Appeler', 'Ekleb')),
           ),
         ],
       ),

@@ -5,7 +5,7 @@ import '../resultat.dart';
 
 /// M3 - Ouvrir une autre application du téléphone (package url_launcher) :
 ///   - l'application de cartes, sur le point GPS d'un signalement ;
-///   - (étape 7) le téléphone, pour appeler un numéro utile.
+///   - le téléphone, pour appeler un numéro utile (STEG, SONEDE...).
 ///
 /// On n'appelle PAS canLaunchUrl : on essaie d'ouvrir, et si ça échoue on
 /// passe au plan B. Remplaçable dans les tests :
@@ -57,6 +57,24 @@ class LiensM3 {
       return const Resultat.succes(null);
     }
     return const Resultat.echec(messageCarte);
+  }
+
+  static const String messageAppel =
+      'Impossible d\'ouvrir le téléphone sur cet appareil';
+
+  /// Le lien d'appel : tel:80100444 (ouvre le clavier du téléphone avec le
+  /// numéro ; l'utilisateur appuie lui-même sur "Appeler", pas besoin de
+  /// permission).
+  static Uri urlAppel(String numero) {
+    return Uri(scheme: 'tel', path: numero);
+  }
+
+  /// "Appeler" un numéro utile.
+  static Future<Resultat<void>> appeler(String numero) async {
+    if (await ouvrirUrl(urlAppel(numero))) {
+      return const Resultat.succes(null);
+    }
+    return const Resultat.echec(messageAppel);
   }
 
   /// Remet le vrai lanceur (tests).

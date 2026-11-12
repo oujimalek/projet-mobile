@@ -7,6 +7,23 @@ import '../resultat.dart';
 import 'firebase_signalement_repository.dart';
 import 'photos_m3.dart';
 
+/// M3 - Un numéro utile (ex : STEG – urgences, 80100444).
+class NumeroUtile {
+  final String nom;
+  final String numero; // chiffres seulement (pour le lien tel:)
+
+  const NumeroUtile({required this.nom, required this.numero});
+
+  /// Lisible : "80 100 444" pour 8 chiffres, sinon tel quel ("198").
+  String get numeroLisible {
+    if (numero.length != 8) {
+      return numero;
+    }
+    return '${numero.substring(0, 2)} ${numero.substring(2, 5)} '
+        '${numero.substring(5)}';
+  }
+}
+
 /// M3 - Accès aux signalements du quartier : le CONTRAT.
 ///
 /// Implémentations :
@@ -82,6 +99,29 @@ abstract class SignalementRepository {
     'travaux',
     'incident',
   ];
+
+  // =====================================================================
+  // Numéros utiles (bouton "Appeler" du détail)
+  // =====================================================================
+
+  /// Le numéro à appeler pour une catégorie (seulement celles qui ont UN
+  /// numéro national ; travaux et ordures dépendent de chaque municipalité,
+  /// donc pas de bouton).
+  ///
+  /// Source : numéros nationaux publics communiqués par le responsable du
+  /// module 3 — STEG (électricité et gaz) : urgences ; SONEDE (eau) :
+  /// numéro vert ; Protection civile : 198. N'ajouter aucun numéro sans
+  /// source officielle.
+  static const Map<String, NumeroUtile> numerosUtiles = {
+    'electricite': NumeroUtile(nom: 'STEG – urgences', numero: '80100444'),
+    'eau': NumeroUtile(nom: 'SONEDE – numéro vert', numero: '80100319'),
+    'incident': NumeroUtile(nom: 'Protection civile', numero: '198'),
+  };
+
+  /// Le numéro utile de la catégorie (null : pas de numéro national).
+  static NumeroUtile? numeroUtile(String categorieId) {
+    return numerosUtiles[categorieId];
+  }
 
   /// Retrouve une catégorie à partir de son id.
   /// Si l'id n'existe pas, on renvoie la catégorie "Incident".
