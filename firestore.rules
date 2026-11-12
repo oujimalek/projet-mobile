@@ -46,6 +46,11 @@ service cloud.firestore {
       return membreDe(q) && moi().role == 'admin';
     }
 
+    // M4 : leader ou admin actif du quartier q (organise événements et sondages)
+    function organisateurDe(q) {
+      return membreDe(q) && moi().role in ['leader', 'admin'];
+    }
+
     // Seuls ces champs changent dans la modification
     function changeSeulement(champs) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(champs);
@@ -104,7 +109,9 @@ service cloud.firestore {
                 && resource.data.role != 'admin'
                 && request.resource.data.quartierId != resource.data.quartierId))
         && changeSeulement(['quartierId', 'quartierNom', 'residence',
-             'statut', 'dateDemande', 'motif'])
+             'statut', 'dateDemande', 'motif', 'role'])
+        // M4 : un leader qui change de quartier redevient résident
+        && request.resource.data.get('role', 'resident') == 'resident'
         && request.resource.data.statut == 'enAttente'
         && request.resource.data.get('motif', '') == ''
         && request.resource.data.dateDemande == request.time
@@ -123,6 +130,16 @@ service cloud.firestore {
                 && request.resource.data.motif is string
                 && request.resource.data.motif.size() >= 3
                 && request.resource.data.motif.size() <= 200));
+
+      // M4 - Admin du quartier : nomme un membre actif leader, ou lui
+      // retire ce rôle. Seulement entre "resident" et "leader" (on ne
+      // devient jamais admin ainsi, et l'admin ne se change pas lui-même).
+      allow update: if adminDe(resource.data.quartierId)
+        && monUid() != uid
+        && resource.data.statut == 'actif'
+        && changeSeulement(['role'])
+        && resource.data.role in ['resident', 'leader']
+        && request.resource.data.role in ['resident', 'leader'];
 
       // Après un changement d'e-mail (lien de confirmation cliqué) :
       // recopier dans le profil l'adresse de Firebase Auth, et rien d'autre.
@@ -371,27 +388,61 @@ service cloud.firestore {
         function maParticipation() {
           return /databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid());
         }
+        function monInteret() {
+          return /databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/interesses/$(monUid());
+        }
 
         allow read: if membreDe(q);
 
-        allow create: if membreDe(q)
+        // Seuls les leaders et l'admin créent un événement ; seul l'admin
+        // crée un événement "officiel" ; jamais déjà annulé
+        allow create: if organisateurDe(q)
           && request.resource.data.organisateurId == monUid()
-          && request.resource.data.nbParticipants == 0;
+          && request.resource.data.nbParticipants == 0
+          && request.resource.data.get('nbInteresses', 0) == 0
+          && (request.resource.data.get('officiel', false) == false || adminDe(q))
+          && request.resource.data.get('annule', false) == false
+          && (request.resource.data.get('photoUrl', null) == null
+              || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/pu3lxdrf/.*'));
 
-        // L'organisateur modifie son événement (pas le compteur).
+        // L'organisateur (ou l'admin) modifie ou annule l'événement
+        // (pas le compteur, ni "officiel").
         allow update: if membreDe(q)
-          && resource.data.organisateurId == monUid()
-          && changeSeulement(['titre', 'description', 'date', 'lieu']);
+          && (resource.data.organisateurId == monUid() || adminDe(q))
+          && changeSeulement(['titre', 'description', 'date', 'dateFin',
+                              'lieu', 'categorie', 'annule', 'placesMax',
+                              'position', 'photoUrl',
+                              'serviceId', 'serviceNom'])
+          && (request.resource.data.get('position', null) == null
+              || request.resource.data.position is latlng)
+          // Photo : seulement une adresse de NOTRE compte Cloudinary
+          && (request.resource.data.get('photoUrl', null) == null
+              || request.resource.data.photoUrl.matches('^https://res[.]cloudinary[.]com/pu3lxdrf/.*'))
+          && (request.resource.data.get('placesMax', 0) == 0
+              || request.resource.data.placesMax >= resource.data.nbParticipants);
 
-        // Compteur de participants : +1 avec ma fiche créée, -1 avec ma
-        // fiche supprimée, dans le même WriteBatch.
+        // Compteur de participants : +1 avec ma fiche créée (et une place
+        // libre s'il y a une limite), -1 avec ma fiche supprimée, dans le
+        // même WriteBatch.
         allow update: if membreDe(q)
           && changeSeulement(['nbParticipants'])
           && (
             (request.resource.data.nbParticipants == resource.data.nbParticipants + 1
-              && !exists(maParticipation()) && existsAfter(maParticipation()))
+              && !exists(maParticipation()) && existsAfter(maParticipation())
+              && (resource.data.get('placesMax', 0) == 0
+                  || request.resource.data.nbParticipants <= resource.data.placesMax))
             || (request.resource.data.nbParticipants == resource.data.nbParticipants - 1
               && exists(maParticipation()) && !existsAfter(maParticipation()))
+          );
+
+        // Compteur "Peut-être" : même principe, avec ma fiche interesses/{uid}
+        allow update: if membreDe(q)
+          && changeSeulement(['nbInteresses'])
+          && (
+            (request.resource.data.nbInteresses == resource.data.get('nbInteresses', 0) + 1
+              && !exists(monInteret()) && existsAfter(monInteret()))
+            || (request.resource.data.nbInteresses == resource.data.get('nbInteresses', 0) - 1
+              && exists(monInteret()) && !existsAfter(monInteret()))
           );
 
         allow delete: if (membreDe(q) && resource.data.organisateurId == monUid())
@@ -410,12 +461,113 @@ service cloud.firestore {
                == get(chemin()).data.nbParticipants - 1;
           allow update: if false;
         }
+
+        // ----- "Peut-être" (id du document = uid) -----
+        match /interesses/{uidInteresse} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidInteresse == monUid()
+            && getAfter(chemin()).data.nbInteresses
+               == get(chemin()).data.get('nbInteresses', 0) + 1;
+          allow delete: if membreDe(q)
+            && uidInteresse == monUid()
+            && getAfter(chemin()).data.nbInteresses
+               == get(chemin()).data.get('nbInteresses', 0) - 1;
+          allow update: if false;
+        }
+
+        // L'organisateur de l'événement, ou l'admin
+        function organisateurOuAdmin() {
+          return get(chemin()).data.organisateurId == monUid() || adminDe(q);
+        }
+
+        // ----- Liste d'attente (id = uid) : seulement quand c'est complet -----
+        match /attente/{uidAttente} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidAttente == monUid()
+            && get(chemin()).data.get('placesMax', 0) > 0
+            && get(chemin()).data.nbParticipants >= get(chemin()).data.placesMax;
+          // Je la quitte (ou j'obtiens une place), ou l'organisateur / l'admin
+          allow delete: if membreDe(q)
+            && (uidAttente == monUid() || organisateurOuAdmin());
+          allow update: if false;
+        }
+
+        // ----- Questions / commentaires -----
+        match /commentaires/{commentaireId} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && request.resource.data.auteurId == monUid()
+            && request.resource.data.texte is string
+            && request.resource.data.texte.size() >= 1
+            && request.resource.data.texte.size() <= 300;
+          // Son auteur, l'organisateur ou l'admin
+          allow delete: if membreDe(q)
+            && (resource.data.auteurId == monUid() || organisateurOuAdmin());
+          allow update: if false;
+        }
+
+        // ----- Qui apporte quoi ? -----
+        match /aApporter/{objetId} {
+          allow read: if membreDe(q);
+          // L'organisateur (ou l'admin) gère la liste
+          allow create: if membreDe(q) && organisateurOuAdmin()
+            && request.resource.data.prisParId == null;
+          allow delete: if membreDe(q) && organisateurOuAdmin();
+          // Un voisin s'en charge ou ne s'en charge plus : avant et après,
+          // c'est "personne" ou "moi"
+          allow update: if membreDe(q)
+            && changeSeulement(['prisParId', 'prisParNom'])
+            && resource.data.get('prisParId', null) in [null, monUid()]
+            && request.resource.data.get('prisParId', null) in [null, monUid()];
+        }
+
+        // ----- Avis après l'événement (id = uid) -----
+        // Un participant, après l'événement, une seule fois, 1 à 5 étoiles
+        match /avis/{uidAvis} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && uidAvis == monUid()
+            && exists(/databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid()))
+            && get(chemin()).data.date < request.time
+            && request.resource.data.note is int
+            && request.resource.data.note >= 1
+            && request.resource.data.note <= 5;
+          allow update, delete: if false;
+        }
+
+        // ----- Présence par QR code (A21) -----
+        // prive/presence = { code } : le code secret du QR. Seuls
+        // l'organisateur et l'admin le lisent ou le créent.
+        match /prive/{docPrive} {
+          allow read, create: if membreDe(q) && organisateurOuAdmin();
+          allow update, delete: if false;
+        }
+
+        // presences/{uid} : je me pointe présent en scannant le QR, si je
+        // suis inscrit, de 2 h avant à 12 h après le début, avec le BON code.
+        // Lisible par moi-même, l'organisateur et l'admin (le code y est).
+        match /presences/{uidPresence} {
+          allow read: if membreDe(q)
+            && (uidPresence == monUid() || organisateurOuAdmin());
+          allow create: if membreDe(q)
+            && uidPresence == monUid()
+            && exists(/databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/participants/$(monUid()))
+            && get(chemin()).data.get('annule', false) == false
+            && request.time > get(chemin()).data.date - duration.value(2, 'h')
+            && request.time < get(chemin()).data.date + duration.value(12, 'h')
+            && request.resource.data.code
+               == get(/databases/$(database)/documents/quartiers/$(q)/evenements/$(evenementId)/prive/presence).data.code;
+          allow update, delete: if false;
+        }
       }
 
       // ---------- M4 · Sondages ----------
       match /sondages/{sondageId} {
         allow read: if membreDe(q);
-        allow create: if membreDe(q)
+        // Seuls les leaders et l'admin créent un sondage
+        allow create: if organisateurDe(q)
           && request.resource.data.proposeParId == monUid()
           && request.resource.data.options is list
           && request.resource.data.options.size() >= 2;
@@ -423,21 +575,125 @@ service cloud.firestore {
           || adminDe(q);
         allow update: if false;
 
-        // ----- Votes (id du document = uid) : 1 vote, définitif -----
+        function compteurChemin(index) {
+          return /databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)/compteurs/$(index);
+        }
+        function monVote() {
+          return /databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)/votes/$(monUid());
+        }
+
+        // ----- Votes (id = uid) : SECRETS, 1 vote, définitif -----
+        // Chacun ne lit que SON vote ; les totaux sont dans compteurs/.
         match /votes/{uidVote} {
           function sondage() {
             return get(/databases/$(database)/documents/quartiers/$(q)/sondages/$(sondageId)).data;
           }
 
-          allow read: if membreDe(q);
+          allow read: if membreDe(q) && uidVote == monUid();
           allow create: if membreDe(q)
             && uidVote == monUid()
             && request.time < sondage().dateFin
             && request.resource.data.choix is int
             && request.resource.data.choix >= 0
-            && request.resource.data.choix < sondage().options.size();
+            && request.resource.data.choix < sondage().options.size()
+            // le compteur de ce choix monte de 1 dans le même WriteBatch
+            && getAfter(compteurChemin(string(request.resource.data.choix))).data.n
+               == (exists(compteurChemin(string(request.resource.data.choix)))
+                   ? get(compteurChemin(string(request.resource.data.choix))).data.n
+                   : 0) + 1;
           allow update, delete: if false;
         }
+
+        // ----- Compteurs (id = index du choix) : n = nombre de votes -----
+        // +1 seulement avec MON vote créé dans le même WriteBatch, pour ce choix
+        match /compteurs/{index} {
+          allow read: if membreDe(q);
+          allow create: if membreDe(q)
+            && request.resource.data.n == 1
+            && !exists(monVote()) && existsAfter(monVote())
+            && string(getAfter(monVote()).data.choix) == index;
+          allow update: if membreDe(q)
+            && changeSeulement(['n'])
+            && request.resource.data.n == resource.data.n + 1
+            && !exists(monVote()) && existsAfter(monVote())
+            && string(getAfter(monVote()).data.choix) == index;
+          allow delete: if false;
+        }
+      }
+
+      // ---------- M4 · Élections des leaders ----------
+      match /elections/{electionId} {
+        function election() {
+          return get(/databases/$(database)/documents/quartiers/$(q)/elections/$(electionId)).data;
+        }
+        function candidatChemin(uidC) {
+          return /databases/$(database)/documents/quartiers/$(q)/elections/$(electionId)/candidats/$(uidC);
+        }
+        function voteChemin(uidV) {
+          return /databases/$(database)/documents/quartiers/$(q)/elections/$(electionId)/votes/$(uidV);
+        }
+
+        allow read: if membreDe(q);
+        // L'admin ouvre l'élection et publie les résultats
+        allow create: if adminDe(q)
+          && request.resource.data.publiee == false;
+        allow update: if adminDe(q)
+          && changeSeulement(['publiee', 'elusIds', 'elusNoms']);
+        allow delete: if adminDe(q);
+
+        // ----- Candidats (id = uid) : nbVoix ne bouge qu'avec un vote -----
+        match /candidats/{uidC} {
+          allow read: if membreDe(q);
+          // Se porter candidat : pendant les candidatures, pas l'admin ;
+          // première élection : tout membre, sinon membre depuis 30 jours
+          allow create: if membreDe(q)
+            && uidC == monUid()
+            && moi().role != 'admin'
+            && request.time < election().finCandidatures
+            && request.resource.data.nbVoix == 0
+            && (election().premiere == true
+                || moi().dateDemande < request.time - duration.value(30, 'd'));
+          // Retirer sa candidature : pendant les candidatures
+          allow delete: if membreDe(q)
+            && uidC == monUid()
+            && request.time < election().finCandidatures;
+          // +1 voix : seulement avec MON vote créé dans le même WriteBatch
+          allow update: if membreDe(q)
+            && changeSeulement(['nbVoix'])
+            && request.resource.data.nbVoix == resource.data.nbVoix + 1
+            && !exists(voteChemin(monUid()))
+            && existsAfter(voteChemin(monUid()))
+            && getAfter(voteChemin(monUid())).data.candidatId == uidC;
+        }
+
+        // ----- Votes (id = uid) : SECRETS, 1 par membre, définitifs -----
+        match /votes/{uidV} {
+          allow read: if membreDe(q) && uidV == monUid();
+          allow create: if membreDe(q)
+            && uidV == monUid()
+            && election().publiee == false
+            && request.time >= election().finCandidatures
+            && request.time < election().finVote
+            && getAfter(candidatChemin(request.resource.data.candidatId)).data.nbVoix
+               == get(candidatChemin(request.resource.data.candidatId)).data.nbVoix + 1;
+          allow update, delete: if false;
+        }
+      }
+
+      // ---------- M4 · Idées de l'assistant IA (écrites par le serveur) ----------
+      // quartiers/{q}/suggestionsIA/courant : lues par les leaders et l'admin.
+      // Personne ne les écrit depuis l'app (le serveur Cloudflare écrit avec
+      // le compte de service, qui ne passe pas par ces règles).
+      match /suggestionsIA/{docIA} {
+        allow read: if organisateurDe(q);
+        allow write: if false;
+      }
+
+      // ---------- M4 · Demandes d'élection anticipée (id = uid) ----------
+      match /demandesElection/{uidD} {
+        allow read: if adminDe(q) || (membreDe(q) && uidD == monUid());
+        allow create: if membreDe(q) && uidD == monUid();
+        allow delete: if (membreDe(q) && uidD == monUid()) || adminDe(q);
       }
     }
   }

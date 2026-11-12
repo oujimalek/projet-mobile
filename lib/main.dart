@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'data/services/sync_signalements_m3.dart';
 import 'firebase_options.dart';
@@ -104,6 +105,15 @@ class _HoumaniAppState extends State<HoumaniApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.actuel, // couleurs (claires ou sombres) et police
       routerConfig: appRouter,
+      // Textes de Flutter en français (calendrier, horloge 24 h, boutons
+      // "Annuler" / "OK"...) au lieu de l'anglais
+      locale: const Locale('fr'),
+      supportedLocales: const [Locale('fr')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
     );
   }
 }

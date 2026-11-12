@@ -565,6 +565,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       statut: StatutUtilisateur.enAttente,
       dateDemande: DateTime.now(),
       motif: '', // nouvelle demande : on oublie un ancien refus
+      role: RoleUtilisateur.resident, // un leader ne l'est plus ailleurs (M4)
     );
 
     // On l'ajoute à la liste des membres (s'il n'y est pas déjà)
@@ -686,6 +687,22 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   @override
   Future<Resultat<void>> debloquerMembre(String id) async {
     return _changerStatut(id, StatutUtilisateur.actif, '');
+  }
+
+  @override
+  Future<Resultat<void>> changerRole(String id, RoleUtilisateur role) async {
+    for (final Utilisateur membre in _membres) {
+      if (membre.id == id) {
+        final String? refus =
+            UtilisateurRepository.refusRole(_connecte, membre, role);
+        if (refus != null) {
+          return Resultat.echec(refus);
+        }
+        _remplacer(membre.copier(role: role));
+        return const Resultat.succes(null);
+      }
+    }
+    return const Resultat.echec('Membre introuvable');
   }
 
   // =====================================================================

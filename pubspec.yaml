@@ -51,18 +51,29 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   geolocator: ^14.1.1
-  # M3 : base SQLite locale (brouillons, envois hors ligne, cache des
-  # signalements), voir lib/data/services/base_locale_m3.dart.
+  # M4
+  share_plus: ^13.3.1
+  table_calendar: ^3.3.0
+  fl_chart: ^1.3.1
+  add_2_calendar: ^3.1.1
+  flutter_local_notifications: ^19.5.0
+  timezone: ^0.10.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.5.0
+  flutter_localizations:
+    sdk: flutter
+  firebase_messaging: ^17.0.1
+  # M3 et M4 : photos (appareil photo ou galerie, envoyées sur Cloudinary)
+  image_picker: ^1.2.4
+  # M3 et M4 : appels web (M3 : Nominatim et Cloudinary)
+  http: ^1.6.0
+  # M3 et M4 : base SQLite locale (chacun son fichier : houmani_m3.db et
+  # houmani_m4.db). M3 : brouillons, envois hors ligne, cache des
+  # signalements (lib/data/services/base_locale_m3.dart).
   sqflite: ^2.4.6
   path: ^1.9.1
   # M3 : savoir si le téléphone a du réseau (envoi automatique au retour).
   connectivity_plus: ^7.3.1
-  # M3 : adresse à partir du GPS (API Nominatim d'OpenStreetMap).
-  # Même version que le module 4.
-  http: ^1.6.0
-  # M3 : photo du signalement (appareil photo ou galerie), même version
-  # que le module 4.
-  image_picker: ^1.2.4
   # M3 : dossier de l'application, où la photo attend d'être envoyée
   # (le cache d'image_picker peut être vidé par Android).
   path_provider: ^2.1.5
@@ -79,7 +90,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  # M3 : SQLite dans les tests (sur l'ordinateur, base en mémoire).
+  # M3 et M4 : SQLite dans les tests (sur l'ordinateur, base en mémoire).
   sqflite_common_ffi: ^2.4.7
 
 # For information on the generic Dart part of this file, see the

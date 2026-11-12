@@ -307,4 +307,33 @@ abstract class UtilisateurRepository {
   /// L'admin débloque un membre : il redevient actif (motif effacé).
   /// Valider efface aussi le motif.
   Future<Resultat<void>> debloquerMembre(String id);
+
+  /// M4 - L'admin nomme un membre actif leader, ou lui retire ce rôle
+  /// ([role] : leader ou resident). Voir [refusRole].
+  Future<Resultat<void>> changerRole(String id, RoleUtilisateur role);
+
+  /// Pourquoi [admin] ne peut pas donner [role] à [membre] (null : il peut).
+  /// Mêmes conditions que firestore.rules : seul l'admin du quartier, sur
+  /// un membre actif de son quartier, entre "resident" et "leader"
+  /// (l'admin ne peut pas être leader, ni retirer le rôle d'admin).
+  static String? refusRole(
+    Utilisateur admin,
+    Utilisateur membre,
+    RoleUtilisateur role,
+  ) {
+    if (!admin.estAdmin || admin.statut != StatutUtilisateur.actif) {
+      return 'Action non autorisée';
+    }
+    if (membre.id == admin.id || membre.estAdmin) {
+      return 'L\'administrateur ne peut pas être leader';
+    }
+    if (membre.quartierId != admin.quartierId ||
+        membre.statut != StatutUtilisateur.actif) {
+      return 'Seul un membre actif du quartier peut être leader';
+    }
+    if (role == RoleUtilisateur.admin) {
+      return 'Action non autorisée';
+    }
+    return null;
+  }
 }

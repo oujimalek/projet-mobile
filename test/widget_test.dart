@@ -32,7 +32,7 @@ import 'package:houmani/screens/module1/tracer_limites_screen.dart';
 import 'package:houmani/screens/module1/verification_otp_screen.dart';
 import 'package:houmani/screens/module2/services_list_screen.dart';
 import 'package:houmani/screens/module3/signalements_screen.dart';
-import 'package:houmani/screens/module4/sondage_screen.dart';
+import 'package:houmani/screens/module4/evenements_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
 import 'package:houmani/theme/preference_langue.dart';
@@ -147,7 +147,7 @@ void main() {
     expect(find.byType(BottomNavigationBar), findsOneWidget);
 
     await toucherOnglet(tester, 'Événements');
-    expect(find.byType(SondageScreen), findsOneWidget);
+    expect(find.byType(EvenementsScreen), findsOneWidget);
     expect(find.byType(BottomNavigationBar), findsOneWidget);
 
     await toucherOnglet(tester, 'Profil');

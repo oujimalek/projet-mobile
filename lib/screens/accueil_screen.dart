@@ -14,6 +14,11 @@ import '../widgets/app_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/houmani_logo.dart';
 import 'module1/widgets_module1.dart';
+import 'module4/bandeau_rappel_m4.dart';
+import 'module4/evenement_detail_screen.dart';
+import 'module4/module4_widgets.dart';
+import 'module4/push_m4.dart';
+import 'module4/sondage_screen.dart';
 
 /// Onglet "Accueil" : le tableau de bord du quartier.
 ///
@@ -44,6 +49,12 @@ class _AccueilScreenState extends State<AccueilScreen> {
   void initState() {
     super.initState();
     _chargerDemandesEnAttente();
+    // M4 (C4) : recevoir les annonces de nouveaux événements du quartier
+    final Utilisateur moi = _utilisateurs.getUtilisateurConnecte();
+    PushM4.abonner(
+      moi.quartierId,
+      organisateur: EvenementRepository.peutOrganiser(moi), // (IA) idées du lundi
+    );
   }
 
   Future<void> _chargerDemandesEnAttente() async {
@@ -88,9 +99,12 @@ class _AccueilScreenState extends State<AccueilScreen> {
   Widget build(BuildContext context) {
     final Utilisateur utilisateur = _utilisateurs.getUtilisateurConnecte();
     final Evenement? evenement = _prochainEvenement();
-    final Sondage sondage = _evenements.getSondageActif();
+    final Sondage? sondage = _evenements.getSondageActif();
 
     final List<Widget> contenu = [];
+
+    // ----- M4 : rappel des événements de demain / aujourd'hui -----
+    contenu.add(const BandeauRappelM4());
 
     // ----- Admin : demandes en attente -----
     if (utilisateur.estAdmin && _enAttente > 0) {
@@ -133,13 +147,20 @@ class _AccueilScreenState extends State<AccueilScreen> {
     contenu.add(const SizedBox(height: 24));
 
     // ----- À ne pas manquer : événement + sondage -----
-    contenu.add(_titre('À ne pas manquer'));
+    // (rien à afficher s'il n'y a ni événement à venir ni sondage ouvert)
+    if (evenement != null || sondage != null) {
+      contenu.add(_titre('À ne pas manquer'));
+    }
     if (evenement != null) {
       contenu.add(_carteEvenement(evenement));
       contenu.add(const SizedBox(height: 10));
     }
-    contenu.add(_carteSondage(sondage));
-    contenu.add(const SizedBox(height: 24));
+    if (sondage != null) {
+      contenu.add(_carteSondage(sondage));
+    }
+    if (evenement != null || sondage != null) {
+      contenu.add(const SizedBox(height: 24));
+    }
 
     // ----- Derniers services -----
     contenu.add(
@@ -513,7 +534,11 @@ class _AccueilScreenState extends State<AccueilScreen> {
         '${evenement.date.hour}:${evenement.date.minute.toString().padLeft(2, '0')}';
 
     return AppCard(
-      onTap: () => context.go('/evenements'),
+      // M4 : ouvre directement le détail de cet événement
+      onTap: () => ouvrirEcranM4(
+        context,
+        EvenementDetailScreen(evenementId: evenement.id),
+      ),
       child: Row(
         children: [
           Container(
@@ -562,7 +587,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${evenement.participants} participants',
+                  '${evenement.participants} participant${evenement.participants > 1 ? 's' : ''}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -579,7 +604,8 @@ class _AccueilScreenState extends State<AccueilScreen> {
   /// Le sondage en cours : question et nombre de votes.
   Widget _carteSondage(Sondage sondage) {
     return AppCard(
-      onTap: () => context.go('/evenements'),
+      // M4 : ouvre directement ce sondage
+      onTap: () => ouvrirEcranM4(context, SondageScreen(sondageId: sondage.id)),
       child: Row(
         children: [
           Container(

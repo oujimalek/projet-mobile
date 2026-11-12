@@ -25,3 +25,21 @@ Crée un fichier `regles_mX.test.js` sur le modèle de `regles_m1.test.js` :
 - prépare les données avec `withSecurityRulesDisabled` ;
 - utilise `assertSucceeds` pour ce qui doit passer ;
 - utilise `assertFails` pour ce qui doit être refusé.
+
+## Fichiers
+
+- `regles_m1.test.js` : Module 1 (utilisateurs, quartiers, codes).
+- `regles_m4.test.js` : Module 4 (créer / modifier un événement, participer
+  avec le compteur, places et liste d'attente, photo Cloudinary, sondages et
+  votes secrets, présence par QR code).
+
+## Si le port 8080 est déjà pris
+
+Sous Windows, un service système utilise parfois le port 8080
+(`Could not start Firestore Emulator, port taken`). Crée alors, HORS du
+dépôt, un `firebase.json` qui choisit un autre port, et passe-le avec
+`--config` :
+
+```
+{"firestore":{"rules":"CHEMIN/VERS/firestore.rules"},"emulators":{"firestore":{"port":8086},"ui":{"enabled":false}}}
+```

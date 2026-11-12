@@ -18,7 +18,7 @@ import '../screens/module1/tracer_limites_screen.dart';
 import '../screens/module1/verification_otp_screen.dart';
 import '../screens/module2/services_list_screen.dart';
 import '../screens/module3/signalements_screen.dart';
-import '../screens/module4/sondage_screen.dart';
+import '../screens/module4/evenements_screen.dart';
 import '../screens/splash_screen.dart';
 import '../widgets/app_bottom_nav.dart';
 import '../widgets/app_drawer.dart';
@@ -73,7 +73,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/evenements',
           builder: (context, state) {
-            return const SondageScreen(); // M4
+            return const EvenementsScreen(); // M4
           },
         ),
         GoRoute(
