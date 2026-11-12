@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../screens/accueil_screen.dart';
-import '../screens/demo_screen.dart';
 import '../screens/module1/admin_membres_screen.dart';
 import '../screens/module1/annuaire_voisins_screen.dart';
 import '../screens/module1/attente_validation_screen.dart';
@@ -37,7 +36,7 @@ const List<String> cheminsOnglets = [
 ///
 /// - Les 5 onglets sont dans un ShellRoute : ils s'affichent DANS la même
 ///   coquille (AppShell), qui garde la barre du bas visible.
-/// - Les autres écrans (splash, connexion, inscription, démo...) sont en
+/// - Les autres écrans (splash, connexion, inscription...) sont en
 ///   dehors du ShellRoute : ils s'ouvrent en plein écran, sans barre du bas.
 ///
 /// Parcours du module 1 (M1) :
@@ -175,12 +174,6 @@ final GoRouter appRouter = GoRouter(
       path: '/parametres',
       builder: (context, state) {
         return const ParametresScreen(); // M1
-      },
-    ),
-    GoRoute(
-      path: '/demo',
-      builder: (context, state) {
-        return const DemoScreen();
       },
     ),
   ],

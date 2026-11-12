@@ -17,7 +17,6 @@ import 'package:houmani/data/services/utilisateur_repository.dart';
 import 'package:houmani/main.dart';
 import 'package:houmani/router/app_router.dart';
 import 'package:houmani/screens/accueil_screen.dart';
-import 'package:houmani/screens/demo_screen.dart';
 import 'package:houmani/screens/module1/admin_membres_screen.dart';
 import 'package:houmani/screens/module1/annuaire_voisins_screen.dart';
 import 'package:houmani/screens/module1/attente_validation_screen.dart';
@@ -617,18 +616,6 @@ void main() {
     expect(find.byType(ParametresScreen), findsOneWidget);
     expect(find.text('Démo des modules'), findsNothing);
     expect(find.text('Modifier mon profil'), findsNothing);
-  });
-
-  testWidgets('La démo (adresse /demo) ouvre le module 1',
-      (WidgetTester tester) async {
-    appRouter.go('/demo');
-    await lancerApp(tester);
-    expect(find.byType(DemoScreen), findsOneWidget);
-    expect(find.text('Ahla bik !'), findsOneWidget);
-
-    await tester.tap(find.text('M1 · Utilisateurs'));
-    await tester.pumpAndSettle();
-    expect(find.byType(ConnexionScreen), findsOneWidget);
   });
 
   // -------------------------------------------------------------------
