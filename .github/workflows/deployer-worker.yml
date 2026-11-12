@@ -1,0 +1,44 @@
+# Déploie le Worker des notifications push (push_worker/) sur Cloudflare.
+#
+# - Automatique : à chaque push sur integration-finale ou main qui modifie
+#   un fichier de push_worker/.
+# - À la main : onglet Actions → "Déployer le Worker" → "Run workflow".
+#
+# Secrets à créer dans GitHub (Settings → Secrets and variables → Actions) :
+#   CLOUDFLARE_API_TOKEN  : jeton API Cloudflare (droit "Edit Cloudflare Workers")
+#   CLOUDFLARE_ACCOUNT_ID : identifiant du compte Cloudflare
+name: Déployer le Worker
+
+on:
+  push:
+    branches:
+      - integration-finale
+      - main
+    paths:
+      - 'push_worker/**'
+  workflow_dispatch:
+
+jobs:
+  deployer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: push_worker/package-lock.json
+
+      - name: Installer les dépendances du Worker
+        working-directory: push_worker
+        run: npm ci
+
+      - name: Déployer sur Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: push_worker
