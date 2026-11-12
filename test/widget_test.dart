@@ -558,9 +558,15 @@ void main() {
     expect(find.text('Ahla Amira !'), findsOneWidget);
     expect(find.text('3 demandes d\'adhésion en attente'), findsOneWidget);
 
-    // Un raccourci ouvre l'onglet du module
+    // "Signaler" ouvre le formulaire de création, par-dessus la liste
     await toucher(tester, find.text('Signaler'));
+    expect(find.byType(CreateSignalementScreen), findsOneWidget);
+
+    // Retour : la liste des signalements (onglet Signalements)
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
     expect(find.byType(SignalementsScreen), findsOneWidget);
+    expect(find.byType(CreateSignalementScreen), findsNothing);
   });
 
   testWidgets('Menu latéral : modules, sous-rubriques et déconnexion',
