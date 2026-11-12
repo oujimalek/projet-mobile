@@ -32,6 +32,11 @@ Prérequis : Flutter (canal stable), Android Studio avec le SDK Android, et Git.
 > La police Inter est téléchargée au premier lancement : il faut Internet
 > la première fois.
 
+> **Flutter 3.50 ou plus récent** : la compilation Android demande AGP 9.1.1.
+> Changer la version d'AGP dans `android/settings.gradle.kts` **sur sa
+> machine seulement, sans jamais la commiter** (ou lancer
+> `flutter run --android-skip-build-dependency-validation`).
+
 ## Configuration Firebase
 
 L'application utilise **Firebase** (projet `houmani-235bb`) : comptes
@@ -73,47 +78,97 @@ Ne jamais ajouter ces deux fichiers dans un commit
 
 Les règles de sécurité de la base sont dans `firestore.rules` et les index
 dans `firestore.indexes.json`. Le schéma complet des 4 modules est dans
-[`docs/schema_firestore.md`](docs/schema_firestore.md). Mohamed les déploie
-(`firebase deploy --only firestore`) une fois chaque partie validée.
+[`docs/schema_firestore.md`](docs/schema_firestore.md). Pour les déployer,
+voir [Déploiement](#déploiement).
 
-Avant chaque commit, vérifier que tout va bien :
+## Vérifier avant de pousser
+
+Depuis la racine du dépôt, tout doit passer :
 ```bash
-flutter analyze
-flutter test
+flutter analyze                 # 0 erreur, 0 warning
+flutter test                    # 786 tests
+firebase emulators:exec --only firestore --project demo-houmani "npm --prefix test_regles test"
+cd push_worker && npm test      # tests du Worker (limites)
 ```
+La 3e commande teste les règles sur l'émulateur Firebase (Java 21+ requis,
+`npm install` une fois dans `test_regles/`) : voir
+[`test_regles/README.md`](test_regles/README.md), y compris le cas
+« port 8080 déjà pris ».
 
-Les règles se testent à part, sur l'émulateur Firebase : voir
-[`test_regles/README.md`](test_regles/README.md).
+## Déploiement
+
+**Règles et index Firestore** (responsable : l'intégrateur) :
+```bash
+git checkout integration-finale
+git pull
+firebase deploy --only firestore:rules,firestore:indexes
+```
+- Toujours depuis `integration-finale` **à jour**, jamais depuis une
+  ancienne branche : on écraserait les règles des autres modules.
+- Si Firebase propose de **supprimer des index** absents du fichier,
+  répondre **N**.
+
+**Worker Cloudflare** (`push_worker/` : notifications push et IA) :
+- déployé **automatiquement** par
+  [`.github/workflows/deployer-worker.yml`](.github/workflows/deployer-worker.yml)
+  à chaque push sur `integration-finale` ou `main` qui modifie `push_worker/` ;
+- à la main : GitHub → onglet **Actions** → « Déployer le Worker » →
+  **Run workflow** ;
+- secrets GitHub nécessaires (Settings → Secrets and variables → Actions) :
+  `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`.
+
+**Limites d'IA par jour (optionnel, Cloudflare KV)** : par utilisateur,
+20 « Améliorer » / « Qui peut m'aider ? », 5 demandes d'idées, 10 annonces
+push. Sans espace KV, le Worker marche sans limite. Pour l'activer :
+1. Cloudflare → **Storage & Databases → Workers KV** → **Create**, nom
+   `houmani-limites` ;
+2. copier son **ID** ;
+3. dans `push_worker/wrangler.toml`, enlever les `#` du bloc
+   `[[kv_namespaces]]` et coller l'ID ;
+4. commiter sur `integration-finale` : le Worker est redéployé tout seul.
 
 ## Organisation de l'équipe : les branches
 
-- `main` contient uniquement du code validé. **Jamais de push directement sur `main`.**
-- Chaque membre travaille sur la branche de son module :
-  - `feature/module1-utilisateurs`
-  - `feature/module2-services`
-  - `feature/module3-signalements`
-  - `feature/module4-evenements`
-- Une nouvelle fonctionnalité = une nouvelle branche `feature/moduleX-...`,
-  créée depuis `main` à jour :
+- `integration-finale` est la **branche par défaut** et la branche
+  d'intégration : tout le travail y arrive.
+- Pour travailler : une nouvelle branche créée depuis `integration-finale`
+  à jour, puis une **Pull Request vers `integration-finale`** :
   ```bash
-  git checkout main
+  git checkout integration-finale
   git pull
   git checkout -b feature/module2-detail-service
   ```
-- Pour intégrer son travail dans `main` : **Pull Request obligatoire**.
+- `main` recevra plus tard la **version finale validée**.
 - Ne jamais utiliser `git push --force`.
 - Chaque membre modifie seulement les fichiers de son module. Un changement
-  dans un fichier commun (`theme/`, `widgets/`, `data/`) se fait dans sa
-  propre branche et sa propre Pull Request, pour que tout le monde en profite.
+  dans un fichier commun (`theme/`, `widgets/`, `data/`, routeur, accueil,
+  menu) se fait dans sa propre branche et sa propre Pull Request, pour que
+  tout le monde en profite.
 
 ## Les modules et leurs dossiers
 
-| Module | Dossier | Écran (fichier · classe) |
-|---|---|---|
-| M1 · Utilisateurs | `lib/screens/module1/` | 9 écrans : inscription, vérification de l'e-mail, connexion, mot de passe oublié, code du quartier, attente de validation, profil, modification du profil, membres (admin) — voir ci-dessous |
-| M2 · Services | `lib/screens/module2/` | `services_list_screen.dart` · `ServicesListScreen` (liste + filtres) |
-| M3 · Signalements | `lib/screens/module3/` | `signalements_screen.dart` · `SignalementsScreen` (liste, filtres, urgence, hors ligne), `create_signalement_screen.dart` (création / modification, photo, GPS), `signalement_detail_screen.dart` (confirmer, carte, appeler, statut admin) — voir [`docs/module3_signalements.md`](docs/module3_signalements.md) |
-| M4 · Événements | `lib/screens/module4/` | `sondage_screen.dart` · `SondageScreen` (sondage avec vote) |
+| Module | Dossier | Ce qu'il contient | Documentation |
+|---|---|---|---|
+| M1 · Utilisateurs | `lib/screens/module1/` | Inscription, vérification de l'e-mail, connexion (e-mail, numéro ou SMS), mot de passe oublié, code du quartier, attente de validation, profil, paramètres (thème, derja), membres (admin), mon quartier et ses limites, annuaire des voisins + « Qui peut m'aider ? » (IA) — voir ci-dessous | [`m1_m2_sqlite_services_web.md`](docs/m1_m2_sqlite_services_web.md) |
+| M2 · Services | `lib/screens/module2/` | Liste des offres et demandes (filtres, favoris), détail, publication (« Améliorer avec l'IA »), demandes et chat, évaluations, services communs (planning, inscription aux créneaux, rotation, jours fériés) | [`module2_firestore.md`](docs/module2_firestore.md), [`m1_m2_sqlite_services_web.md`](docs/m1_m2_sqlite_services_web.md) |
+| M3 · Signalements | `lib/screens/module3/` | `signalements_screen.dart` · `SignalementsScreen` (liste, filtres, urgence, hors ligne), `create_signalement_screen.dart` (création / modification, photo, GPS), `signalement_detail_screen.dart` (confirmer, carte, appeler, statut admin) | [`module3_signalements.md`](docs/module3_signalements.md) |
+| M4 · Événements | `lib/screens/module4/` | Événements (liste, calendrier, détail, formulaire avec photo et carte, places et liste d'attente, questions, qui apporte quoi, avis, présence par QR code), sondages (vote secret, résultats en direct), élection des leaders, rappels et notifications push, brouillons et « Mon historique », assistant IA du leader, statistiques (admin) | [`module4_evenements.md`](docs/module4_evenements.md) |
+
+## Documentation
+
+| Fichier | Ce qu'il explique |
+|---|---|
+| [`docs/schema_firestore.md`](docs/schema_firestore.md) | Le schéma Firestore des 4 modules : collections, champs, qui lit et écrit quoi |
+| [`docs/guide_modules_firebase.md`](docs/guide_modules_firebase.md) | Comment brancher un module sur Firebase (repository abstrait + Firebase + mock) |
+| [`docs/m1_m2_sqlite_services_web.md`](docs/m1_m2_sqlite_services_web.md) | Bases SQLite de M1 et M2, services web gratuits (Open-Meteo, Nager.Date, Nominatim) et aides IA |
+| [`docs/module2_firestore.md`](docs/module2_firestore.md) | Module 2 : ce qu'il lit et écrit dans Firestore |
+| [`docs/module3_signalements.md`](docs/module3_signalements.md) | Module 3 : fonctionnement général, écrans, architecture |
+| [`docs/module3_sqflite.md`](docs/module3_sqflite.md) | Module 3 : base SQLite (brouillons, file d'envoi hors ligne, cache) |
+| [`docs/module3_photos.md`](docs/module3_photos.md) | Module 3 : photos sur Cloudinary (offre gratuite) |
+| [`docs/module3_regles_a_deployer.md`](docs/module3_regles_a_deployer.md) | Module 3 : règles et index Firestore ajoutés pour le module |
+| [`docs/module4_evenements.md`](docs/module4_evenements.md) | Module 4 : événements, sondages, élections, notifications push, IA, SQLite |
+| [`docs/audit_integration.md`](docs/audit_integration.md) | Rapport d'audit de l'intégration (12/11/2026) ; plusieurs points ont été corrigés depuis |
+| [`test_regles/README.md`](test_regles/README.md) | Tester les règles Firestore sur l'émulateur |
 
 ## Les fichiers communs (la fondation)
 
@@ -121,7 +176,7 @@ Les règles se testent à part, sur l'émulateur Firebase : voir
 |---|---|
 | `lib/theme/app_theme.dart` | Toutes les couleurs (`AppColors`) et le thème de l'app |
 | `lib/widgets/` | Composants réutilisables : bouton principal (bleu cobalt) et secondaire (bordure dorée), champ de saisie, carte, badge de statut, séparateur en clous, date en arc, barre du bas, en-tête (avec une action optionnelle à droite), logo |
-| `lib/data/models/` | Les modèles de données (Utilisateur, Quartier, Service, Signalement, Evenement, Sondage) |
+| `lib/data/models/` | Les modèles de données (Utilisateur, Quartier, Service, Signalement, Evenement, Sondage, Election…) |
 | `lib/data/services/` | Les classes qui fournissent les données. Les 4 modules sont sur Firebase (Firestore), chacun avec son repository (contrat abstrait + version Firebase + mock dans `test/`), selon [`docs/guide_modules_firebase.md`](docs/guide_modules_firebase.md). `firestore_commun.dart` regroupe les outils Firestore communs aux modules. Données sur le téléphone : SQLite pour M1 (`cache_local.dart`), M2 (`base_locale_m2.dart`), M3 (`base_locale_m3.dart`) et M4 (`base_locale_m4.dart`). Services web externes gratuits : Open-Meteo (M1, `meteo_m1.dart`), Nager.Date (M2, `jours_feries_m2.dart`), Nominatim (M1, `verification_adresse_m1.dart` ; M3, `adresse_m3.dart`). IA via le serveur Cloudflare (`push_worker/`), avec repli local sans réseau : « Qui peut m'aider ? » (M1, `trouver_voisin_m1.dart`) et « Améliorer avec l'IA » (M2, `aide_redaction_m2.dart`). Voir [`docs/m1_m2_sqlite_services_web.md`](docs/m1_m2_sqlite_services_web.md). |
 | `lib/data/resultat.dart` | `Resultat<T>` : la réponse d'un repository, succès (avec la donnée) ou échec (avec un message à afficher) |
 | `lib/router/app_router.dart` | La navigation (go_router) : les 5 onglets de la barre du bas (Accueil, Services, Signalements, Événements, Profil) et les écrans en plein écran (splash, connexion, inscription...) |
@@ -141,7 +196,7 @@ et les profils sont enregistrés dans **Cloud Firestore**.
 UtilisateurRepository            (classe abstraite, méthodes en Future,
    │                              réponses en Resultat<T>)
    ├── FirebaseUtilisateurRepository → Firebase Auth + Cloud Firestore
-   │        └── CacheLocal (Hive)   → copie du profil sur le téléphone
+   │        └── CacheLocal (SQLite) → copie du profil sur le téléphone
    └── MockUtilisateurRepository    → test/ : données fictives des tests
 ```
 
@@ -149,7 +204,7 @@ UtilisateurRepository            (classe abstraite, méthodes en Future,
   `_enChargement` (avec `setState`). Pendant l'appel, il affiche un indicateur
   de chargement. Ensuite, il affiche soit le résultat, soit le message d'erreur
   du `Resultat` (« Pas de connexion Internet », « E-mail ou mot de passe incorrect »…).
-- **Cache local (Hive) :** au redémarrage, le profil s'affiche tout de suite
+- **Cache local (SQLite) :** au redémarrage, le profil s'affiche tout de suite
   et l'app reste utilisable sans Internet. Firebase met ensuite le profil à
   jour.
 - **Le statut décide de l'écran** : `actif` → accueil ; `enAttente` → attente
@@ -179,7 +234,9 @@ vérification de l'e-mail → code du quartier → attente de validation → acc
 
 ### Avoir un compte pour tester
 
-Il n'y a plus de compte de démo : chacun crée **son propre compte**.
+Des **comptes de test** existent : leurs
+identifiants sont partagés **en privé** dans l'équipe, jamais dans le dépôt.
+On peut aussi créer **son propre compte** :
 
 1. Récupérer les 2 fichiers de configuration Firebase (voir
    [Configuration Firebase](#configuration-firebase)).
@@ -204,11 +261,12 @@ Autres points :
 
 ### Tests
 
-- `flutter test` : 80 tests. Ils couvrent les modèles, les validateurs, le
-  repository (avec le mock), le cache Hive, la couche Firestore commune et les
-  parcours d'écrans selon le statut.
-- `test_regles/` : 32 tests des règles de sécurité du module 1, lancés sur
-  l'émulateur Firebase.
+- `flutter test` : 786 tests pour toute l'application. Pour M1, ils
+  couvrent les modèles, les validateurs, le repository (avec le mock), le
+  cache SQLite, la couche Firestore commune et les parcours d'écrans selon
+  le statut.
+- `test_regles/` : 133 tests des règles de sécurité (M1, M3, M4), lancés
+  sur l'émulateur Firebase.
 
 ### Notions du cours utilisées
 
@@ -221,6 +279,6 @@ Autres points :
 | Classe abstraite, `factory`, `static` | `UtilisateurRepository` |
 | `Future`, `async` / `await` | Toutes les méthodes du repository |
 | Gestion succès / erreur / chargement | `Resultat<T>` + indicateur de chargement |
-| Stockage local | `CacheLocal` (Hive) |
+| Stockage local | `CacheLocal` (SQLite) |
 | Firebase Auth et Cloud Firestore | `FirebaseUtilisateurRepository` |
 | Tests unitaires et tests de widgets | `test/` |
