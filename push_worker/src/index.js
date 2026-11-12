@@ -11,9 +11,18 @@
 //   1. le jeton Firebase (l'utilisateur est vraiment connecté) ;
 //   2. dans Firestore : compte actif, dans CE quartier, leader ou admin ;
 // puis envoie à tous les téléphones abonnés au sujet "quartier_{id}".
+//
+// Autres routes (même vérification du jeton) :
+//   POST /suggestions      (M4, leaders/admin) idées de l'assistant ;
+//   POST /ameliorer        (M2, tout membre actif) réécrit une annonce :
+//        { idToken, quartierId, titre, description, categorie } ;
+//   POST /correspondances  (M1, tout membre actif) compétences utiles :
+//        { idToken, quartierId, besoin, competences: [...] }.
+// Voir aide_ia.js : aucun nom de personne n'est envoyé à l'IA.
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from 'jose';
 
 import { genererPourQuartier, listerQuartiers } from './assistant.js';
+import { ameliorerAnnonce, trouverCompetences } from './aide_ia.js';
 
 const PROJET = 'houmani-235bb';
 const CLES_GOOGLE = createRemoteJWKSet(
@@ -103,9 +112,9 @@ function lireCompte(env) {
   return JSON.parse(env.SERVICE_ACCOUNT.replace(/^\uFEFF/, ''));
 }
 
-// Vérifie l'appelant : jeton Firebase valide ET leader/admin actif de CE
-// quartier. Renvoie { uid, acces } ou une Response d'erreur.
-async function verifierOrganisateur(env, idToken, quartierId) {
+// Vérifie l'appelant : jeton Firebase valide ET membre actif de CE quartier,
+// avec l'un des rôles demandés. Renvoie { uid, acces } ou une Response d'erreur.
+async function verifierMembre(env, idToken, quartierId, roles) {
   if (!idToken || !quartierId || !/^[A-Za-z0-9_-]{1,64}$/.test(quartierId)) {
     return reponse(400, { erreur: 'champs manquants' });
   }
@@ -121,11 +130,25 @@ async function verifierOrganisateur(env, idToken, quartierId) {
     !profil ||
     profil.statut !== 'actif' ||
     profil.quartierId !== quartierId ||
-    !['leader', 'admin'].includes(profil.role)
+    !roles.includes(profil.role)
   ) {
-    return reponse(403, { erreur: 'seuls les leaders et l\'admin du quartier' });
+    return reponse(403, {
+      erreur: roles.includes('resident')
+        ? 'seuls les membres actifs du quartier'
+        : 'seuls les leaders et l\'admin du quartier',
+    });
   }
   return { uid, acces };
+}
+
+const ORGANISATEURS = ['leader', 'admin'];
+const MEMBRES = ['resident', 'leader', 'admin'];
+// Routes ouvertes à tous les membres actifs ; les autres : organisateurs
+const ROUTES_MEMBRES = ['/ameliorer', '/correspondances'];
+const ROUTES = ['/notifier', '/suggestions', ...ROUTES_MEMBRES];
+
+function texteValide(v, min, max) {
+  return typeof v === 'string' && v.trim().length >= min && v.length <= max;
 }
 
 // Notification aux leaders et à l'admin d'un quartier (sujet "leaders_{q}")
@@ -150,7 +173,7 @@ async function prevenirLeaders(acces, quartierId, nb) {
 export default {
   async fetch(requete, env) {
     const chemin = new URL(requete.url).pathname;
-    if (requete.method !== 'POST' || !['/notifier', '/suggestions'].includes(chemin)) {
+    if (requete.method !== 'POST' || !ROUTES.includes(chemin)) {
       return reponse(404, { erreur: 'introuvable' });
     }
     let entree;
@@ -160,11 +183,35 @@ export default {
       return reponse(400, { erreur: 'JSON invalide' });
     }
     try {
-      const verif = await verifierOrganisateur(env, entree.idToken, entree.quartierId);
+      const roles = ROUTES_MEMBRES.includes(chemin) ? MEMBRES : ORGANISATEURS;
+      const verif = await verifierMembre(env, entree.idToken, entree.quartierId, roles);
       if (verif instanceof Response) {
         return verif;
       }
       const { uid, acces } = verif;
+
+      // (IA, M2) Réécrire une annonce de service
+      if (chemin === '/ameliorer') {
+        const { titre, description, categorie } = entree;
+        if (!texteValide(titre, 1, 120) || !texteValide(description, 1, 1000)) {
+          return reponse(400, { erreur: 'champs manquants' });
+        }
+        const propre = await ameliorerAnnonce(env, titre, description, String(categorie || '').slice(0, 30));
+        return propre ? reponse(200, propre) : reponse(502, { erreur: 'IA illisible' });
+      }
+
+      // (IA, M1) Les compétences de la houma utiles pour un besoin
+      if (chemin === '/correspondances') {
+        const { besoin, competences } = entree;
+        if (!texteValide(besoin, 3, 300) || !Array.isArray(competences)) {
+          return reponse(400, { erreur: 'champs manquants' });
+        }
+        const liste = [...new Set(competences.filter((c) => texteValide(c, 1, 40)).map((c) => c.trim()))].slice(0, 80);
+        if (liste.length === 0) {
+          return reponse(200, { correspondances: [] });
+        }
+        return reponse(200, { correspondances: await trouverCompetences(env, besoin, liste) });
+      }
 
       // (IA) Les idées de l'assistant pour cette houma, tout de suite
       if (chemin === '/suggestions') {
