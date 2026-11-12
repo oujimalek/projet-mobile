@@ -16,6 +16,7 @@ import 'package:houmani/data/models/signalement.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/adresse_m3.dart';
 import 'package:houmani/data/services/base_locale_m3.dart';
+import 'package:houmani/data/services/liens_m3.dart';
 import 'package:houmani/data/services/localisation.dart';
 import 'package:houmani/data/services/signalement_repository.dart';
 import 'package:houmani/data/services/sync_signalements_m3.dart';
@@ -226,7 +227,7 @@ void main() {
 
   // =====================================================================
   group('SQLite : version 2 (position + adresses)', () {
-    test('Un téléphone en version 1 passe en version 2 sans perdre ses données',
+    test('Un téléphone en version 1 passe à la version actuelle sans perdre ses données',
         () async {
       final Directory dossier = Directory.systemTemp.createTempSync('m3_');
       final String fichier = chemin.join(dossier.path, 'houmani_m3.db');
@@ -244,7 +245,7 @@ void main() {
       });
       await ancienne.close();
 
-      // La nouvelle version ouvre la même base : onUpgrade (1 → 2)
+      // La nouvelle version ouvre la même base : onUpgrade (1 → 2 → 3)
       final BaseLocaleM3 base = BaseLocaleM3(chemin: fichier);
       final Brouillon garde = (await base.lireBrouillon('u1'))!;
       expect(garde.titre, 'Brouillon d\'avant');
@@ -259,7 +260,7 @@ void main() {
       expect((await base.lireBrouillon('u1'))!.position!.latitude, 36.86251);
       await base.enregistrerAdresse('cle', 'Rue Y');
       expect(await base.lireAdresse('cle'), 'Rue Y');
-      expect((await (await base.base).getVersion()), 2);
+      expect((await (await base.base).getVersion()), BaseLocaleM3.version);
 
       await base.fermer();
       dossier.deleteSync(recursive: true);
@@ -372,8 +373,13 @@ void main() {
       expect(requetes, isEmpty);
     });
 
-    testWidgets('Détail : coordonnées et "Voir sur la carte" (à venir)',
+    testWidgets('"Voir sur la carte" : l\'application de cartes (lien geo:)',
         (WidgetTester tester) async {
+      final List<Uri> ouverts = [];
+      LiensM3.ouvrirUrl = (url) async {
+        ouverts.add(url);
+        return true; // une application de cartes répond
+      };
       // Un signalement avec un point GPS (copie de r3)
       final Signalement r3 = depot.tous.firstWhere((s) => s.id == 'r3');
       await depot.ajouterSignalement(r3.copyWith(id: 'avecgps', position: ennasr));
@@ -383,7 +389,38 @@ void main() {
       expect(find.text('36.86251, 10.17003'), findsOneWidget);
       await tester.tap(find.text('Voir sur la carte'));
       await tester.pumpAndSettle();
-      expect(find.text('La carte des signalements arrive bientôt'), findsOneWidget);
+      expect(ouverts.single.scheme, 'geo');
+      expect(ouverts.single.toString(),
+          'geo:36.86251,10.17003?q=36.86251,10.17003(Fuite%20d\'eau%20devant%20l\'entr%C3%A9e)');
+    });
+
+    testWidgets('Pas d\'application de cartes : OpenStreetMap ; rien : message',
+        (WidgetTester tester) async {
+      final List<Uri> ouverts = [];
+      bool navigateur = true;
+      LiensM3.ouvrirUrl = (url) async {
+        ouverts.add(url);
+        return url.scheme == 'https' && navigateur;
+      };
+      final Signalement r3 = depot.tous.firstWhere((s) => s.id == 'r3');
+      await depot.ajouterSignalement(r3.copyWith(id: 'avecgps', position: ennasr));
+      await afficher(
+          tester, const SignalementDetailScreen(signalementId: 'avecgps'));
+
+      await tester.tap(find.text('Voir sur la carte'));
+      await tester.pumpAndSettle();
+      expect(ouverts.map((u) => u.scheme), ['geo', 'https']);
+      final Uri osm = ouverts.last;
+      expect(osm.host, 'www.openstreetmap.org');
+      expect(osm.queryParameters['mlat'], '36.86251');
+      expect(osm.queryParameters['mlon'], '10.17003');
+      expect(osm.fragment, 'map=18/36.86251/10.17003');
+      expect(find.text(LiensM3.messageCarte), findsNothing);
+
+      navigateur = false;
+      await tester.tap(find.text('Voir sur la carte'));
+      await tester.pumpAndSettle();
+      expect(find.text(LiensM3.messageCarte), findsOneWidget);
     });
 
     testWidgets('Détail sans point GPS : pas de ligne de carte',

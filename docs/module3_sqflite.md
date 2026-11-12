@@ -14,7 +14,7 @@ document Firestore. Le module 3 a besoin de quatre choses qu'il ne fait pas :
 |---|---|---|
 | **Brouillon** d'un formulaire pas encore envoyé | ❌ Ce n'est pas un document Firestore | ✅ Table `brouillons`, privée, sur le téléphone |
 | **File d'envoi visible** (« En attente d'envoi », Réessayer, Annuler, nombre d'essais, dernière erreur) | ❌ Écritures en attente cachées ; `await add()` ne se termine **jamais** hors ligne | ✅ Table `envois_en_attente` affichée dans la liste |
-| **Photo locale** à envoyer plus tard (étape 6) | ❌ Un fichier ne va pas dans Firestore | ✅ Colonne `photo_locale` (chemin du fichier) |
+| **Photo locale** à envoyer plus tard (voir `docs/module3_photos.md`) | ❌ Un fichier ne va pas dans Firestore | ✅ Colonne `photo_locale` (chemin du fichier) |
 | **Requêtes locales** : filtrer par statut, catégorie, auteur, trier | ⚠️ Possible seulement avec les requêtes et les index Firestore | ✅ `WHERE` / `ORDER BY` en SQL, index SQLite |
 
 En plus, on **maîtrise** ce qui est gardé et quand : la liste hors ligne
@@ -77,6 +77,20 @@ CREATE TABLE adresses_cache (cle TEXT PRIMARY KEY, adresse TEXT, date INTEGER)
 - `adresses_cache` : la clé est le point arrondi à 4 décimales (environ
   11 m), ex. `36.8625,10.1700`. La politique de Nominatim demande de ne pas
   redemander le même endroit ; et une adresse déjà trouvée marche hors ligne.
+
+### Version 3 (étape 6 : photo)
+
+```sql
+ALTER TABLE envois_en_attente ADD COLUMN photo_url TEXT;
+```
+
+Dès que la photo d'un envoi est sur Cloudinary, son adresse est notée
+(`enregistrerPhotoEnvoyee`) : si Firestore échoue ensuite, le prochain
+essai n'envoie pas la photo une deuxième fois. `onUpgrade` enchaîne les
+étapes : un téléphone en version 1 passe par 2 puis 3. La colonne
+`photo_locale` (prévue dès la version 1) garde le chemin du fichier ; une
+requête `UNION` sur les brouillons et la file liste les photos encore
+utiles (ménage au démarrage). Détails : `docs/module3_photos.md`.
 
 ## 4. Les parcours
 
