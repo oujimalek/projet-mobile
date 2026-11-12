@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/demande_service.dart';
 import '../../data/models/service.dart';
 import '../../data/resultat.dart';
+import '../../data/services/base_locale_m2.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -42,6 +43,46 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       .ecouterDemandesEnvoyees();
 
   bool _enCours = false; // true pendant une écriture : boutons désactivés
+
+  // SQLite (base locale M2) : favori et consultation, gardés sur le téléphone
+  bool _favori = false;
+  bool _consultationNotee = false; // on note l'ouverture une seule fois
+  Service? _service; // le dernier service reçu (pour l'étoile)
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerFavori();
+  }
+
+  Future<void> _chargerFavori() async {
+    final bool favori = await BaseLocaleM2.estFavori(widget.serviceId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _favori = favori;
+    });
+  }
+
+  /// L'étoile : ajoute ou retire le service des favoris (SQLite).
+  Future<void> _basculerFavori() async {
+    final Service? service = _service;
+    if (service == null) {
+      return;
+    }
+    final bool favori = await BaseLocaleM2.basculerFavori(service);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _favori = favori;
+    });
+    afficherMessage(
+      context,
+      favori ? 'Ajouté à tes favoris' : 'Retiré de tes favoris',
+    );
+  }
 
   /// Appelé quand on touche "Demander ce service".
   Future<void> _demander(Service service) async {
@@ -122,13 +163,28 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const AppHeader(titre: 'Détail du service'),
+          AppHeader(
+            titre: 'Détail du service',
+            action: IconButton(
+              tooltip: _favori ? 'Retirer des favoris' : 'Ajouter aux favoris',
+              onPressed: _basculerFavori,
+              icon: Icon(
+                _favori ? Icons.star : Icons.star_border,
+                color: AppColors.secondary,
+              ),
+            ),
+          ),
           Expanded(
             child: FluxM2<Service?>(
               flux: _fluxService,
               construire: (context, service) {
                 if (service == null) {
                   return const MessageEtat(texte: 'Ce service n\'existe plus');
+                }
+                _service = service;
+                if (!_consultationNotee) {
+                  _consultationNotee = true;
+                  BaseLocaleM2.noterConsultation(service); // SQLite, sans attendre
                 }
                 return _contenu(service);
               },

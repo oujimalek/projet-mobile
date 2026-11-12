@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/service.dart';
 import '../../data/resultat.dart';
+import '../../data/services/aide_redaction_m2.dart';
+import '../../data/services/base_locale_m2.dart';
+import '../../data/services/firebase_service_repository.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
@@ -50,8 +53,11 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   TimeOfDay? _heureFin;
   String? _erreurCommun; // message sous la zone du service commun
   bool _enCours = false; // true pendant l'enregistrement
+  bool _iaEnCours = false; // true pendant "Améliorer avec l'IA"
   bool _rotation = false; // false = inscription libre, true = rotation automatique
   List<ParticipantRotation> _participants = []; // dans l'ordre de passage
+
+  bool _publie = false; // true = publié : plus besoin de brouillon
 
   bool get _modification => widget.service != null;
 
@@ -66,11 +72,51 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
       _jePropose = service.estOffre;
       _categorie = service.categorie;
       _commun = service.estCommun;
+    } else {
+      _restaurerBrouillon();
     }
+  }
+
+  /// Nouvelle publication : on reprend le brouillon gardé dans SQLite.
+  Future<void> _restaurerBrouillon() async {
+    final BrouillonService? brouillon = await BaseLocaleM2.lireBrouillon();
+    if (brouillon == null || !mounted) {
+      return;
+    }
+    // On n'écrase pas ce que l'utilisateur a déjà commencé à taper
+    if (_titreController.text.isNotEmpty ||
+        _descriptionController.text.isNotEmpty) {
+      return;
+    }
+    setState(() {
+      _titreController.text = brouillon.titre;
+      _descriptionController.text = brouillon.description;
+      _disponibiliteController.text = brouillon.disponibilite;
+      _jePropose = brouillon.estOffre;
+      _categorie = brouillon.categorie;
+    });
+    afficherMessage(context, 'Brouillon restauré');
+  }
+
+  /// Le formulaire en cours, sous forme de brouillon.
+  BrouillonService _brouillonActuel() {
+    return BrouillonService(
+      titre: _titreController.text,
+      description: _descriptionController.text,
+      disponibilite: _disponibiliteController.text,
+      categorie: _categorie,
+      estOffre: _jePropose,
+      majLe: DateTime.now(),
+    );
   }
 
   @override
   void dispose() {
+    // Nouvelle publication quittée sans publier : on garde le brouillon
+    // (SQLite). Un formulaire vide efface l'ancien brouillon.
+    if (!_modification && !_publie) {
+      BaseLocaleM2.enregistrerBrouillon(_brouillonActuel());
+    }
     // On libère les contrôleurs quand l'écran est fermé
     _titreController.dispose();
     _descriptionController.dispose();
@@ -148,6 +194,88 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     });
   }
 
+  /// (IA) Propose une version plus claire du titre et de la description.
+  /// Rien n'est remplacé sans l'accord de l'utilisateur.
+  Future<void> _ameliorer() async {
+    setState(() {
+      _iaEnCours = true;
+    });
+    final Resultat<AnnonceProposee> resultat = await AideRedactionM2.ameliorer(
+      quartierId: ContexteM2.moi().quartierId ?? '',
+      titre: _titreController.text,
+      description: _descriptionController.text,
+      categorie: _categorie,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _iaEnCours = false;
+    });
+    if (!resultat.estSucces) {
+      afficherMessage(context, resultat.erreur!);
+      return;
+    }
+    final AnnonceProposee proposition = resultat.donnee!;
+    if (proposition.titre == _titreController.text.trim() &&
+        proposition.description == _descriptionController.text.trim()) {
+      afficherMessage(context, 'Ton annonce est déjà bien écrite');
+      return;
+    }
+    final bool? accepte = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          proposition.parIA ? 'Proposition de l\'IA' : 'Mise en forme proposée',
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!proposition.parIA)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'L\'IA n\'est pas disponible : seuls les espaces, les '
+                    'majuscules et la ponctuation ont été corrigés.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ),
+              const _Etiquette('Titre'),
+              Text(proposition.titre),
+              const SizedBox(height: 12),
+              const _Etiquette('Description'),
+              Text(proposition.description),
+              const SizedBox(height: 12),
+              Text(
+                'Relis bien : tu pourras encore modifier le texte.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Garder mon texte'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Utiliser'),
+          ),
+        ],
+      ),
+    );
+    if (accepte != true || !mounted) {
+      return;
+    }
+    setState(() {
+      _titreController.text = proposition.titre;
+      _descriptionController.text = proposition.description;
+    });
+  }
+
   /// Appelé quand on touche "Publier" (ou "Enregistrer").
   Future<void> _publier() async {
     // On vérifie les champs du Form, puis la catégorie et le service commun
@@ -221,6 +349,10 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     if (!resultat.estSucces) {
       afficherMessage(context, resultat.erreur!);
       return;
+    }
+    if (!_modification) {
+      _publie = true;
+      BaseLocaleM2.supprimerBrouillon(); // publié : le brouillon ne sert plus
     }
     afficherMessage(
       context,
@@ -296,7 +428,24 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                         controller: _descriptionController,
                         validator: _validerDescription,
                       ),
-                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          // null = désactivé pendant la demande
+                          onPressed: _iaEnCours ? null : _ameliorer,
+                          icon: _iaEnCours
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.auto_awesome, size: 18),
+                          label: Text(
+                            _iaEnCours ? 'Rédaction...' : 'Améliorer avec l\'IA',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       AppTextField(
                         label: 'Disponibilité (optionnel)',
                         hint: 'Ex : Ce week-end',

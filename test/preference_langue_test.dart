@@ -1,13 +1,18 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive_ce.dart';
 import 'package:houmani/data/services/cache_local.dart';
 import 'package:houmani/theme/preference_langue.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-// Le choix de langue est gardé sur le téléphone (Hive, dossier temporaire).
+// Le choix de langue est gardé sur le téléphone (SQLite, dossier temporaire).
 void main() {
   late Directory dossier;
+
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
 
   setUp(() {
     dossier = Directory.systemTemp.createTempSync('houmani_langue_');
@@ -17,7 +22,6 @@ void main() {
   tearDown(() async {
     PreferenceLangue.langue.value = Langue.francais;
     await PreferenceLangue.cache.fermer();
-    await Hive.close();
     try {
       dossier.deleteSync(recursive: true);
     } catch (e) {

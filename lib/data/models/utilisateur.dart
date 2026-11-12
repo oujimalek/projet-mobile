@@ -46,6 +46,11 @@ class Utilisateur {
   // Raison donnée par l'admin quand il refuse ou bloque (vide sinon)
   final String motif;
 
+  // Adresse postale donnée avec la demande (ex : "12 rue des Jasmins").
+  // Vue par l'admin seulement, qui la vérifie sur la carte (M1).
+  // Champ à part dans Firestore (`adresse`), écrit par enregistrerAdresse.
+  final String adresse;
+
   const Utilisateur({
     required this.id,
     required this.prenom,
@@ -67,6 +72,7 @@ class Utilisateur {
     this.dateDemande,
     this.avatar = '',
     this.motif = '',
+    this.adresse = '',
   });
 
   String get nomComplet => '$prenom $nom';
@@ -106,6 +112,7 @@ class Utilisateur {
     String? avatar,
     String? motif,
     RoleUtilisateur? role,
+    String? adresse,
   }) {
     return Utilisateur(
       id: id,
@@ -126,6 +133,7 @@ class Utilisateur {
       dateDemande: dateDemande ?? this.dateDemande,
       avatar: avatar ?? this.avatar,
       motif: motif ?? this.motif,
+      adresse: adresse ?? this.adresse,
     );
   }
 
@@ -135,6 +143,7 @@ class Utilisateur {
 
   /// Les champs enregistrés dans Firestore. L'id est le nom du document,
   /// et les statistiques (servicesRendus...) ne sont pas stockées.
+  /// L'adresse n'y est pas : elle est écrite à part (enregistrerAdresse).
   Map<String, dynamic> toMap() {
     return {
       'prenom': prenom,
@@ -173,6 +182,7 @@ class Utilisateur {
       competences: List<String>.from(map['competences'] ?? []),
       avatar: map['avatar'] ?? '',
       motif: map['motif'] ?? '',
+      adresse: map['adresse'] ?? '',
       dateDemande: date?.toDate(),
     );
   }

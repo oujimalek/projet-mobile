@@ -36,6 +36,8 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   final UtilisateurRepository _repository = UtilisateurRepository();
 
   final TextEditingController _rechercheController = TextEditingController();
+  // Facultatif : l'admin vérifie sur la carte qu'elle est dans la houma
+  final TextEditingController _adresseController = TextEditingController();
 
   String _code = '';
   Quartier? _quartierDuCode; // trouvé grâce au code complet (6 caractères)
@@ -57,6 +59,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   @override
   void dispose() {
     _rechercheController.dispose();
+    _adresseController.dispose();
     super.dispose();
   }
 
@@ -172,6 +175,14 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     if (quartier == null) {
       return;
     }
+    final String adresse = _adresseController.text.trim();
+    final String? refusAdresse = UtilisateurRepository.refusAdresse(adresse);
+    if (refusAdresse != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(refusAdresse)),
+      );
+      return;
+    }
     if (_changement() && !await _confirmerChangement(quartier)) {
       return;
     }
@@ -179,6 +190,10 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
       _enChargement = true;
     });
     final Resultat<void> resultat = await _repository.rejoindreQuartier(quartier);
+    if (resultat.estSucces && adresse.isNotEmpty) {
+      // Pas bloquant : si l'adresse ne passe pas, la demande est déjà partie
+      await _repository.enregistrerAdresse(adresse);
+    }
     if (!mounted) {
       return;
     }
@@ -354,6 +369,31 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 ),
                 const SizedBox(height: 4),
                 ..._listeQuartiers(),
+                const SizedBox(height: 16),
+
+                // ----- Adresse (facultative) -----
+                AppTextField(
+                  label: tr(
+                    'Ton adresse (facultatif)',
+                    'L\'adresse mte3ek (ken t7eb)',
+                  ),
+                  hint: tr(
+                    'Ex : 12 rue des Jasmins',
+                    'Mathalan : 12 rue des Jasmins',
+                  ),
+                  icone: Icons.home_outlined,
+                  controller: _adresseController,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  tr(
+                    'Vue seulement par l\'administrateur, pour vérifier que '
+                        'tu habites bien la houma.',
+                    'Ken el admin ychoufha, bech yetthabbet elli enti '
+                        'saken fel houma.',
+                  ),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
                 const SizedBox(height: 24),
 
                 PrimaryButton(

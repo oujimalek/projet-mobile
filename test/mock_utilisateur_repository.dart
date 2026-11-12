@@ -583,6 +583,17 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
+  Future<Resultat<void>> enregistrerAdresse(String adresse) async {
+    final String? refus = UtilisateurRepository.refusAdresse(adresse);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final Utilisateur modifie = _connecte.copier(adresse: adresse.trim());
+    _remplacer(modifie);
+    return const Resultat.succes(null);
+  }
+
+  @override
   Future<Resultat<Quartier?>> getQuartierConnecte() async {
     for (final Quartier quartier in _quartiers) {
       if (quartier.nom == _connecte.quartier) {
@@ -666,6 +677,22 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   @override
   Future<Resultat<List<Utilisateur>>> getVoisins() {
     return getMembres(StatutUtilisateur.actif);
+  }
+
+  /// Date de copie renvoyée par dateCopieVoisins (les tests la changent).
+  DateTime? dateCopie;
+
+  /// Connexions renvoyées par dernieresConnexions (les tests la remplissent).
+  List<ConnexionLocale> connexions = [];
+
+  @override
+  Future<DateTime?> dateCopieVoisins() async {
+    return dateCopie;
+  }
+
+  @override
+  Future<List<ConnexionLocale>> dernieresConnexions() async {
+    return connexions;
   }
 
   @override

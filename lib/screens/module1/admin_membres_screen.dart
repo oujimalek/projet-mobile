@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/quartier.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/utilisateur_repository.dart';
+import '../../data/services/verification_adresse_m1.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
@@ -38,6 +40,10 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
 
   bool _enChargement = true; // true jusqu'au premier chargement
   String _erreur = ''; // ex : pas de réseau
+
+  // Vérification des adresses des demandes (Nominatim), par id de membre.
+  // Absent : pas encore vérifiée ; échec : pas de réseau.
+  final Map<String, Resultat<VerdictAdresse>> _verdicts = {};
 
   // Couleurs des avatars, choisies à tour de rôle
   // (des `get` : les couleurs suivent le thème clair/sombre)
@@ -88,6 +94,35 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
         }
       }
     });
+    _verifierAdresses();
+  }
+
+  /// Vérifie, une par une, les adresses des demandes en attente :
+  /// sont-elles dans le contour du quartier ? (en arrière-plan)
+  Future<void> _verifierAdresses() async {
+    final List<Utilisateur> aVerifier = [];
+    for (final Utilisateur membre in _enAttente) {
+      if (membre.adresse.isNotEmpty && !_verdicts.containsKey(membre.id)) {
+        aVerifier.add(membre);
+      }
+    }
+    if (aVerifier.isEmpty) {
+      return;
+    }
+    final Resultat<Quartier?> quartier = await _repository.getQuartierConnecte();
+    if (quartier.donnee == null) {
+      return;
+    }
+    for (final Utilisateur membre in aVerifier) {
+      final Resultat<VerdictAdresse> verdict =
+          await VerificationAdresseM1.verifier(membre.adresse, quartier.donnee!);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _verdicts[membre.id] = verdict;
+      });
+    }
   }
 
   /// Les membres chargés pour un statut.
@@ -464,6 +499,17 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                         fontSize: 12,
                       ),
                     ),
+                    // Demande avec une adresse : vérifiée sur la carte
+                    if (_onglet == StatutUtilisateur.enAttente &&
+                        membre.adresse.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        membre.adresse,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      _badgeAdresse(_verdicts[membre.id]),
+                    ],
                   ],
                 ),
               ),
@@ -473,6 +519,73 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           _boutons(membre),
         ],
       ),
+    );
+  }
+
+  /// Le résultat de la vérification de l'adresse, en couleur.
+  Widget _badgeAdresse(Resultat<VerdictAdresse>? verdict) {
+    String texte;
+    Color couleur;
+    IconData icone;
+    if (verdict == null) {
+      texte = tr('Vérification de l\'adresse...', 'Nthabtou fel adresse...');
+      couleur = AppColors.textSecondary;
+      icone = Icons.hourglass_empty;
+    } else if (!verdict.estSucces) {
+      texte = tr(
+        'Adresse non vérifiée (pas de réseau ?)',
+        'Ma najjamnech nthabtou fel adresse (ma famech réseau ?)',
+      );
+      couleur = AppColors.textSecondary;
+      icone = Icons.cloud_off;
+    } else {
+      final VerdictAdresse v = verdict.donnee!;
+      final String km = v.distanceMetres == null
+          ? ''
+          : ' · ${(v.distanceMetres! / 1000).toStringAsFixed(1)} km';
+      switch (v.etat) {
+        case EtatAdresse.dansLeQuartier:
+          texte = tr('Adresse dans la houma', 'L\'adresse fel houma');
+          couleur = AppColors.success;
+          icone = Icons.verified_outlined;
+        case EtatAdresse.horsDuQuartier:
+          texte = tr(
+            'Adresse hors de la houma$km',
+            'L\'adresse barra el houma$km',
+          );
+          couleur = AppColors.warning;
+          icone = Icons.warning_amber_rounded;
+        case EtatAdresse.introuvable:
+          texte = tr(
+            'Adresse introuvable sur la carte',
+            'Ma l9inech l\'adresse 3al carte',
+          );
+          couleur = AppColors.textSecondary;
+          icone = Icons.help_outline;
+        case EtatAdresse.sansContour:
+          texte = tr(
+            'Trace les limites du quartier pour vérifier$km',
+            'Arsem 7doud el houma bech tthabbet$km',
+          );
+          couleur = AppColors.textSecondary;
+          icone = Icons.map_outlined;
+      }
+    }
+    return Row(
+      children: [
+        Icon(icone, size: 14, color: couleur),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            texte,
+            style: TextStyle(
+              color: couleur,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

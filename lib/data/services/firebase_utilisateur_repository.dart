@@ -50,7 +50,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   // sans attendre le réseau (synchrone).
   Utilisateur _connecte = _invite;
 
-  // Copie du profil sur le téléphone (Hive) : voir cache_local.dart
+  // Copie du profil sur le téléphone (SQLite) : voir cache_local.dart
   final CacheLocal _cache;
 
   /// [cache] : les tests peuvent donner un cache dans un dossier temporaire.
@@ -90,7 +90,15 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         email: email,
         password: motDePasse,
       );
-      return await _chargerProfil(credential.user!);
+      final Resultat<Utilisateur> profil =
+          await _chargerProfil(credential.user!);
+      if (profil.estSucces) {
+        await _cache.noterConnexion(
+          profil.donnee!.id,
+          parNumero ? 'telephone' : 'email',
+        );
+      }
+      return profil;
     } on FirebaseAuthException catch (e) {
       final String message = _messageAuth(e.code);
       if (parNumero && message == 'E-mail ou mot de passe incorrect') {
@@ -395,7 +403,12 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         await _auth.signOut();
         return const Resultat.echec(UtilisateurRepository.numeroNonVerifie);
       }
-      return await _chargerProfil(credential.user!);
+      final Resultat<Utilisateur> profil =
+          await _chargerProfil(credential.user!);
+      if (profil.estSucces) {
+        await _cache.noterConnexion(profil.donnee!.id, 'sms');
+      }
+      return profil;
     } on FirebaseAuthException catch (e) {
       return Resultat.echec(_messageAuth(e.code));
     } on FirebaseException catch (e) {
@@ -680,6 +693,24 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
+  Future<Resultat<void>> enregistrerAdresse(String adresse) async {
+    final String? refus = UtilisateurRepository.refusAdresse(adresse);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final Utilisateur modifie = _connecte.copier(adresse: adresse.trim());
+    try {
+      // Écrit seul (règle à part dans firestore.rules) : si ça échoue,
+      // la demande pour rejoindre le quartier est quand même partie
+      await _utilisateurs.doc(modifie.id).update({'adresse': modifie.adresse});
+      await _memoriser(modifie);
+      return const Resultat.succes(null);
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
   Future<Resultat<Quartier?>> getQuartierConnecte() async {
     final String? quartierId = _connecte.quartierId;
     if (quartierId == null || quartierId.isEmpty) {
@@ -799,9 +830,33 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
+  /// Les voisins actifs. Chaque réponse de Firebase est copiée dans SQLite ;
+  /// sans réseau, on renvoie la dernière copie (s'il y en a une).
   @override
-  Future<Resultat<List<Utilisateur>>> getVoisins() {
-    return getMembres(StatutUtilisateur.actif);
+  Future<Resultat<List<Utilisateur>>> getVoisins() async {
+    final String? quartierId = _connecte.quartierId;
+    final Resultat<List<Utilisateur>> resultat =
+        await getMembres(StatutUtilisateur.actif);
+    if (quartierId == null) {
+      return resultat;
+    }
+    if (resultat.estSucces) {
+      await _cache.enregistrerVoisins(quartierId, resultat.donnee!);
+      return resultat;
+    }
+    final List<Utilisateur> copie = await _cache.lireVoisins(quartierId);
+    return copie.isEmpty ? resultat : Resultat.succes(copie);
+  }
+
+  @override
+  Future<DateTime?> dateCopieVoisins() async {
+    final String? quartierId = _connecte.quartierId;
+    return quartierId == null ? null : _cache.dateVoisins(quartierId);
+  }
+
+  @override
+  Future<List<ConnexionLocale>> dernieresConnexions() {
+    return _cache.historiqueConnexions(_connecte.id);
   }
 
   @override

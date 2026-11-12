@@ -41,6 +41,43 @@ class _ParametresScreenState extends State<ParametresScreen> {
   // true pendant qu'on attend Firebase (la roue tourne, les lignes sont inactives)
   bool _enChargement = false;
 
+  // Les dernières connexions sur ce téléphone (base SQLite du module 1)
+  List<ConnexionLocale> _connexions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerConnexions();
+  }
+
+  Future<void> _chargerConnexions() async {
+    final List<ConnexionLocale> connexions =
+        await _repository.dernieresConnexions();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _connexions = connexions;
+    });
+  }
+
+  /// "E-mail · 12/11/2026 à 18:05"
+  static String _texteConnexion(ConnexionLocale connexion) {
+    String deux(int n) {
+      return n.toString().padLeft(2, '0');
+    }
+
+    final DateTime d = connexion.date;
+    String methode = tr('E-mail', 'E-mail');
+    if (connexion.methode == 'telephone') {
+      methode = tr('Numéro', 'Nouméro');
+    } else if (connexion.methode == 'sms') {
+      methode = tr('Code SMS', 'Code SMS');
+    }
+    return '$methode · ${deux(d.day)}/${deux(d.month)}/${d.year} '
+        '${tr('à', 'fel')} ${deux(d.hour)}:${deux(d.minute)}';
+  }
+
   // ----- Règles des champs (les mêmes qu'à l'inscription) -----
 
   static String? _validerMotDePasseActuel(String valeur, List<String> saisies) {
@@ -306,6 +343,32 @@ class _ParametresScreenState extends State<ParametresScreen> {
                 ),
                 if (_enChargement) const IndicateurChargement(),
                 const SizedBox(height: 24),
+
+                if (_connexions.isNotEmpty) ...[
+                  _titreSection(
+                    tr('DERNIÈRES CONNEXIONS', 'A5ER CONNEXIONS'),
+                  ),
+                  AppCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        for (int i = 0; i < _connexions.length; i++) ...[
+                          if (i > 0)
+                            Divider(height: 1, color: AppColors.border),
+                          _ligne(
+                            icone: Icons.history,
+                            titre: _texteConnexion(_connexions[i]),
+                            detail: i == 0
+                                ? tr('La plus récente, sur ce téléphone',
+                                    'A5er wa7da, fel téléphone hedha')
+                                : null,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 _titreSection(tr('APPARENCE', 'ECHAKL')),
                 AppCard(

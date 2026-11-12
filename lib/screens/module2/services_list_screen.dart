@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/service.dart';
+import '../../data/services/base_locale_m2.dart';
 import '../../data/services/service_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -36,6 +37,31 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
   bool _afficherOffres = true; // true = onglet "Offres", false = "Demandes"
   String _categorieChoisie = 'Tous';
 
+  // SQLite (base locale M2) : mes favoris et les services vus récemment
+  bool _seulementFavoris = false;
+  Set<String> _idsFavoris = {};
+  Map<String, String> _vusRecemment = {}; // id -> titre
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerDonneesLocales();
+  }
+
+  /// Relit les favoris et l'historique dans SQLite (au début et au retour
+  /// d'un détail, car l'étoile a pu changer).
+  Future<void> _chargerDonneesLocales() async {
+    final Set<String> favoris = await BaseLocaleM2.idsFavoris();
+    final Map<String, String> vus = await BaseLocaleM2.vusRecemment(limite: 3);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _idsFavoris = favoris;
+      _vusRecemment = vus;
+    });
+  }
+
   // Couleurs des avatars (fond, texte), utilisées à tour de rôle
   // (des `get` : les couleurs suivent le thème clair/sombre)
   List<Color> get _fondsAvatar => [
@@ -59,6 +85,9 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
       if (_categorieChoisie != 'Tous' && service.categorie != _categorieChoisie) {
         continue;
       }
+      if (_seulementFavoris && !_idsFavoris.contains(service.id)) {
+        continue;
+      }
       resultat.add(service);
     }
     return resultat;
@@ -76,6 +105,10 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
           const SizedBox(height: 12),
           _filtresCategories(),
           const SizedBox(height: 12),
+          if (_vusRecemment.isNotEmpty) ...[
+            _vusRecemmentLigne(),
+            const SizedBox(height: 12),
+          ],
 
           // ----- La liste des services (en direct) -----
           Expanded(
@@ -87,7 +120,9 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
                   return MessageEtat(
                     texte: tous.isEmpty
                         ? 'Aucun service pour l\'instant. Publie le premier !'
-                        : 'Aucun service dans cette catégorie',
+                        : _seulementFavoris
+                            ? 'Aucun favori ici. Touche l\'étoile d\'un service'
+                            : 'Aucun service dans cette catégorie',
                     icone: Icons.handshake_outlined,
                   );
                 }
@@ -184,9 +219,83 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     });
   }
 
-  /// Ouvre le détail d'un service.
-  void _ouvrirDetail(Service service) {
-    ouvrirEcran(context, ServiceDetailScreen(serviceId: service.id));
+  /// Ouvre le détail d'un service. Au retour, on relit SQLite
+  /// (favori ajouté ou retiré, nouvelle consultation).
+  Future<void> _ouvrirDetail(String serviceId) async {
+    await ouvrirEcran(context, ServiceDetailScreen(serviceId: serviceId));
+    await _chargerDonneesLocales();
+  }
+
+  /// "Vus récemment" : les 3 derniers services ouverts (SQLite).
+  Widget _vusRecemmentLigne() {
+    final List<Widget> liens = [];
+    _vusRecemment.forEach((id, titre) {
+      liens.add(ActionChip(
+        avatar: Icon(Icons.history, size: 16, color: AppColors.primary),
+        label: Text(titre, overflow: TextOverflow.ellipsis),
+        onPressed: () {
+          _ouvrirDetail(id);
+        },
+      ));
+    });
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Vus récemment',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 4, children: liens),
+        ],
+      ),
+    );
+  }
+
+  /// Le filtre "★ Favoris" (s'ajoute aux catégories).
+  Widget _filtreFavoris() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () {
+        setState(() {
+          _seulementFavoris = !_seulementFavoris;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: _seulementFavoris ? AppColors.secondary : AppColors.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _seulementFavoris ? AppColors.secondary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _seulementFavoris ? Icons.star : Icons.star_border,
+              size: 16,
+              color: _seulementFavoris ? Colors.white : AppColors.secondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Favoris (${_idsFavoris.length})',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _seulementFavoris ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Les deux onglets "Offres" / "Demandes".
@@ -240,6 +349,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
     for (final categorie in _repository.getCategories()) {
       filtres.add(_filtre(categorie));
     }
+    filtres.add(_filtreFavoris());
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Align(
@@ -309,7 +419,7 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
       child: AppCard(
         // Toucher la carte ouvre le détail du service
         onTap: () {
-          _ouvrirDetail(service);
+          _ouvrirDetail(service.id);
         },
         child: Row(
           children: [

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
+import '../../data/services/trouver_voisin_m1.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -31,6 +32,14 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
   List<Utilisateur> _voisins = [];
   bool _enChargement = true; // true jusqu'au premier chargement
   String _erreur = ''; // ex : pas de réseau
+  // Date de la copie SQLite affichée quand Firebase n'a pas répondu
+  // (null : la liste vient du serveur)
+  DateTime? _copieHorsLigne;
+
+  // (IA) "Qui peut m'aider ?"
+  bool _iaEnCours = false;
+  String _besoin = ''; // le dernier besoin décrit
+  ReponseBesoin? _reponse; // null = rien demandé (ou fermé)
 
   @override
   void initState() {
@@ -48,7 +57,11 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
   }
 
   Future<void> _charger() async {
+    final DateTime debut = DateTime.now();
     final Resultat<List<Utilisateur>> resultat = await _repository.getVoisins();
+    // Copie plus ancienne que la demande : Firebase n'a pas répondu,
+    // la liste vient de la base SQLite du téléphone
+    final DateTime? copie = await _repository.dateCopieVoisins();
     if (!mounted) {
       return;
     }
@@ -63,7 +76,254 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
       _enChargement = false;
       _voisins = voisins;
       _erreur = resultat.estSucces ? '' : resultat.erreur!;
+      _copieHorsLigne =
+          resultat.estSucces && copie != null && copie.isBefore(debut)
+              ? copie
+              : null;
     });
+  }
+
+  /// "12/11 à 18:05"
+  static String _dateCourte(DateTime date) {
+    String deux(int n) {
+      return n.toString().padLeft(2, '0');
+    }
+
+    return '${deux(date.day)}/${deux(date.month)} à '
+        '${deux(date.hour)}:${deux(date.minute)}';
+  }
+
+  /// Bandeau "hors ligne" : la liste affichée est la copie du téléphone.
+  Widget _bandeauHorsLigne(DateTime date) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.secondaryLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off_outlined, color: AppColors.secondary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tr(
+                'Hors ligne : liste enregistrée le ${_dateCourte(date)}',
+                'Ma famma ch connexion : el liste mte3 ${_dateCourte(date)}',
+              ),
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// (IA) Demande le besoin, puis cherche les compétences utiles.
+  Future<void> _demanderAide() async {
+    final TextEditingController champ = TextEditingController(text: _besoin);
+    final String? besoin = await showDialog<String>(
+      context: context,
+      builder: (contexteDialogue) {
+        return AlertDialog(
+          title: Text(tr('Qui peut m\'aider ?', 'Chkoun ynajem y3aweni ?')),
+          content: TextField(
+            controller: champ,
+            autofocus: true,
+            maxLength: TrouverVoisinM1.besoinMax,
+            maxLines: 3,
+            minLines: 2,
+            decoration: InputDecoration(
+              hintText: tr(
+                'Ex : ma machine à laver fuit',
+                'Mithel : el machine mte3i tsayyeb',
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(contexteDialogue).pop(),
+              child: Text(tr('Annuler', 'Batel')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(contexteDialogue).pop(champ.text),
+              child: Text(
+                tr('Chercher', 'Lawej'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    champ.dispose();
+    if (besoin == null || !mounted) {
+      return;
+    }
+    if (!TrouverVoisinM1.besoinValide(besoin)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(tr(
+            'Décris ton besoin en quelques mots',
+            'Ochre7 chnowa te7tej fi kelmtin',
+          )),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _iaEnCours = true;
+      _besoin = besoin.trim();
+    });
+    final Resultat<ReponseBesoin> resultat = await TrouverVoisinM1.trouver(
+      quartierId: _repository.getUtilisateurConnecte().quartierId ?? '',
+      besoin: besoin,
+      voisins: _voisins,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _iaEnCours = false;
+      _reponse = resultat.donnee;
+    });
+  }
+
+  /// Carte "Besoin d'un coup de main ?" avec le bouton de l'IA.
+  Widget _carteAide() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.secondaryLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, color: AppColors.secondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tr(
+                'Un souci ? Décris-le, l\'IA trouve le voisin qui peut aider.',
+                'Famma mochkla ? Ochre7ha, el IA tal9alek el jar elli ynajem y3awnek.',
+              ),
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _iaEnCours
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : TextButton(
+                  // Pas de voisin chargé : rien à chercher
+                  onPressed: _voisins.isEmpty ? null : _demanderAide,
+                  child: Text(tr('Demander', 'Is2el')),
+                ),
+        ],
+      ),
+    );
+  }
+
+  /// Les compétences utiles et les voisins qui les ont.
+  Widget _resultatsAide(ReponseBesoin reponse) {
+    final List<Widget> lignes = [];
+    for (final Correspondance c in reponse.correspondances) {
+      lignes.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Pastille(
+                texte: c.competence,
+                couleur: AppColors.secondary,
+                fond: AppColors.secondaryLight,
+              ),
+              if (c.raison.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  c.raison,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final Utilisateur voisin in c.voisins)
+                    ActionChip(
+                      avatar: Icon(Icons.phone_outlined,
+                          size: 16, color: AppColors.primary),
+                      label: Text(voisin.nomComplet),
+                      onPressed: () => _afficherContact(voisin),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (lignes.isEmpty) {
+      lignes.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            tr(
+              'Personne dans la houma n\'a déclaré une compétence pour ça.',
+              'Ma famma 7atta jar fel houma 3andou 5edma kif hethi.',
+            ),
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    tr('Pour « $_besoin »', 'Bech « $_besoin »'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                IconButton(
+                  tooltip: tr('Fermer', 'Sakker'),
+                  onPressed: () {
+                    setState(() {
+                      _reponse = null;
+                    });
+                  },
+                  icon: Icon(Icons.close, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            Text(
+              reponse.parIA
+                  ? tr('Suggestions de l\'IA', 'Ra2y el IA')
+                  : tr(
+                      'IA indisponible : recherche simple par mots-clés',
+                      'El IA mech mawjouda : lawajna bel kelmet',
+                    ),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            ...lignes,
+          ],
+        ),
+      ),
+    );
   }
 
   /// Les voisins dont le nom ou une compétence contient la recherche.
@@ -120,6 +380,8 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (!_enChargement && _erreur.isEmpty) _carteAide(),
+                if (_reponse != null) _resultatsAide(_reponse!),
                 TextField(
                   controller: _rechercheController,
                   decoration: InputDecoration(
@@ -128,6 +390,8 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (_copieHorsLigne != null)
+                  _bandeauHorsLigne(_copieHorsLigne!),
                 ...cartes,
               ],
             ),

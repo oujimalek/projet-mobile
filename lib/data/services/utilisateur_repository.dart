@@ -1,7 +1,10 @@
 import '../models/quartier.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
+import 'cache_local.dart';
 import 'firebase_utilisateur_repository.dart';
+
+export 'cache_local.dart' show ConnexionLocale;
 
 /// M1 - Accès aux données des utilisateurs et des quartiers : le CONTRAT.
 ///
@@ -265,6 +268,27 @@ abstract class UtilisateurRepository {
   /// quartier où l'on est déjà.
   Future<Resultat<void>> rejoindreQuartier(Quartier quartier);
 
+  /// M1 - Enregistre l'adresse postale de l'utilisateur connecté (ex :
+  /// "12 rue des Jasmins"), vue seulement par l'admin de son quartier qui
+  /// la vérifie sur la carte (VerificationAdresseM1). Vide : effacée.
+  Future<Resultat<void>> enregistrerAdresse(String adresse);
+
+  /// Adresse acceptée ? null si oui, sinon le message d'erreur.
+  /// Vide : acceptée (l'adresse est facultative).
+  static String? refusAdresse(String adresse) {
+    final String texte = adresse.trim();
+    if (texte.isEmpty) {
+      return null;
+    }
+    if (texte.length < 5) {
+      return 'Adresse trop courte';
+    }
+    if (texte.length > 150) {
+      return 'Adresse trop longue (150 caractères au plus)';
+    }
+    return null;
+  }
+
   /// Le quartier de l'utilisateur connecté (`donnee == null` s'il n'en a pas).
   Future<Resultat<Quartier?>> getQuartierConnecte();
 
@@ -292,6 +316,14 @@ abstract class UtilisateurRepository {
 
   /// La liste des voisins actifs du quartier.
   Future<Resultat<List<Utilisateur>>> getVoisins();
+
+  /// Date de la copie locale (SQLite) de l'annuaire, null : jamais copié.
+  /// Sans réseau, getVoisins renvoie cette copie.
+  Future<DateTime?> dateCopieVoisins();
+
+  /// Les dernières connexions sur ce téléphone (SQLite), la plus récente
+  /// d'abord. Affichées dans Paramètres → Sécurité.
+  Future<List<ConnexionLocale>> dernieresConnexions();
 
   /// L'admin accepte une demande : le membre devient actif.
   Future<Resultat<void>> validerMembre(String id);

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/models/evenement.dart';
+import '../data/models/quartier.dart';
 import '../data/models/service.dart';
 import '../data/models/sondage.dart';
 import '../data/models/utilisateur.dart';
 import '../data/resultat.dart';
 import '../data/services/evenement_repository.dart';
+import '../data/services/meteo_m1.dart';
 import '../data/services/service_repository.dart';
 import '../data/services/sync_signalements_m3.dart';
 import '../data/services/utilisateur_repository.dart';
@@ -46,10 +48,14 @@ class _AccueilScreenState extends State<AccueilScreen> {
   // Nombre de demandes d'adhésion en attente (affiché à l'admin)
   int _enAttente = 0;
 
+  // M1 : météo au centre du quartier (Open-Meteo), null tant qu'inconnue
+  Meteo? _meteo;
+
   @override
   void initState() {
     super.initState();
     _chargerDemandesEnAttente();
+    _chargerMeteo();
     // M4 (C4) : recevoir les annonces de nouveaux événements du quartier
     final Utilisateur moi = _utilisateurs.getUtilisateurConnecte();
     PushM4.abonner(
@@ -72,6 +78,24 @@ class _AccueilScreenState extends State<AccueilScreen> {
     }
     setState(() {
       _enAttente = resultat.donnee ?? 0;
+    });
+  }
+
+  /// M1 : la météo au centre du quartier. Sans position ou sans réseau
+  /// (et sans cache), la carte ne s'affiche simplement pas.
+  Future<void> _chargerMeteo() async {
+    final Resultat<Quartier?> quartier =
+        await _utilisateurs.getQuartierConnecte();
+    final PointGps? centre = quartier.donnee?.centre;
+    if (centre == null) {
+      return;
+    }
+    final Resultat<Meteo> resultat = await MeteoM1.meteoDe(centre);
+    if (!mounted || resultat.donnee == null) {
+      return;
+    }
+    setState(() {
+      _meteo = resultat.donnee;
     });
   }
 
@@ -120,6 +144,13 @@ class _AccueilScreenState extends State<AccueilScreen> {
     final int pourcentage = _pourcentageProfil(utilisateur);
     if (pourcentage < 100) {
       contenu.add(_carteProfilIncomplet(pourcentage));
+      contenu.add(const SizedBox(height: 20));
+    }
+
+    // ----- M1 : météo du quartier (service web Open-Meteo) -----
+    final Meteo? meteo = _meteo;
+    if (meteo != null) {
+      contenu.add(_carteMeteo(meteo));
       contenu.add(const SizedBox(height: 20));
     }
 
@@ -442,6 +473,51 @@ class _AccueilScreenState extends State<AccueilScreen> {
             'Ajoute ta photo et tes compétences : tes voisins sauront '
             'qui tu es et comment tu peux les aider.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// M1 : "☀️ 24° Ciel dégagé · max 27° / min 18°" + un conseil de voisinage.
+  /// Si la météo date de plus d'une heure (gardée hors ligne), on le dit.
+  Widget _carteMeteo(Meteo meteo) {
+    final (String texte, String icone) = MeteoM1.description(meteo.code);
+    final List<String> details = [texte];
+    if (meteo.max != null && meteo.min != null) {
+      details.add('max ${meteo.max!.round()}° / min ${meteo.min!.round()}°');
+    }
+    final Duration age = DateTime.now().difference(meteo.recueLe);
+    final String source = age.inMinutes >= 60
+        ? 'Hors ligne · relevé à ${meteo.recueLe.hour}h'
+            '${meteo.recueLe.minute.toString().padLeft(2, '0')}'
+        : 'Open-Meteo · ton quartier';
+
+    return AppCard(
+      child: Row(
+        children: [
+          Text(icone, style: const TextStyle(fontSize: 34)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${meteo.temperature.round()}° · ${details.join(' · ')}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  MeteoM1.conseil(meteo),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  source,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
           ),
         ],
       ),

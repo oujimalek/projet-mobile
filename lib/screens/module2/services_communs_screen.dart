@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/creneau_commun.dart';
 import '../../data/models/service.dart';
 import '../../data/resultat.dart';
+import '../../data/services/jours_feries_m2.dart';
 import '../../data/services/service_repository.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
@@ -47,6 +48,9 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
   late final DateTime _lundi; // premier jour de la semaine affichée
   late DateTime _jourChoisi; // jour dont on affiche les créneaux
 
+  // Jours fériés de la semaine ('AAAA-MM-JJ' → nom), via Nager.Date
+  Map<String, String> _feries = {};
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +65,32 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
           );
     _lundi = DateTime(depart.year, depart.month, depart.day - (depart.weekday - 1));
     _jourChoisi = depart; // aujourd'hui est choisi par défaut
+    _chargerJoursFeries();
+  }
+
+  /// Les jours fériés de l'année (des deux années si la semaine est à
+  /// cheval sur le 1er janvier). Sans réseau ni cache : rien n'est marqué.
+  Future<void> _chargerJoursFeries() async {
+    final DateTime dimanche =
+        DateTime(_lundi.year, _lundi.month, _lundi.day + 6);
+    final Set<int> annees = {_lundi.year, dimanche.year};
+    final Map<String, String> feries = {};
+    for (final int annee in annees) {
+      final Resultat<Map<String, String>> resultat =
+          await JoursFeriesM2.joursDe(annee);
+      feries.addAll(resultat.donnee ?? {});
+    }
+    if (!mounted || feries.isEmpty) {
+      return;
+    }
+    setState(() {
+      _feries = feries;
+    });
+  }
+
+  /// Le nom du jour férié, ou null si c'est un jour ordinaire.
+  String? _ferie(DateTime jour) {
+    return _feries[JoursFeriesM2.cle(jour)];
   }
 
   /// Ouvre l'inscription à un créneau (le planning se met à jour tout seul).
@@ -138,10 +168,12 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
         }
       }
     }
+    final String? ferie = _ferie(_jourChoisi);
     return Column(
       children: [
         _bandeauSemaine(semaine),
         const SizedBox(height: 16),
+        if (ferie != null) _bandeauFerie(ferie, creneaux.isNotEmpty),
         Expanded(
           child: (creneaux.isEmpty && encarts.isEmpty)
               ? MessageEtat(
@@ -279,6 +311,49 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
     );
   }
 
+  /// "Jour férié : Fête de la République" (+ un rappel s'il y a des créneaux).
+  Widget _bandeauFerie(String nom, bool aDesCreneaux) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.incidentLight,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.celebration_outlined, color: AppColors.incident),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Jour férié : $nom',
+                    style: TextStyle(
+                      color: AppColors.incident,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (aDesCreneaux)
+                    Text(
+                      'Vérifie que le créneau est bien maintenu.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Les 7 jours de la semaine (le jour choisi est doré).
   Widget _bandeauSemaine(List<CreneauCommun> semaine) {
     final List<Widget> jours = [];
@@ -296,6 +371,7 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
   Widget _caseJour(DateTime jour, List<CreneauCommun> semaine) {
     final bool choisi = memeJour(jour, _jourChoisi);
     final bool estAujourdhui = memeJour(jour, _aujourdhui);
+    final bool ferie = _ferie(jour) != null; // numéro en rouge
     bool aDesCreneaux = false;
     for (final creneau in semaine) {
       if (memeJour(creneau.date, jour)) {
@@ -338,7 +414,9 @@ class _ServicesCommunsScreenState extends State<ServicesCommunsScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: choisi ? AppColors.card : AppColors.textPrimary,
+                  color: choisi
+                      ? AppColors.card
+                      : (ferie ? AppColors.incident : AppColors.textPrimary),
                 ),
               ),
               const SizedBox(height: 4),

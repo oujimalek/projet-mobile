@@ -79,7 +79,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['prenom', 'nom', 'email',
              'telephone', 'quartierId', 'quartierNom', 'residence',
              'logement', 'statut', 'role', 'competences', 'avatar',
-             'dateDemande', 'motif'])
+             'dateDemande', 'motif', 'adresse'])
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.get('motif', '') == ''
         && request.resource.data.statut == 'enAttente'
@@ -116,6 +116,14 @@ service cloud.firestore {
         && request.resource.data.get('motif', '') == ''
         && request.resource.data.dateDemande == request.time
         && exists(/databases/$(database)/documents/quartiers/$(request.resource.data.quartierId));
+
+      // M1 - Son adresse postale (avec la demande, vérifiée par l'admin sur
+      // la carte) : seul ce champ change, texte de 150 caractères au plus.
+      allow update: if connecte()
+        && monUid() == uid
+        && changeSeulement(['adresse'])
+        && request.resource.data.adresse is string
+        && request.resource.data.adresse.size() <= 150;
 
       // Admin du quartier : change UNIQUEMENT le statut d'un membre
       // (valider, refuser, bloquer, débloquer) et le motif, jamais le sien.
