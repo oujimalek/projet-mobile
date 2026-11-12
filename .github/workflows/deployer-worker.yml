@@ -36,6 +36,11 @@ jobs:
         working-directory: push_worker
         run: npm ci
 
+      # Un test en échec arrête le workflow : rien n'est déployé
+      - name: Tester le Worker
+        working-directory: push_worker
+        run: npm test
+
       - name: Déployer sur Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
