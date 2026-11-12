@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/historique_signalement.dart';
 import '../models/signalement.dart';
 import '../models/utilisateur.dart';
 import '../resultat.dart';
@@ -175,20 +176,53 @@ class FirebaseSignalementRepository implements SignalementRepository {
       nbConfirmations: 0,
       date: DateTime.now(),
     );
+    // 1re étape de l'historique : "en attente", par l'auteur
+    final EntreeHistorique premiere = EntreeHistorique(
+      statut: StatutSignalement.enAttente,
+      date: nouveau.date,
+      parId: moi.id,
+      parNom: nouveau.auteurNom,
+    );
     return FirestoreCommun.executer(() async {
+      final DocumentReference<Map<String, dynamic>> document;
       if (nouveau.id.isEmpty) {
-        await _signalements.add(nouveau.toMap());
-        return;
+        document = _signalements.doc(); // id choisi par Firestore
+      } else {
+        // Id choisi à l'avance (file d'envoi) : déjà créé = déjà envoyé
+        document = _signalements.doc(nouveau.id);
+        final DocumentSnapshot<Map<String, dynamic>> existant =
+            await document.get();
+        if (existant.exists) {
+          return;
+        }
       }
-      // Id choisi à l'avance (file d'envoi) : déjà créé = déjà envoyé
-      final DocumentReference<Map<String, dynamic>> document =
-          _signalements.doc(nouveau.id);
-      final DocumentSnapshot<Map<String, dynamic>> existant =
-          await document.get();
-      if (existant.exists) {
-        return;
+      // Le signalement ET sa 1re entrée d'historique dans le même lot :
+      // firestore.rules n'accepte l'entrée que pendant la création
+      final WriteBatch batch = FirestoreCommun.base.batch();
+      batch.set(document, nouveau.toMap());
+      batch.set(document.collection('historique').doc(), premiere.toMap());
+      await batch.commit();
+    });
+  }
+
+  @override
+  Future<Resultat<List<EntreeHistorique>>> getHistorique(String id) async {
+    final String? refus = SignalementRepository.refusUtilisateur(_moi);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    return FirestoreCommun.executer(() async {
+      // Un seul champ trié : pas d'index composite
+      final QuerySnapshot<Map<String, dynamic>> resultat = await _signalements
+          .doc(id)
+          .collection('historique')
+          .orderBy('date')
+          .get();
+      final List<EntreeHistorique> entrees = [];
+      for (final document in resultat.docs) {
+        entrees.add(EntreeHistorique.fromMap(document.id, document.data()));
       }
-      await document.set(nouveau.toMap());
+      return entrees;
     });
   }
 
@@ -295,17 +329,39 @@ class FirebaseSignalementRepository implements SignalementRepository {
   @override
   Future<Resultat<void>> changerStatut(
     String id,
-    StatutSignalement statut,
-  ) async {
+    StatutSignalement statut, {
+    String note = '',
+  }) async {
     final Utilisateur moi = _moi;
     final String? refus = SignalementRepository.refusUtilisateur(moi) ??
-        SignalementRepository.refusChangementStatut(moi);
+        SignalementRepository.refusChangementStatut(moi) ??
+        SignalementRepository.refusNote(statut, note);
     if (refus != null) {
       return Resultat.echec(refus);
     }
+    final Resultat<Signalement> lecture = await getSignalement(id);
+    if (!lecture.estSucces) {
+      return Resultat.echec(lecture.erreur!);
+    }
+    if (lecture.donnee!.statut == statut) {
+      return const Resultat.succes(null); // rien ne change : pas d'entrée
+    }
+    final EntreeHistorique entree = EntreeHistorique(
+      statut: statut,
+      note: note.trim(),
+      date: DateTime.now(),
+      parId: moi.id,
+      parNom: SignalementRepository.nomCourt(moi),
+    );
     return FirestoreCommun.executer(() async {
-      // Seulement le statut (firestore.rules : changeSeulement)
-      await _signalements.doc(id).update({'statut': statut.name});
+      // Le statut (seul champ changé : firestore.rules) ET l'entrée
+      // d'historique, dans le même lot
+      final DocumentReference<Map<String, dynamic>> document =
+          _signalements.doc(id);
+      final WriteBatch batch = FirestoreCommun.base.batch();
+      batch.update(document, {'statut': statut.name});
+      batch.set(document.collection('historique').doc(), entree.toMap());
+      await batch.commit();
     });
   }
 }

@@ -686,6 +686,8 @@ void main() {
 
       await tester.tap(find.text('Résolu'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Valider')); // fenêtre de la note (optionnelle)
+      await tester.pumpAndSettle();
       expect(lire('r1').statut, StatutSignalement.resolu);
     });
 

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../models/historique_signalement.dart';
 import '../models/quartier.dart' show PointGps;
 import '../models/signalement.dart';
 import '../models/utilisateur.dart';
@@ -279,6 +280,22 @@ abstract class SignalementRepository {
   }
 
   /// Pourquoi [moi] ne peut pas changer le statut (null : il peut).
+  static const int noteMax = 200;
+
+  /// La note de l'admin : jusqu'à 200 caractères ; pour "refusé", une
+  /// explication de 3 caractères au moins est obligatoire (le voisin doit
+  /// savoir pourquoi). Comme firestore.rules.
+  static String? refusNote(StatutSignalement statut, String note) {
+    final String texte = note.trim();
+    if (texte.length > noteMax) {
+      return 'La note doit avoir au plus $noteMax caractères';
+    }
+    if (statut == StatutSignalement.refuse && texte.length < 3) {
+      return 'Explique pourquoi le signalement est refusé (3 à $noteMax caractères)';
+    }
+    return null;
+  }
+
   static String? refusChangementStatut(Utilisateur moi) {
     if (!moi.estAdmin) {
       return 'Seul l\'admin du quartier peut changer le statut';
@@ -470,5 +487,15 @@ abstract class SignalementRepository {
   Future<Resultat<bool>> aConfirme(String id);
 
   /// L'admin change le statut (voir [refusChangementStatut]).
-  Future<Resultat<void>> changerStatut(String id, StatutSignalement statut);
+  ///
+  /// [note] : la raison donnée par l'admin (obligatoire pour "refusé", voir
+  /// [refusNote]). Le statut et l'entrée d'historique sont écrits ensemble.
+  Future<Resultat<void>> changerStatut(
+    String id,
+    StatutSignalement statut, {
+    String note = '',
+  });
+
+  /// L'historique des statuts, du plus ancien au plus récent.
+  Future<Resultat<List<EntreeHistorique>>> getHistorique(String id);
 }

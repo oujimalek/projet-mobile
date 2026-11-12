@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/historique_signalement.dart';
 import '../../data/models/quartier.dart' show PointGps;
 import '../../data/models/signalement.dart';
 import '../../data/models/utilisateur.dart';
@@ -46,6 +47,8 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
   bool _actionEnCours = false; // confirmer, changer le statut, supprimer
   String? _erreur;
   bool _depuisCache = false; // lu dans SQLite (hors ligne) : pas d'action
+  List<EntreeHistorique>? _historique; // null : pas encore chargé
+  String? _erreurHistorique;
 
   final SyncSignalementsM3 _sync = SyncSignalementsM3.instance;
 
@@ -100,6 +103,27 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       _aConfirme = deja;
       _depuisCache = depuisCache;
       _enChargement = false;
+    });
+    if (!depuisCache) {
+      await _chargerHistorique(signalement.id);
+    }
+  }
+
+  /// L'historique des statuts (en ligne seulement).
+  Future<void> _chargerHistorique(String id) async {
+    final Resultat<List<EntreeHistorique>> resultat = await SignalementRepository()
+        .getHistorique(id)
+        .timeout(
+          SyncSignalementsM3.delaiReseau,
+          onTimeout: () =>
+              const Resultat.echec(SyncSignalementsM3.messageDelai),
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _historique = resultat.donnee;
+      _erreurHistorique = resultat.erreur;
     });
   }
 
@@ -220,14 +244,19 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     if (nouveau == signalement.statut) {
       return;
     }
+    // La note de l'admin (obligatoire pour "refusé") ; null : annulé
+    final String? note = await _demanderNote(nouveau);
+    if (note == null || !mounted) {
+      return;
+    }
     if (!await _verifierReseau() || !mounted) {
       return;
     }
     setState(() {
       _actionEnCours = true;
     });
-    final Resultat<void> resultat =
-        await SignalementRepository().changerStatut(signalement.id, nouveau);
+    final Resultat<void> resultat = await SignalementRepository()
+        .changerStatut(signalement.id, nouveau, note: note);
     if (!mounted) {
       return;
     }
@@ -242,6 +271,203 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       _signalement = signalement.copyWith(statut: nouveau);
     });
     _message('${tr('Statut mis à jour', 'El 7ala tbadlet')} : ${texteStatut(nouveau)}');
+    await _chargerHistorique(signalement.id); // la nouvelle étape apparaît
+  }
+
+  /// La fenêtre de l'admin : passer à [nouveau], avec une note. Renvoie la
+  /// note ('' : sans note), ou null si l'admin annule.
+  Future<String?> _demanderNote(StatutSignalement nouveau) {
+    final bool obligatoire = nouveau == StatutSignalement.refuse;
+    String texte = '';
+    String? erreur;
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        // StatefulBuilder : la fenêtre se redessine pour afficher l'erreur
+        return StatefulBuilder(
+          builder: (context, setStateFenetre) {
+            return AlertDialog(
+              title: Text(
+                '${tr('Passer à', 'Badel l')} « ${texteStatut(nouveau)} »',
+              ),
+              content: TextField(
+                key: const ValueKey('note_statut'),
+                autofocus: true,
+                maxLines: 3,
+                maxLength: SignalementRepository.noteMax,
+                onChanged: (valeur) => texte = valeur,
+                decoration: InputDecoration(
+                  labelText: obligatoire
+                      ? tr('Raison du refus (obligatoire)', '3lech martoud (lezem)')
+                      : tr('Note pour les voisins (optionnelle)',
+                          'Kelma lel jiran (ken t7eb)'),
+                  hintText: obligatoire
+                      ? tr('Ex : déjà signalé à la municipalité',
+                          'Ex : deja mballagh lel baladiya')
+                      : tr('Ex : intervention prévue jeudi',
+                          'Ex : yjiw nhar el khmis'),
+                  errorText: erreur,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(tr('Annuler', 'Batel')),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final String? refus =
+                        SignalementRepository.refusNote(nouveau, texte);
+                    if (refus != null) {
+                      setStateFenetre(() {
+                        erreur = refus;
+                      });
+                      return;
+                    }
+                    Navigator.of(context).pop(texte.trim());
+                  },
+                  child: Text(tr('Valider', 'Sajjel')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// La frise de l'historique : une étape par changement de statut.
+  Widget _carteHistorique(Signalement signalement) {
+    final List<Widget> contenu = [
+      Text(
+        tr('Historique', 'Tarikh'),
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 10),
+    ];
+    final List<EntreeHistorique>? historique = _historique;
+    final String? erreur = _erreurHistorique;
+    if (_depuisCache) {
+      contenu.add(Text(
+        tr('L\'historique s\'affiche avec la connexion.',
+            'Et-tarikh yban ki tarja3 el connexion.'),
+        style: TextStyle(color: AppColors.textSecondary),
+      ));
+    } else if (erreur != null) {
+      contenu.add(Text(erreur, style: TextStyle(color: AppColors.error)));
+    } else if (historique == null) {
+      contenu.add(const LinearProgressIndicator(minHeight: 2));
+    } else {
+      // Signalement créé avant l'historique : sa 1re étape (la création)
+      // n'existe pas ; on la refait à partir du signalement lui-même
+      final List<EntreeHistorique> etapes = List.of(historique);
+      final bool creationConnue = etapes.isNotEmpty &&
+          etapes.first.statut == StatutSignalement.enAttente &&
+          etapes.first.parId == signalement.auteurId;
+      if (!creationConnue) {
+        etapes.insert(
+          0,
+          EntreeHistorique(
+            statut: StatutSignalement.enAttente,
+            date: signalement.date,
+            parId: signalement.auteurId,
+            parNom: signalement.auteurNom,
+          ),
+        );
+      }
+      for (int i = 0; i < etapes.length; i++) {
+        contenu.add(_etape(etapes[i], premiere: i == 0, derniere: i == etapes.length - 1));
+      }
+    }
+    return AppCard(
+      key: const ValueKey('historique'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: contenu,
+      ),
+    );
+  }
+
+  /// Une étape : un point (et un trait vers la suivante), le statut, la
+  /// date, qui, et la note.
+  Widget _etape(
+    EntreeHistorique etape, {
+    required bool premiere,
+    required bool derniere,
+  }) {
+    final List<Widget> details = [
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          StatusBadge(statut: etape.statut),
+          Text(
+            dateCompleteM3(etape.date),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        premiere
+            ? '${tr('Signalé par', 'Ballegh 3lih')} ${etape.parNom}'
+            : '${tr('Par', 'Men')} ${etape.parNom}',
+        style: const TextStyle(fontSize: 13),
+      ),
+    ];
+    if (etape.note.isNotEmpty) {
+      details.add(Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '« ${etape.note} »',
+          style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 13),
+        ),
+      ));
+    }
+    // IntrinsicHeight : le trait vertical prend la hauteur de l'étape
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Column(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(
+                    color: derniere ? AppColors.primary : AppColors.border,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!derniere)
+                  Expanded(
+                    child: Container(width: 2, color: AppColors.border),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: derniere ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: details,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -315,6 +541,8 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       enfants.add(const SizedBox(height: 12));
       enfants.add(_carteNumeroUtile(numero));
     }
+    enfants.add(const SizedBox(height: 12));
+    enfants.add(_carteHistorique(signalement));
     enfants.add(const SizedBox(height: 24));
     if (_depuisCache) {
       // Hors ligne : les actions passent par Firestore, on les cache

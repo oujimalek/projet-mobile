@@ -1,3 +1,4 @@
+import 'package:houmani/data/models/historique_signalement.dart';
 import 'package:houmani/data/models/signalement.dart';
 import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
@@ -30,6 +31,9 @@ class MockSignalementRepository implements SignalementRepository {
 
   // Qui a confirmé quoi : id du signalement -> uids des voisins
   final Map<String, Set<String>> _confirmations = {};
+
+  // Historique des statuts : id du signalement -> étapes
+  final Map<String, List<EntreeHistorique>> _historiques = {};
 
   // Numéro du prochain signalement créé (s100, s101, ...)
   int _prochainNumero = 100;
@@ -232,6 +236,16 @@ class MockSignalementRepository implements SignalementRepository {
     );
     _prochainNumero++;
     _signalements.add(nouveau);
+    // 1re étape de l'historique, avec la création (comme le WriteBatch)
+    _historiques[nouveau.id] = [
+      EntreeHistorique(
+        id: 'h${_prochainNumero++}',
+        statut: StatutSignalement.enAttente,
+        date: nouveau.date,
+        parId: moi.id,
+        parNom: nouveau.auteurNom,
+      ),
+    ];
     _confirmations[nouveau.id] = {};
     return const Resultat.succes(null);
   }
@@ -320,10 +334,13 @@ class MockSignalementRepository implements SignalementRepository {
   @override
   Future<Resultat<void>> changerStatut(
     String id,
-    StatutSignalement statut,
-  ) async {
+    StatutSignalement statut, {
+    String note = '',
+  }) async {
+    final Utilisateur moi = _moi;
     final String? refus = _refusDeBase() ??
-        SignalementRepository.refusChangementStatut(_moi);
+        SignalementRepository.refusChangementStatut(moi) ??
+        SignalementRepository.refusNote(statut, note);
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -331,7 +348,34 @@ class MockSignalementRepository implements SignalementRepository {
     if (position == -1) {
       return const Resultat.echec('Ce signalement n\'existe plus');
     }
+    if (_signalements[position].statut == statut) {
+      return const Resultat.succes(null); // rien ne change : pas d'entrée
+    }
+    // Le statut ET l'entrée d'historique, ensemble (comme le WriteBatch)
     _signalements[position] = _signalements[position].copyWith(statut: statut);
+    _historiques.putIfAbsent(id, () => []).add(EntreeHistorique(
+          id: 'h${_prochainNumero++}',
+          statut: statut,
+          note: note.trim(),
+          date: DateTime.now(),
+          parId: moi.id,
+          parNom: SignalementRepository.nomCourt(moi),
+        ));
     return const Resultat.succes(null);
   }
+
+  @override
+  Future<Resultat<List<EntreeHistorique>>> getHistorique(String id) async {
+    final String? refus = _refusDeBase();
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final List<EntreeHistorique> entrees = List.of(_historiques[id] ?? []);
+    entrees.sort((a, b) => a.date.compareTo(b.date));
+    return Resultat.succes(entrees);
+  }
+
+  /// L'historique tel qu'il est dans le mock (pour vérifier dans les tests).
+  List<EntreeHistorique> historiqueDe(String id) =>
+      List.unmodifiable(_historiques[id] ?? []);
 }
