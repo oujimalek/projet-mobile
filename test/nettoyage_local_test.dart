@@ -16,8 +16,8 @@ import 'fausse_connexion_m3.dart';
 import 'outils_test_m3.dart';
 
 /// Commun - Nettoyage des données locales à la déconnexion (et quand le
-/// compte est bloqué, refusé ou supprimé) : la méthode « vider » de chaque
-/// module, puis la fonction commune qui les appelle.
+/// compte est bloqué, refusé ou supprimé) : le nettoyage M3, puis la
+/// fonction commune qui appelle chaque module.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -39,6 +39,8 @@ void main() {
   tearDown(() async {
     NettoyageLocal.etapes = NettoyageLocal.etapesParDefaut();
     NettoyageLocal.delaiMax = const Duration(seconds: 5);
+    BaseLocaleM2.utilisateurActuel = BaseLocaleM2.uidConnecte;
+    BaseLocaleM4.utilisateurActuel = BaseLocaleM4.uidConnecte;
     await BaseLocaleM2.fermer();
     await BaseLocaleM4.fermer();
     await nettoyerHorsLigneM3(connexion);
@@ -84,38 +86,6 @@ void main() {
       lieu: 'Parking', photoLocale: photo, dateCreation: DateTime(2026, 11, 2),
     );
   }
-
-  group('M2 : BaseLocaleM2.vider', () {
-    test('efface favoris, consultations et brouillon ; garde les jours fériés',
-        () async {
-      await BaseLocaleM2.ajouterFavori(service('s1'));
-      await BaseLocaleM2.noterConsultation(service('s2'));
-      await BaseLocaleM2.enregistrerBrouillon(
-          BrouillonService(titre: 'Cours de maths', majLe: DateTime(2026, 11, 1)));
-      await BaseLocaleM2.enregistrerJoursFeries(2026, {'2026-12-17': 'Révolution'});
-
-      await BaseLocaleM2.vider();
-
-      expect(await BaseLocaleM2.favoris(), isEmpty);
-      expect(await BaseLocaleM2.vusRecemment(), isEmpty);
-      expect(await BaseLocaleM2.lireBrouillon(), isNull);
-      expect(await BaseLocaleM2.joursFeries(2026), {'2026-12-17': 'Révolution'});
-    });
-  });
-
-  group('M4 : BaseLocaleM4.vider', () {
-    test('efface les brouillons et l\'historique', () async {
-      await BaseLocaleM4.enregistrerBrouillon(
-          BrouillonEvenement(titre: 'Fête', majLe: DateTime(2026, 11, 1)));
-      await BaseLocaleM4.noterParticipation(evenement('e1'), true);
-      expect(await BaseLocaleM4.historique(), isNotEmpty);
-
-      await BaseLocaleM4.vider();
-
-      expect(await BaseLocaleM4.brouillons(), isEmpty);
-      expect(await BaseLocaleM4.historique(), isEmpty);
-    });
-  });
 
   group('M3 : SyncSignalementsM3.viderUtilisateur', () {
     test('efface brouillon, file et cache de CET utilisateur, et ses photos',
@@ -182,25 +152,28 @@ void main() {
       expect(appels, ['fin']);
     });
 
-    test('par défaut : une étape par module (M2, M3, M4 × 3)', () {
-      expect(NettoyageLocal.etapesParDefaut(), hasLength(5));
+    test('par défaut : M3, rappels M4, push M4', () {
+      expect(NettoyageLocal.etapesParDefaut(), hasLength(3));
     });
 
-    test('étapes par défaut : efface M2, M3 et M4, sans exception', () async {
+    test('étapes par défaut : vide M3, GARDE M2 et M4 (lignes par utilisateur)',
+        () async {
       NettoyageLocal.delaiMax = const Duration(seconds: 2);
+      BaseLocaleM2.utilisateurActuel = () => 'u1';
+      BaseLocaleM4.utilisateurActuel = () => 'u1';
       await BaseLocaleM2.ajouterFavori(service('s1'));
       await BaseLocaleM3.instance.enregistrerBrouillon(Brouillon(
           utilisateurId: 'u1', titre: 'Brouillon',
           dateModification: DateTime(2026, 11, 1)));
-      await BaseLocaleM4.enregistrerBrouillon(
-          BrouillonEvenement(titre: 'Fête', majLe: DateTime(2026, 11, 1)));
+      await BaseLocaleM4.noterParticipation(evenement('e1'), true);
 
       // Notifications et push : pas de plugin en test, étapes ignorées
       await NettoyageLocal.viderTout('u1');
 
-      expect(await BaseLocaleM2.favoris(), isEmpty);
       expect(await BaseLocaleM3.instance.lireBrouillon('u1'), isNull);
-      expect(await BaseLocaleM4.brouillons(), isEmpty);
+      // u1 retrouvera ses favoris et son historique à sa prochaine connexion
+      expect(await BaseLocaleM2.favoris(), hasLength(1));
+      expect(await BaseLocaleM4.historique(), hasLength(1));
     });
   });
 }

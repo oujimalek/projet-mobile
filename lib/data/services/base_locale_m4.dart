@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/evenement.dart';
+import 'utilisateur_repository.dart';
 
 /// M4 - (SQLite) Un brouillon d'événement, gardé SUR LE TÉLÉPHONE tant qu'il
 /// n'est pas publié. Table `brouillons`.
@@ -143,22 +144,49 @@ class BilanHistorique {
 /// - `historique` : mes participations, présences et notes, pour « Mon
 ///   historique » (statistiques avec COUNT, AVG, GROUP BY).
 ///
+/// Le téléphone peut servir à plusieurs comptes : chaque ligne porte
+/// `utilisateur_id`, et chaque lecture (statistiques comprises) ne prend
+/// que les lignes de l'utilisateur connecté.
+///
 /// Que des static. Les méthodes ne lèvent jamais d'exception : si la base
 /// n'est pas disponible, on renvoie une liste vide (l'appli continue).
 class BaseLocaleM4 {
   BaseLocaleM4._();
 
   static const String nomFichier = 'houmani_m4.db';
-  static const int version = 1;
+
+  /// Version du schéma :
+  ///   1 : brouillons, historique
+  ///   2 : + colonne utilisateur_id (brouillons, historique)
+  static const int version = 2;
+
+  /// Les tables dont les lignes appartiennent à un utilisateur.
+  static const List<String> tablesPersonnelles = ['brouillons', 'historique'];
 
   /// Pour les tests : une base en mémoire (sqflite_common_ffi).
   static String? cheminPourTests;
 
+  /// L'uid de l'utilisateur connecté ('' : personne). Les tests le remplacent.
+  static String Function() utilisateurActuel = uidConnecte;
+
+  static String uidConnecte() {
+    try {
+      return UtilisateurRepository().getUtilisateurConnecte().id;
+    } catch (e) {
+      return '';
+    }
+  }
+
   static Database? _base;
+
+  // Les lignes d'avant la version 2 (utilisateur_id NULL) ont été données
+  // à l'utilisateur connecté (une seule fois par lancement de l'app)
+  static bool _orphelinsAttribues = false;
 
   static Future<Database> _ouvrir() async {
     final Database? deja = _base;
     if (deja != null && deja.isOpen) {
+      await _attribuerOrphelins(deja);
       return deja;
     }
     final String chemin =
@@ -177,42 +205,81 @@ class BaseLocaleM4 {
             debut INTEGER,
             fin INTEGER,
             places INTEGER NOT NULL DEFAULT 0,
-            maj_le INTEGER NOT NULL
+            maj_le INTEGER NOT NULL,
+            utilisateur_id TEXT
           )''');
-        await db.execute('''
-          CREATE TABLE historique (
-            evenement_id TEXT PRIMARY KEY,
+        await db.execute('CREATE TABLE historique $_colonnesHistorique');
+      },
+      onUpgrade: (db, ancienne, nouvelle) async {
+        if (ancienne < 2) {
+          await _migrerVersVersion2(db);
+        }
+      },
+    );
+    _base = base;
+    await _attribuerOrphelins(base);
+    return base;
+  }
+
+  /// Une ligne par (utilisateur, événement) : deux comptes du même
+  /// téléphone peuvent participer au même événement.
+  static const String _colonnesHistorique = '''(
+            utilisateur_id TEXT,
+            evenement_id TEXT NOT NULL,
             titre TEXT NOT NULL,
             categorie TEXT NOT NULL,
             date INTEGER NOT NULL,
             participe INTEGER NOT NULL DEFAULT 1,
             present INTEGER NOT NULL DEFAULT 0,
-            note INTEGER
-          )''');
-      },
-    );
-    _base = base;
-    return base;
+            note INTEGER,
+            PRIMARY KEY (utilisateur_id, evenement_id)
+          )''';
+
+  /// Version 2 : utilisateur_id sur les deux tables. Les lignes existantes
+  /// sont gardées, avec utilisateur_id NULL (données ensuite à
+  /// l'utilisateur connecté, voir [_attribuerOrphelins]).
+  /// - brouillons : simple ALTER TABLE ADD COLUMN ;
+  /// - historique : sa clé change (avant : un événement pour tout le
+  ///   téléphone), et SQLite ne sait pas changer une clé : nouvelle table,
+  ///   copie, puis on remplace.
+  static Future<void> _migrerVersVersion2(Database db) async {
+    await db.execute('ALTER TABLE brouillons ADD COLUMN utilisateur_id TEXT');
+
+    await db.execute('CREATE TABLE historique_v2 $_colonnesHistorique');
+    await db.execute(
+        'INSERT INTO historique_v2 (evenement_id, titre, categorie, date, participe, present, note) '
+        'SELECT evenement_id, titre, categorie, date, participe, present, note FROM historique');
+    await db.execute('DROP TABLE historique');
+    await db.execute('ALTER TABLE historique_v2 RENAME TO historique');
+  }
+
+  /// Les lignes d'avant la version 2 (utilisateur_id NULL) appartiennent à
+  /// l'utilisateur qui se servait du téléphone : on les donne au premier
+  /// utilisateur connecté qui ouvre la base après la mise à jour.
+  static Future<void> _attribuerOrphelins(Database db) async {
+    if (_orphelinsAttribues) {
+      return;
+    }
+    final String uid = utilisateurActuel();
+    if (uid.isEmpty) {
+      return; // personne de connecté : on attend
+    }
+    await db.transaction((txn) async {
+      for (final String table in tablesPersonnelles) {
+        await txn.rawUpdate(
+          'UPDATE OR IGNORE $table SET utilisateur_id = ? WHERE utilisateur_id IS NULL',
+          [uid],
+        );
+      }
+    });
+    _orphelinsAttribues = true;
   }
 
   /// Ferme la base (tests).
   static Future<void> fermer() async {
     await _base?.close();
     _base = null;
-  }
-
-  /// Déconnexion : efface les brouillons et l'historique (données
-  /// personnelles de l'utilisateur qui quitte le téléphone).
-  static Future<void> vider() async {
-    try {
-      final Database db = await _ouvrir();
-      await db.transaction((txn) async {
-        await txn.delete('brouillons');
-        await txn.delete('historique');
-      });
-    } catch (e) {
-      // pas de base locale : rien à effacer
-    }
+    _orphelinsAttribues = false;
   }
 
   // =====================================================================
@@ -223,25 +290,33 @@ class BaseLocaleM4 {
   static Future<int?> enregistrerBrouillon(BrouillonEvenement brouillon) async {
     try {
       final Database db = await _ouvrir();
+      final String uid = utilisateurActuel();
       final Map<String, Object?> valeurs = brouillon.toMap();
+      valeurs['utilisateur_id'] = uid;
       final int? id = brouillon.id;
       if (id == null) {
         valeurs.remove('id');
         return await db.insert('brouillons', valeurs);
       }
-      await db.update('brouillons', valeurs, where: 'id = ?', whereArgs: [id]);
+      // Seulement MON brouillon
+      await db.update('brouillons', valeurs,
+          where: 'id = ? AND utilisateur_id = ?', whereArgs: [id, uid]);
       return id;
     } catch (e) {
       return null;
     }
   }
 
-  /// Tous les brouillons, le plus récemment modifié en premier.
+  /// Tous MES brouillons, le plus récemment modifié en premier.
   static Future<List<BrouillonEvenement>> brouillons() async {
     try {
       final Database db = await _ouvrir();
-      final List<Map<String, Object?>> lignes =
-          await db.query('brouillons', orderBy: 'maj_le DESC');
+      final List<Map<String, Object?>> lignes = await db.query(
+        'brouillons',
+        where: 'utilisateur_id = ?',
+        whereArgs: [utilisateurActuel()],
+        orderBy: 'maj_le DESC',
+      );
       final List<BrouillonEvenement> liste = [];
       for (final Map<String, Object?> ligne in lignes) {
         liste.add(BrouillonEvenement.fromMap(ligne));
@@ -255,8 +330,9 @@ class BaseLocaleM4 {
   static Future<int> nombreBrouillons() async {
     try {
       final Database db = await _ouvrir();
-      final List<Map<String, Object?>> r =
-          await db.rawQuery('SELECT COUNT(*) AS n FROM brouillons');
+      final List<Map<String, Object?>> r = await db.rawQuery(
+          'SELECT COUNT(*) AS n FROM brouillons WHERE utilisateur_id = ?',
+          [utilisateurActuel()]);
       return (r.first['n'] as int?) ?? 0;
     } catch (e) {
       return 0;
@@ -266,7 +342,9 @@ class BaseLocaleM4 {
   static Future<void> supprimerBrouillon(int id) async {
     try {
       final Database db = await _ouvrir();
-      await db.delete('brouillons', where: 'id = ?', whereArgs: [id]);
+      await db.delete('brouillons',
+          where: 'id = ? AND utilisateur_id = ?',
+          whereArgs: [id, utilisateurActuel()]);
     } catch (e) {
       // rien : le brouillon restera, sans gêner l'utilisateur
     }
@@ -280,6 +358,7 @@ class BaseLocaleM4 {
   static Future<void> noterParticipation(Evenement evenement, bool participe) async {
     try {
       final Database db = await _ouvrir();
+      final String uid = utilisateurActuel();
       final int n = await db.update(
         'historique',
         {
@@ -288,11 +367,12 @@ class BaseLocaleM4 {
           'categorie': evenement.categorie.name,
           'date': evenement.date.millisecondsSinceEpoch,
         },
-        where: 'evenement_id = ?',
-        whereArgs: [evenement.id],
+        where: 'utilisateur_id = ? AND evenement_id = ?',
+        whereArgs: [uid, evenement.id],
       );
       if (n == 0 && participe) {
         await db.insert('historique', {
+          'utilisateur_id': uid,
           'evenement_id': evenement.id,
           'titre': evenement.titre,
           'categorie': evenement.categorie.name,
@@ -312,7 +392,8 @@ class BaseLocaleM4 {
     try {
       final Database db = await _ouvrir();
       await db.update('historique', {'present': 1},
-          where: 'evenement_id = ?', whereArgs: [evenement.id]);
+          where: 'utilisateur_id = ? AND evenement_id = ?',
+          whereArgs: [utilisateurActuel(), evenement.id]);
     } catch (e) {
       // idem
     }
@@ -324,7 +405,8 @@ class BaseLocaleM4 {
     try {
       final Database db = await _ouvrir();
       await db.update('historique', {'note': note},
-          where: 'evenement_id = ?', whereArgs: [evenement.id]);
+          where: 'utilisateur_id = ? AND evenement_id = ?',
+          whereArgs: [utilisateurActuel(), evenement.id]);
     } catch (e) {
       // idem
     }
@@ -335,10 +417,13 @@ class BaseLocaleM4 {
   static Future<List<LigneHistorique>> historique({CategorieEvenement? categorie}) async {
     try {
       final Database db = await _ouvrir();
+      final String uid = utilisateurActuel();
       final List<Map<String, Object?>> lignes = await db.query(
         'historique',
-        where: categorie == null ? 'participe = 1' : 'participe = 1 AND categorie = ?',
-        whereArgs: categorie == null ? null : [categorie.name],
+        where: categorie == null
+            ? 'utilisateur_id = ? AND participe = 1'
+            : 'utilisateur_id = ? AND participe = 1 AND categorie = ?',
+        whereArgs: categorie == null ? [uid] : [uid, categorie.name],
         orderBy: 'date DESC',
       );
       final List<LigneHistorique> liste = [];
@@ -351,24 +436,33 @@ class BaseLocaleM4 {
     }
   }
 
-  /// Le bilan, avec des requêtes SQL (COUNT, AVG, GROUP BY).
+  /// MON bilan, avec des requêtes SQL (COUNT, AVG, GROUP BY).
   static Future<BilanHistorique> bilan() async {
     try {
       final Database db = await _ouvrir();
+      final List<Object?> moi = [utilisateurActuel()];
       final int participations = (await db.rawQuery(
-              'SELECT COUNT(*) AS n FROM historique WHERE participe = 1'))
+              'SELECT COUNT(*) AS n FROM historique '
+              'WHERE utilisateur_id = ? AND participe = 1',
+              moi))
           .first['n'] as int;
       final int presences = (await db.rawQuery(
-              'SELECT COUNT(*) AS n FROM historique WHERE participe = 1 AND present = 1'))
+              'SELECT COUNT(*) AS n FROM historique '
+              'WHERE utilisateur_id = ? AND participe = 1 AND present = 1',
+              moi))
           .first['n'] as int;
       final Object? moyenne = (await db.rawQuery(
-              'SELECT AVG(note) AS m FROM historique WHERE note IS NOT NULL'))
+              'SELECT AVG(note) AS m FROM historique '
+              'WHERE utilisateur_id = ? AND note IS NOT NULL',
+              moi))
           .first['m'];
 
       // Catégorie préférée : celle où je suis allé le plus souvent
       final List<Map<String, Object?>> prefs = await db.rawQuery(
-          'SELECT categorie, COUNT(*) AS n FROM historique WHERE participe = 1 '
-          'GROUP BY categorie ORDER BY n DESC, categorie LIMIT 1');
+          'SELECT categorie, COUNT(*) AS n FROM historique '
+          'WHERE utilisateur_id = ? AND participe = 1 '
+          'GROUP BY categorie ORDER BY n DESC, categorie LIMIT 1',
+          moi);
       CategorieEvenement? preferee;
       if (prefs.isNotEmpty) {
         for (final CategorieEvenement c in CategorieEvenement.values) {
@@ -381,8 +475,10 @@ class BaseLocaleM4 {
       // Par mois (heure locale), du plus récent au plus ancien
       final List<Map<String, Object?>> mois = await db.rawQuery(
           "SELECT strftime('%Y-%m', date / 1000, 'unixepoch', 'localtime') AS mois, "
-          'COUNT(*) AS n FROM historique WHERE participe = 1 '
-          'GROUP BY mois ORDER BY mois DESC');
+          'COUNT(*) AS n FROM historique '
+          'WHERE utilisateur_id = ? AND participe = 1 '
+          'GROUP BY mois ORDER BY mois DESC',
+          moi);
       final Map<String, int> parMois = {};
       for (final Map<String, Object?> ligne in mois) {
         parMois[ligne['mois'] as String] = ligne['n'] as int;

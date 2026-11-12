@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:houmani/data/models/service.dart';
 import 'package:houmani/data/services/base_locale_m2.dart';
@@ -23,13 +25,140 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
+  // L'utilisateur connecté vu par la base (les tests le changent)
+  String moi = 'u1';
+
   setUp(() async {
     await BaseLocaleM2.fermer();
     BaseLocaleM2.cheminPourTests = inMemoryDatabasePath;
+    moi = 'u1';
+    BaseLocaleM2.utilisateurActuel = () => moi;
   });
 
   tearDown(() async {
     await BaseLocaleM2.fermer();
+    BaseLocaleM2.utilisateurActuel = BaseLocaleM2.uidConnecte;
+  });
+
+  group('plusieurs comptes sur le même téléphone', () {
+    test('chacun ne voit que ses favoris, consultations et brouillon', () async {
+      final Service perceuse = _service('s1', 'Perceuse', 'Prêt d\'outils');
+      await BaseLocaleM2.ajouterFavori(perceuse);
+      await BaseLocaleM2.noterConsultation(perceuse);
+      await BaseLocaleM2.enregistrerBrouillon(
+          BrouillonService(titre: 'Cours de maths', majLe: DateTime(2026, 11, 1)));
+
+      moi = 'u2';
+      expect(await BaseLocaleM2.favoris(), isEmpty);
+      expect(await BaseLocaleM2.estFavori('s1'), isFalse);
+      expect(await BaseLocaleM2.vusRecemment(), isEmpty);
+      expect(await BaseLocaleM2.categoriesPreferees(), isEmpty);
+      expect(await BaseLocaleM2.lireBrouillon(), isNull);
+
+      // u2 met le MÊME service en favori, puis le retire : u1 le garde
+      await BaseLocaleM2.ajouterFavori(perceuse);
+      expect(await BaseLocaleM2.estFavori('s1'), isTrue);
+      await BaseLocaleM2.retirerFavori('s1');
+      // u2 a son propre brouillon ; le supprimer ne touche pas celui de u1
+      await BaseLocaleM2.enregistrerBrouillon(
+          BrouillonService(titre: 'Vélo', majLe: DateTime(2026, 11, 2)));
+      await BaseLocaleM2.supprimerBrouillon();
+
+      moi = 'u1';
+      expect(await BaseLocaleM2.idsFavoris(), {'s1'});
+      expect(await BaseLocaleM2.vusRecemment(), {'s1': 'Perceuse'});
+      expect(await BaseLocaleM2.categoriesPreferees(), {'Prêt d\'outils': 1});
+      expect((await BaseLocaleM2.lireBrouillon())!.titre, 'Cours de maths');
+    });
+
+    test('les jours fériés (publics) sont partagés', () async {
+      await BaseLocaleM2.enregistrerJoursFeries(2026, {'2026-12-17': 'Révolution'});
+      moi = 'u2';
+      expect(await BaseLocaleM2.joursFeries(2026), {'2026-12-17': 'Révolution'});
+    });
+
+    test('la limite de consultations est comptée par compte', () async {
+      for (int i = 0; i < BaseLocaleM2.maxConsultations; i++) {
+        await BaseLocaleM2.noterConsultation(_service('a$i', 'A', 'Cuisine'),
+            date: DateTime(2026, 1, 1).add(Duration(minutes: i)));
+      }
+      moi = 'u2';
+      await BaseLocaleM2.noterConsultation(_service('b', 'B', 'Cuisine'));
+      moi = 'u1';
+      // u1 garde ses 100 consultations : celle de u2 n'en a effacé aucune
+      expect(await BaseLocaleM2.categoriesPreferees(),
+          {'Cuisine': BaseLocaleM2.maxConsultations});
+    });
+  });
+
+  group('migration version 2 → 3', () {
+    late Directory dossier;
+    late String chemin;
+
+    setUp(() async {
+      dossier = Directory.systemTemp.createTempSync('houmani_m2_v2_');
+      chemin = '${dossier.path}/houmani_m2.db';
+      // Un téléphone resté en version 2 (sans utilisateur_id), avec des données
+      final Database ancienne = await databaseFactory.openDatabase(
+        chemin,
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: (db, version) async {
+            await db.execute('CREATE TABLE favoris (service_id TEXT PRIMARY KEY, '
+                'titre TEXT NOT NULL, categorie TEXT NOT NULL, '
+                "auteur_nom TEXT NOT NULL DEFAULT '', "
+                'est_offre INTEGER NOT NULL DEFAULT 1, ajoute_le INTEGER NOT NULL)');
+            await db.execute('CREATE TABLE consultations (id INTEGER PRIMARY KEY '
+                'AUTOINCREMENT, service_id TEXT NOT NULL, titre TEXT NOT NULL, '
+                'categorie TEXT NOT NULL, date INTEGER NOT NULL)');
+            await db.execute('CREATE TABLE brouillon_service (id INTEGER PRIMARY '
+                "KEY CHECK (id = 1), titre TEXT NOT NULL DEFAULT '', "
+                "description TEXT NOT NULL DEFAULT '', "
+                "disponibilite TEXT NOT NULL DEFAULT '', categorie TEXT, "
+                'est_offre INTEGER NOT NULL DEFAULT 1, maj_le INTEGER NOT NULL)');
+            await db.execute('CREATE TABLE jours_feries (date TEXT PRIMARY KEY, '
+                'annee INTEGER NOT NULL, nom TEXT NOT NULL)');
+          },
+        ),
+      );
+      await ancienne.insert('favoris', {'service_id': 's1', 'titre': 'Perceuse',
+          'categorie': 'Outils', 'auteur_nom': 'Sami', 'est_offre': 1, 'ajoute_le': 1});
+      await ancienne.insert('consultations',
+          {'service_id': 's1', 'titre': 'Perceuse', 'categorie': 'Outils', 'date': 1});
+      await ancienne.insert('brouillon_service', {'id': 1, 'titre': 'Ancien brouillon',
+          'est_offre': 1, 'maj_le': 1});
+      await ancienne.insert('jours_feries',
+          {'date': '2026-12-17', 'annee': 2026, 'nom': 'Révolution'});
+      await ancienne.close();
+      await BaseLocaleM2.fermer();
+      BaseLocaleM2.cheminPourTests = chemin;
+    });
+
+    tearDown(() async {
+      await BaseLocaleM2.fermer();
+      dossier.deleteSync(recursive: true);
+    });
+
+    test('les anciennes lignes vont au premier compte connecté', () async {
+      expect(await BaseLocaleM2.idsFavoris(), {'s1'});
+      expect(await BaseLocaleM2.vusRecemment(), {'s1': 'Perceuse'});
+      expect((await BaseLocaleM2.lireBrouillon())!.titre, 'Ancien brouillon');
+      expect(await BaseLocaleM2.joursFeries(2026), {'2026-12-17': 'Révolution'});
+
+      // Un autre compte ne les voit pas, même après réouverture
+      await BaseLocaleM2.fermer();
+      moi = 'u2';
+      expect(await BaseLocaleM2.favoris(), isEmpty);
+      expect(await BaseLocaleM2.lireBrouillon(), isNull);
+    });
+
+    test('base ouverte sans compte connecté : lignes gardées pour plus tard',
+        () async {
+      moi = '';
+      expect(await BaseLocaleM2.favoris(), isEmpty);
+      moi = 'u1';
+      expect(await BaseLocaleM2.idsFavoris(), {'s1'});
+    });
   });
 
   group('favoris', () {
