@@ -16,6 +16,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../../widgets/status_badge.dart';
+import 'carte_signalements_screen.dart';
 import 'create_signalement_screen.dart';
 import 'widgets_module3.dart';
 
@@ -541,8 +542,20 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
     );
   }
 
-  /// "Voir sur la carte" : l'application de cartes du téléphone (lien
-  /// geo:), sinon OpenStreetMap dans le navigateur.
+  /// "Voir sur la carte" : la carte des signalements de l'app, centrée sur
+  /// celui-ci (sa fiche est ouverte). Au retour, le détail est rechargé.
+  Future<void> _ouvrirMaCarte() async {
+    await ouvrirEcranM3<void>(
+      context,
+      CarteSignalementsScreen(centreSur: widget.signalementId),
+    );
+    if (mounted) {
+      _charger();
+    }
+  }
+
+  /// "Application de cartes" (action secondaire) : l'application de cartes
+  /// du téléphone (lien geo:), sinon OpenStreetMap dans le navigateur.
   Future<void> _voirSurLaCarte(PointGps position, String libelle) async {
     final Resultat<void> resultat = await LiensM3.ouvrirCarte(position, libelle);
     if (!mounted) {
@@ -570,11 +583,29 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
                   texteCoordonnees(position),
                   style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
-                TextButton.icon(
-                  onPressed: () => _voirSurLaCarte(position, libelle),
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: Text(tr('Voir sur la carte', 'Chouf fel carte')),
+                // Wrap : les deux boutons passent à la ligne à 360 px
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _ouvrirMaCarte,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      icon: const Icon(Icons.map_outlined, size: 18),
+                      label: Text(tr('Voir sur la carte', 'Chouf fel carte')),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _voirSurLaCarte(position, libelle),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        foregroundColor: AppColors.textSecondary,
+                      ),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: Text(
+                        tr('Application de cartes', 'Application cartes'),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -280,6 +280,134 @@ class PhotoPleinEcranM3 extends StatelessWidget {
   }
 }
 
+/// Les filtres statut + catégorie (deux lignes de puces qui défilent),
+/// partagés par la liste et la carte des signalements.
+class FiltresSignalementsM3 extends StatelessWidget {
+  final StatutSignalement? statut; // null = tous les statuts
+  final String? categorieId; // null = toutes les catégories
+  final ValueChanged<StatutSignalement?> onStatut;
+  final ValueChanged<String?> onCategorie;
+
+  const FiltresSignalementsM3({
+    super.key,
+    required this.statut,
+    required this.categorieId,
+    required this.onStatut,
+    required this.onCategorie,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> statuts = [
+      _PuceFiltre(
+        texte: tr('Tous les statuts', 'Kol el 7alet'),
+        actif: statut == null,
+        onTap: () => onStatut(null),
+      ),
+    ];
+    for (final StatutSignalement valeur in StatutSignalement.values) {
+      statuts.add(_PuceFiltre(
+        texte: texteStatut(valeur),
+        actif: statut == valeur,
+        onTap: () => onStatut(valeur),
+      ));
+    }
+    final List<Widget> categories = [
+      _PuceFiltre(
+        texte: tr('Toutes', 'El kol'),
+        actif: categorieId == null,
+        onTap: () => onCategorie(null),
+      ),
+    ];
+    for (final CategorieSignalement categorie
+        in SignalementRepository.categories) {
+      categories.add(_PuceFiltre(
+        texte: categorie.nom,
+        icone: categorie.icone,
+        couleurIcone: categorie.couleur,
+        actif: categorieId == categorie.id,
+        onTap: () => onCategorie(categorie.id),
+      ));
+    }
+    return Column(
+      children: [
+        _ligneQuiDefile(statuts),
+        const SizedBox(height: 8),
+        _ligneQuiDefile(categories),
+      ],
+    );
+  }
+
+  /// Une ligne de puces qui défile horizontalement.
+  Widget _ligneQuiDefile(List<Widget> puces) {
+    final List<Widget> espaces = [];
+    for (final Widget puce in puces) {
+      espaces.add(Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: puce,
+      ));
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(children: espaces),
+    );
+  }
+}
+
+/// Une puce de filtre (dorée quand elle est choisie), comme dans le module 2.
+class _PuceFiltre extends StatelessWidget {
+  final String texte;
+  final bool actif;
+  final Function() onTap;
+  final IconData? icone;
+  final Color? couleurIcone;
+
+  const _PuceFiltre({
+    required this.texte,
+    required this.actif,
+    required this.onTap,
+    this.icone,
+    this.couleurIcone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> contenu = [];
+    final IconData? symbole = icone;
+    if (symbole != null) {
+      contenu.add(Icon(
+        symbole,
+        size: 16,
+        color: actif ? Colors.white : couleurIcone,
+      ));
+      contenu.add(const SizedBox(width: 4));
+    }
+    contenu.add(Text(
+      texte,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: actif ? Colors.white : AppColors.textPrimary,
+      ),
+    ));
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: actif ? AppColors.secondary : AppColors.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: actif ? AppColors.secondary : AppColors.border,
+          ),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: contenu),
+      ),
+    );
+  }
+}
+
 /// Message centré (liste vide, erreur), avec un bouton optionnel.
 class MessageEtatM3 extends StatelessWidget {
   final IconData icone;

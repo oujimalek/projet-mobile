@@ -10,6 +10,7 @@ import '../../theme/preference_langue.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/status_badge.dart';
+import 'carte_signalements_screen.dart';
 import 'create_signalement_screen.dart';
 import 'signalement_detail_screen.dart';
 import 'widgets_module3.dart';
@@ -244,13 +245,24 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
     return Scaffold(
       body: Column(
         children: [
-          AppHeader(titre: tr('Signalements', 'Tablighat')),
+          AppHeader(
+            titre: tr('Signalements', 'Tablighat'),
+            action: IconButton(
+              tooltip: tr('Carte des signalements', 'Carte it-tablighat'),
+              onPressed: _ouvrirCarte,
+              icon: Icon(Icons.map_outlined, color: AppColors.primary),
+            ),
+          ),
           const SizedBox(height: 12),
           _ongletsTousMes(),
           const SizedBox(height: 12),
-          _filtresStatut(),
-          const SizedBox(height: 8),
-          _filtresCategorie(),
+          // Filtres statut + catégorie (les mêmes sur la carte)
+          FiltresSignalementsM3(
+            statut: _statutChoisi,
+            categorieId: _categorieChoisie,
+            onStatut: _choisirStatut,
+            onCategorie: _choisirCategorie,
+          ),
           const SizedBox(height: 8),
           _ligneTri(),
           // Fine barre de chargement quand une liste est déjà affichée
@@ -525,45 +537,19 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
     );
   }
 
-  /// Les filtres de statut, sur une ligne qui défile.
-  Widget _filtresStatut() {
-    final List<Widget> filtres = [
-      _filtre(
-        texte: tr('Tous les statuts', 'Kol el 7alet'),
-        actif: _statutChoisi == null,
-        onTap: () => _choisirStatut(null),
+  /// La carte des signalements, avec les filtres choisis ici. Au retour, on
+  /// recharge (un signalement a pu être confirmé ou modifié).
+  Future<void> _ouvrirCarte() async {
+    await ouvrirEcranM3<void>(
+      context,
+      CarteSignalementsScreen(
+        statut: _statutChoisi,
+        categorieId: _categorieChoisie,
       ),
-    ];
-    for (final StatutSignalement statut in StatutSignalement.values) {
-      filtres.add(_filtre(
-        texte: texteStatut(statut),
-        actif: _statutChoisi == statut,
-        onTap: () => _choisirStatut(statut),
-      ));
+    );
+    if (mounted) {
+      _charger();
     }
-    return _ligneQuiDefile(filtres);
-  }
-
-  /// Les filtres de catégorie, sur une ligne qui défile.
-  Widget _filtresCategorie() {
-    final List<Widget> filtres = [
-      _filtre(
-        texte: tr('Toutes', 'El kol'),
-        actif: _categorieChoisie == null,
-        onTap: () => _choisirCategorie(null),
-      ),
-    ];
-    for (final CategorieSignalement categorie
-        in SignalementRepository.categories) {
-      filtres.add(_filtre(
-        texte: categorie.nom,
-        icone: categorie.icone,
-        couleurIcone: categorie.couleur,
-        actif: _categorieChoisie == categorie.id,
-        onTap: () => _choisirCategorie(categorie.id),
-      ));
-    }
-    return _ligneQuiDefile(filtres);
   }
 
   void _choisirStatut(StatutSignalement? statut) {
@@ -578,63 +564,6 @@ class _SignalementsScreenState extends State<SignalementsScreen> {
       _categorieChoisie = categorieId;
     });
     _charger();
-  }
-
-  /// Une ligne de filtres qui défile horizontalement.
-  Widget _ligneQuiDefile(List<Widget> filtres) {
-    final List<Widget> espaces = [];
-    for (final Widget filtre in filtres) {
-      espaces.add(Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: filtre,
-      ));
-    }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(children: espaces),
-    );
-  }
-
-  /// Un filtre (doré quand il est sélectionné), comme dans le module 2.
-  Widget _filtre({
-    required String texte,
-    required bool actif,
-    required Function() onTap,
-    IconData? icone,
-    Color? couleurIcone,
-  }) {
-    final List<Widget> contenu = [];
-    if (icone != null) {
-      contenu.add(Icon(
-        icone,
-        size: 16,
-        color: actif ? Colors.white : couleurIcone,
-      ));
-      contenu.add(const SizedBox(width: 4));
-    }
-    contenu.add(Text(
-      texte,
-      style: TextStyle(
-        fontWeight: FontWeight.w600,
-        color: actif ? Colors.white : AppColors.textPrimary,
-      ),
-    ));
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: actif ? AppColors.secondary : AppColors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: actif ? AppColors.secondary : AppColors.border,
-          ),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: contenu),
-      ),
-    );
   }
 
   /// Le texte d'un tri.

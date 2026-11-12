@@ -387,7 +387,7 @@ void main() {
           tester, const SignalementDetailScreen(signalementId: 'avecgps'));
 
       expect(find.text('36.86251, 10.17003'), findsOneWidget);
-      await tester.tap(find.text('Voir sur la carte'));
+      await tester.tap(find.text('Application de cartes'));
       await tester.pumpAndSettle();
       expect(ouverts.single.scheme, 'geo');
       expect(ouverts.single.toString(),
@@ -407,7 +407,7 @@ void main() {
       await afficher(
           tester, const SignalementDetailScreen(signalementId: 'avecgps'));
 
-      await tester.tap(find.text('Voir sur la carte'));
+      await tester.tap(find.text('Application de cartes'));
       await tester.pumpAndSettle();
       expect(ouverts.map((u) => u.scheme), ['geo', 'https']);
       final Uri osm = ouverts.last;
@@ -418,7 +418,7 @@ void main() {
       expect(find.text(LiensM3.messageCarte), findsNothing);
 
       navigateur = false;
-      await tester.tap(find.text('Voir sur la carte'));
+      await tester.tap(find.text('Application de cartes'));
       await tester.pumpAndSettle();
       expect(find.text(LiensM3.messageCarte), findsOneWidget);
     });

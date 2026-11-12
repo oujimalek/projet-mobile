@@ -41,6 +41,13 @@ class MockSignalementRepository implements SignalementRepository {
   /// Nombre de signalements vraiment créés (pour vérifier les doublons).
   int nombreEnvois = 0;
 
+  /// Ajoute un signalement TEL QUEL (auteur, statut, date, position...),
+  /// pour préparer un test. Ne passe pas par les règles.
+  void ajouterTelQuel(Signalement signalement) {
+    _signalements.add(signalement);
+    _confirmations[signalement.id] = {};
+  }
+
   /// Tous les signalements, pour vérifier dans les tests.
   List<Signalement> get tous => List.unmodifiable(_signalements);
 

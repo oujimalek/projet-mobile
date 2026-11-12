@@ -9,6 +9,9 @@ import 'package:houmani/data/services/liens_m3.dart';
 import 'package:houmani/data/services/localisation.dart';
 import 'package:houmani/data/services/photos_m3.dart';
 import 'package:houmani/data/services/sync_signalements_m3.dart';
+import 'package:flutter/widgets.dart' show SizedBox;
+import 'package:houmani/screens/module1/carte_quartier.dart' show fondOpenStreetMap;
+import 'package:houmani/screens/module3/carte_signalements_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'fausse_connexion_m3.dart';
@@ -41,6 +44,8 @@ FausseConnexionM3 installerHorsLigneM3() {
   _dossierPhotos = dossier;
   PhotosM3.dossierApplication = () async => dossier;
   BaseLocaleM3.instance = BaseLocaleM3(chemin: inMemoryDatabasePath);
+  // Carte : pas de téléchargement d'images OpenStreetMap pendant les tests
+  CarteSignalementsScreen.fondDeCarte = () => const SizedBox.shrink();
   final FausseConnexionM3 connexion = FausseConnexionM3();
   ConnexionM3.instance = connexion;
   SyncSignalementsM3.instance = SyncSignalementsM3();
@@ -60,6 +65,7 @@ Future<void> nettoyerHorsLigneM3(FausseConnexionM3 connexion) async {
   AdresseM3.reinitialiser();
   PhotosM3.reinitialiser();
   LiensM3.reinitialiser();
+  CarteSignalementsScreen.fondDeCarte = fondOpenStreetMap;
   try {
     _dossierPhotos?.deleteSync(recursive: true);
   } catch (erreur) {
