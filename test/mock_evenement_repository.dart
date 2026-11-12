@@ -62,6 +62,8 @@ class MockEvenementRepository implements EvenementRepository {
     String? photoUrl,
     String? serviceId,
     String? serviceNom,
+    String? signalementId,
+    String? signalementTitre,
   }) {
     final Evenement evenement = Evenement(
       id: _nouvelId('e'),
@@ -80,6 +82,8 @@ class MockEvenementRepository implements EvenementRepository {
       photoUrl: photoUrl,
       serviceId: serviceId,
       serviceNom: serviceNom,
+      signalementId: signalementId,
+      signalementTitre: signalementTitre,
     );
     _evenements.add(evenement);
     _participants[evenement.id] = {};
@@ -205,6 +209,8 @@ class MockEvenementRepository implements EvenementRepository {
     String? photoUrl,
     String? serviceId,
     String? serviceNom,
+    String? signalementId,
+    String? signalementTitre,
   }) async {
     if (erreur != null) {
       return Resultat.echec(erreur!);
@@ -236,8 +242,24 @@ class MockEvenementRepository implements EvenementRepository {
       photoUrl: photoUrl,
       serviceId: serviceId,
       serviceNom: serviceNom,
+      signalementId: signalementId,
+      signalementTitre: signalementTitre,
     );
     return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<List<Evenement>>> getEvenementsDuSignalement(
+    String signalementId,
+  ) async {
+    if (erreur != null) {
+      return Resultat.echec(erreur!);
+    }
+    final List<Evenement> liens = _evenements
+        .where((e) => e.signalementId == signalementId)
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return Resultat.succes(liens);
   }
 
   @override
