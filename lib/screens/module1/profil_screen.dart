@@ -53,7 +53,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
   }
 
   Future<void> _chargerDemandesEnAttente() async {
-    if (!_repository.getUtilisateurConnecte().estAdmin) {
+    if (!_repository.getUtilisateurConnecte().peutGerer) {
       return;
     }
     final Resultat<int> resultat =
@@ -327,8 +327,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
   List<Widget> _liens(BuildContext context, Utilisateur utilisateur) {
     final List<Widget> lignes = [];
 
-    // Réservé à l'administrateur : gérer les membres du quartier
-    if (utilisateur.estAdmin) {
+    // Leader ou admin : gérer les membres du quartier
+    if (utilisateur.peutGerer) {
       lignes.add(
         _ligneLien(
           tr('Membres du quartier', 'Sokkan el houma'),

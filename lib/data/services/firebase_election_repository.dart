@@ -117,9 +117,37 @@ class FirebaseElectionRepository implements ElectionRepository {
   @override
   Future<Resultat<int>> compterDemandes() {
     return _executer(() async {
-      final AggregateQuerySnapshot compte = await _demandes.count().get();
-      return compte.count ?? 0;
+      return _nbDemandesValides(await _idsVotants());
     });
+  }
+
+  @override
+  Future<Resultat<int>> compterVotants() {
+    return _executer(() async {
+      return (await _idsVotants()).length;
+    });
+  }
+
+  /// Les membres actifs de la houma, sans l'admin global.
+  Future<Set<String>> _idsVotants() async {
+    final Resultat<List<Utilisateur>> actifs =
+        await UtilisateurRepository().getMembres(StatutUtilisateur.actif);
+    if (!actifs.estSucces) {
+      throw RefusM4(actifs.erreur!);
+    }
+    return ElectionRepository.idsVotants(actifs.donnee ?? []);
+  }
+
+  /// Les demandes des membres encore actifs (pas celles des partis/bloqués).
+  Future<int> _nbDemandesValides(Set<String> idsVotants) async {
+    final QuerySnapshot<Map<String, dynamic>> demandes = await _demandes.get();
+    int nb = 0;
+    for (final document in demandes.docs) {
+      if (idsVotants.contains(document.id)) {
+        nb++;
+      }
+    }
+    return nb;
   }
 
   // =====================================================================
@@ -133,8 +161,21 @@ class FirebaseElectionRepository implements ElectionRepository {
   }) {
     return _executer(() async {
       final Election? derniere = await _derniere();
-      final String? refus =
-          ElectionRepository.refusOuverture(_moi(), derniere, nbPlaces);
+      int nbDemandes = 0;
+      int nbActifs = 0;
+      if (anticipee) {
+        final Set<String> idsVotants = await _idsVotants();
+        nbActifs = idsVotants.length;
+        nbDemandes = await _nbDemandesValides(idsVotants);
+      }
+      final String? refus = ElectionRepository.refusOuverture(
+        _moi(),
+        derniere,
+        nbPlaces,
+        anticipee: anticipee,
+        nbDemandes: nbDemandes,
+        nbActifs: nbActifs,
+      );
       if (refus != null) {
         throw RefusM4(refus);
       }
@@ -279,12 +320,23 @@ class FirebaseElectionRepository implements ElectionRepository {
           batch.update(profil.reference, {'role': RoleUtilisateur.leader.name});
         }
       }
+      // Personne de valide : on ne publie pas (sinon 6 mois sans leader)
+      if (elusIds.isEmpty) {
+        throw const RefusM4(
+            'L\'élu n\'est plus membre actif de la houma : choisis-en un autre');
+      }
 
       batch.update(_elections.doc(election.id), {
         'publiee': true,
         'elusIds': elusIds,
         'elusNoms': elusNoms,
       });
+      // La houma a maintenant un leader élu (les nouveaux habitants n'ont
+      // plus besoin de contrat : le leader les valide)
+      batch.update(
+        FirestoreCommun.base.collection('quartiers').doc(moi.quartierId),
+        {'aUnLeader': true},
+      );
       await batch.commit();
     });
   }

@@ -20,8 +20,9 @@ import 'widgets_module1.dart';
 ///
 /// Nom, localisation et nombre de membres du quartier, sa carte
 /// (OpenStreetMap, si l'admin a saisi la position ou le contour),
-/// le code d'invitation et "Tracer les limites" (admin seulement) et le
-/// bouton "Changer de quartier" (résident actif seulement).
+/// le code d'invitation (leader et admin), "Tracer les limites" et
+/// "Visiter une autre cité" (admin global), et "Changer de quartier"
+/// (habitant actif).
 /// Sur la carte : mon quartier en pointillé rouge, les voisins en gris.
 class MonQuartierScreen extends StatefulWidget {
   const MonQuartierScreen({super.key});
@@ -57,7 +58,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
     final Resultat<int> membres =
         await _repository.compterMembres(StatutUtilisateur.actif);
     Resultat<String?>? code;
-    if (moi.estAdmin) {
+    if (moi.peutGerer) {
       code = await _repository.getCodeInvitation();
     }
     // Les voisins sont un plus : en cas d'échec, on ne les dessine pas
@@ -82,6 +83,78 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
     if (enregistre == true && mounted) {
       await _charger();
     }
+  }
+
+  /// Admin global : choisit une autre cité à regarder (liste en bas).
+  Future<void> _choisirCite() async {
+    final String? actuel = _repository.getUtilisateurConnecte().quartierId;
+    final List<Quartier> autres = [];
+    for (final Quartier quartier in _tousLesQuartiers) {
+      if (quartier.id != actuel) {
+        autres.add(quartier);
+      }
+    }
+    final Quartier? choisi = await showModalBottomSheet<Quartier>(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  tr('Visiter une cité', 'Zour houma'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (autres.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(tr('Aucune autre cité', 'Ma famma 7atta houma o5ra')),
+                ),
+              for (final Quartier quartier in autres)
+                ListTile(
+                  leading: const Icon(Icons.location_city),
+                  title: Text(quartier.nom),
+                  subtitle: Text(
+                    quartier.aUnLeader
+                        ? quartier.localisation
+                        : '${quartier.localisation} · '
+                            '${tr('sans leader', 'bla leader')}',
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop(quartier);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (choisi == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _enChargement = true;
+    });
+    final Resultat<void> resultat = await _repository.visiterQuartier(choisi);
+    if (!mounted) {
+      return;
+    }
+    if (!resultat.estSucces) {
+      setState(() {
+        _enChargement = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resultat.erreur!)),
+      );
+      return;
+    }
+    await _charger();
   }
 
   Future<void> _copierCode(String code) async {
@@ -118,7 +191,7 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
       final Quartier quartier = _quartier!;
       contenu.add(_carteInfos(quartier));
       contenu.add(const SizedBox(height: 16));
-      if (moi.estAdmin && _code != null) {
+      if (moi.peutGerer && _code != null) {
         contenu.add(_carteCode(_code!));
         contenu.add(const SizedBox(height: 16));
       }
@@ -135,8 +208,17 @@ class _MonQuartierScreenState extends State<MonQuartierScreen> {
           ),
         );
       }
-      // Un admin ne peut pas quitter son quartier (il en est responsable)
-      if (!moi.estAdmin && moi.statut == StatutUtilisateur.actif) {
+      // L'admin global ne fait pas de demande : il passe d'une cité à l'autre
+      if (moi.estAdmin) {
+        contenu.add(const SizedBox(height: 24));
+        contenu.add(
+          SecondaryButton(
+            texte: tr('Visiter une autre cité', 'Zour houma o5ra'),
+            icone: Icons.travel_explore,
+            onPressed: _choisirCite,
+          ),
+        );
+      } else if (moi.statut == StatutUtilisateur.actif) {
         contenu.add(const SizedBox(height: 24));
         contenu.add(
           SecondaryButton(

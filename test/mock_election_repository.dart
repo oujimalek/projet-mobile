@@ -5,6 +5,8 @@ import 'package:houmani/data/services/election_repository.dart';
 import 'package:houmani/data/services/evenement_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
 
+import 'mock_utilisateur_repository.dart';
+
 /// M4 - Implémentation "en mémoire" de ElectionRepository, pour les TESTS.
 ///
 /// Mêmes règles que FirebaseElectionRepository (ElectionRepository.refus...).
@@ -101,7 +103,22 @@ class MockElectionRepository implements ElectionRepository {
 
   @override
   Future<Resultat<int>> compterDemandes() async {
-    return Resultat.succes(_demandes.length);
+    return Resultat.succes(await _nbDemandesValides(await _idsVotants()));
+  }
+
+  @override
+  Future<Resultat<int>> compterVotants() async {
+    return Resultat.succes((await _idsVotants()).length);
+  }
+
+  Future<Set<String>> _idsVotants() async {
+    final Resultat<List<Utilisateur>> actifs =
+        await UtilisateurRepository().getMembres(StatutUtilisateur.actif);
+    return ElectionRepository.idsVotants(actifs.donnee ?? []);
+  }
+
+  Future<int> _nbDemandesValides(Set<String> idsVotants) async {
+    return _demandes.where(idsVotants.contains).length;
   }
 
   @override
@@ -113,8 +130,15 @@ class MockElectionRepository implements ElectionRepository {
       return Resultat.echec(erreur!);
     }
     final Election? derniere = _derniere();
-    final String? refus =
-        ElectionRepository.refusOuverture(_moi(), derniere, nbPlaces);
+    final Set<String> idsVotants = await _idsVotants();
+    final String? refus = ElectionRepository.refusOuverture(
+      _moi(),
+      derniere,
+      nbPlaces,
+      anticipee: anticipee,
+      nbDemandes: await _nbDemandesValides(idsVotants),
+      nbActifs: idsVotants.length,
+    );
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -218,6 +242,15 @@ class MockElectionRepository implements ElectionRepository {
     // Les rôles : comme le ferait l'admin, via le module 1
     final Resultat<List<Utilisateur>> actifs =
         await UtilisateurRepository().getMembres(StatutUtilisateur.actif);
+    // Comme Firebase : seuls les élus encore actifs (et pas admin) comptent
+    final List<Candidat> valides = elus
+        .where((c) => ElectionRepository.idsVotants(actifs.donnee ?? []).contains(c.id))
+        .toList();
+    if (valides.isEmpty) {
+      return const Resultat.echec(
+          'L\'élu n\'est plus membre actif de la houma : choisis-en un autre');
+    }
+    elus = valides;
     for (final Utilisateur membre in actifs.donnee ?? []) {
       final bool elu = elus.any((c) => c.id == membre.id);
       if (membre.estLeader && !elu) {
@@ -226,6 +259,11 @@ class MockElectionRepository implements ElectionRepository {
       if (elu && !membre.estLeader) {
         await UtilisateurRepository().changerRole(membre.id, RoleUtilisateur.leader);
       }
+    }
+    // Comme Firebase : le quartier a maintenant son leader
+    final UtilisateurRepository utilisateurs = UtilisateurRepository();
+    if (utilisateurs is MockUtilisateurRepository) {
+      utilisateurs.noterLeader(_moi().quartierId);
     }
     final int index = _elections.indexWhere((e) => e.id == election.id);
     final Election e = _elections[index];

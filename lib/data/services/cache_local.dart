@@ -34,7 +34,8 @@ class ConnexionLocale {
 /// était vide (try/catch partout), elle ne doit jamais faire planter l'app.
 class CacheLocal {
   static const String nomFichier = 'houmani_m1.db';
-  static const int version = 2; // v2 : table geocodage
+  // v2 : table geocodage ; v3 : quartier.a_un_admin → a_un_leader
+  static const int version = 3;
 
   /// Une adresse vérifiée est gardée 30 jours (une rue ne bouge pas).
   static const Duration dureeGeocodage = Duration(days: 30);
@@ -93,25 +94,7 @@ class CacheLocal {
             motif TEXT NOT NULL,
             date_demande INTEGER
           )''');
-        await db.execute('''
-          CREATE TABLE quartier (
-            id TEXT PRIMARY KEY,
-            nom TEXT NOT NULL,
-            localisation TEXT NOT NULL,
-            latitude REAL,
-            longitude REAL,
-            a_un_admin INTEGER NOT NULL
-          )''');
-        await db.execute('''
-          CREATE TABLE quartier_points (
-            quartier_id TEXT NOT NULL,
-            ordre INTEGER NOT NULL,
-            latitude REAL NOT NULL,
-            longitude REAL NOT NULL,
-            PRIMARY KEY (quartier_id, ordre),
-            FOREIGN KEY (quartier_id) REFERENCES quartier(id)
-              ON DELETE CASCADE
-          )''');
+        await _creerQuartier(db);
         await db.execute('''
           CREATE TABLE preferences (
             cle TEXT PRIMARY KEY,
@@ -149,15 +132,45 @@ class CacheLocal {
           )''');
         await _creerGeocodage(db);
       },
-      // Téléphone qui avait la version 1 : on ajoute la nouvelle table
+      // Téléphone qui avait une ancienne version
       onUpgrade: (db, ancienne, nouvelle) async {
         if (ancienne < 2) {
           await _creerGeocodage(db);
+        }
+        if (ancienne < 3) {
+          // a_un_admin devient a_un_leader. Ce n'est qu'une copie : on
+          // refait les tables (le quartier sera relu depuis Firebase).
+          await db.execute('DROP TABLE IF EXISTS quartier_points');
+          await db.execute('DROP TABLE IF EXISTS quartier');
+          await _creerQuartier(db);
         }
       },
     );
     _bases[chemin] = base;
     return base;
+  }
+
+  /// Tables quartier + quartier_points (les coins du contour, dans l'ordre).
+  static Future<void> _creerQuartier(Database db) async {
+    await db.execute('''
+      CREATE TABLE quartier (
+        id TEXT PRIMARY KEY,
+        nom TEXT NOT NULL,
+        localisation TEXT NOT NULL,
+        latitude REAL,
+        longitude REAL,
+        a_un_leader INTEGER NOT NULL
+      )''');
+    await db.execute('''
+      CREATE TABLE quartier_points (
+        quartier_id TEXT NOT NULL,
+        ordre INTEGER NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        PRIMARY KEY (quartier_id, ordre),
+        FOREIGN KEY (quartier_id) REFERENCES quartier(id)
+          ON DELETE CASCADE
+      )''');
   }
 
   /// Table geocodage : adresse cherchée → point trouvé (NULL : introuvable,
@@ -320,7 +333,7 @@ class CacheLocal {
           'localisation': quartier.localisation,
           'latitude': position?.latitude,
           'longitude': position?.longitude,
-          'a_un_admin': quartier.aUnAdmin ? 1 : 0,
+          'a_un_leader': quartier.aUnLeader ? 1 : 0,
         });
         for (int i = 0; i < quartier.contour.length; i++) {
           await txn.insert('quartier_points', {
@@ -369,7 +382,7 @@ class CacheLocal {
             ? PointGps(lat.toDouble(), lng.toDouble())
             : null,
         contour: contour,
-        aUnAdmin: ligne['a_un_admin'] == 1,
+        aUnLeader: ligne['a_un_leader'] == 1,
       );
     } catch (e) {
       debugPrint('CacheLocal : $e');

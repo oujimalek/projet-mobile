@@ -8,6 +8,18 @@ import 'package:houmani/screens/module1/widgets_module1.dart';
 import 'mock_utilisateur_repository.dart';
 
 // Tests de la couche données du Module 1 (sans Firebase).
+/// Un résident actif de q1 (pour les tests de blocage).
+const Utilisateur _residentRim = Utilisateur(
+  id: 'r1',
+  prenom: 'Rim',
+  nom: 'Saidi',
+  email: 'rim@houmani.tn',
+  telephone: '+216 21 000 000',
+  quartierId: 'q1',
+  quartier: 'Résidence El Yasmine',
+  residence: 'Résidence El Yasmine',
+);
+
 void main() {
   // -------------------------------------------------------------------
   group('Resultat', () {
@@ -281,9 +293,9 @@ void main() {
   // -------------------------------------------------------------------
   group('Changement de quartier (refusChangement)', () {
     const Quartier q1 =
-        Quartier(id: 'q1', nom: 'El Yasmine', localisation: 'A', aUnAdmin: true);
+        Quartier(id: 'q1', nom: 'El Yasmine', localisation: 'A', aUnLeader: true);
     const Quartier q2 =
-        Quartier(id: 'q2', nom: 'El Wafa', localisation: 'B', aUnAdmin: true);
+        Quartier(id: 'q2', nom: 'El Wafa', localisation: 'B', aUnLeader: true);
     const Utilisateur resident = Utilisateur(
       id: 'r1',
       prenom: 'Rim',
@@ -299,13 +311,24 @@ void main() {
       expect(UtilisateurRepository.refusChangement(resident, q2), isNull);
     });
 
-    test('pas de demande vers un quartier sans administrateur', () {
-      const Quartier sansAdmin =
+    test('quartier sans leader : le contrat d\'habitation est obligatoire', () {
+      const Quartier sansLeader =
           Quartier(id: 'q3', nom: 'Les Jasmins', localisation: 'C');
+      expect(UtilisateurRepository.refusChangement(resident, sansLeader), isNull);
       expect(
-        UtilisateurRepository.refusChangement(resident, sansAdmin),
-        'Ce quartier n\'a pas encore d\'administrateur',
+        UtilisateurRepository.refusContrat(sansLeader, ''),
+        'Ce quartier n\'a pas encore de leader : ajoute la photo de '
+        'ton contrat d\'habitation',
       );
+      expect(
+        UtilisateurRepository.refusContrat(
+          sansLeader,
+          'https://res.cloudinary.com/pu3lxdrf/image/upload/c.jpg',
+        ),
+        isNull,
+      );
+      // Avec un leader : contrat facultatif
+      expect(UtilisateurRepository.refusContrat(q2, ''), isNull);
     });
 
     test('un résident actif ne peut pas redemander son quartier', () {
@@ -315,22 +338,69 @@ void main() {
       );
     });
 
-    test('un admin ne peut pas quitter son quartier', () {
-      const Utilisateur admin = Utilisateur(
-        id: 'a1',
-        prenom: 'Amira',
-        nom: 'Ben Salah',
+    const Utilisateur admin = Utilisateur(
+      id: 'a1',
+      prenom: 'Amira',
+      nom: 'Ben Salah',
+      email: '',
+      telephone: '',
+      quartierId: 'q1',
+      quartier: 'El Yasmine',
+      residence: 'El Yasmine',
+      role: RoleUtilisateur.admin,
+    );
+
+    test('l\'admin global ne fait pas de demande : il visite les cités', () {
+      expect(
+        UtilisateurRepository.refusChangement(admin, q2),
+        'L\'administrateur visite les cités depuis l\'écran Mon quartier',
+      );
+      expect(UtilisateurRepository.refusVisite(admin, q2), isNull);
+      expect(
+        UtilisateurRepository.refusVisite(admin, q1),
+        'Tu regardes déjà cette cité',
+      );
+      expect(
+        UtilisateurRepository.refusVisite(resident, q2),
+        'Action non autorisée',
+      );
+    });
+
+    test('refusGestion : le leader gère les résidents, l\'admin gère tout', () {
+      final Utilisateur leader = resident.copier(role: RoleUtilisateur.leader);
+      const Utilisateur voisin = Utilisateur(
+        id: 'v1',
+        prenom: 'Sami',
+        nom: 'Ali',
         email: '',
         telephone: '',
         quartierId: 'q1',
         quartier: 'El Yasmine',
         residence: 'El Yasmine',
-        role: RoleUtilisateur.admin,
+        statut: StatutUtilisateur.enAttente,
       );
+      // Un simple résident ne gère personne
+      expect(UtilisateurRepository.refusGestion(resident, voisin),
+          'Action non autorisée');
+      expect(UtilisateurRepository.refusGestion(leader, voisin), isNull);
+      expect(UtilisateurRepository.refusGestion(admin, voisin), isNull);
+      // Jamais soi-même ni l'admin
+      expect(UtilisateurRepository.refusGestion(leader, leader),
+          'Action non autorisée');
+      expect(UtilisateurRepository.refusGestion(leader, admin),
+          'Action non autorisée');
+      // Autre quartier
       expect(
-        UtilisateurRepository.refusChangement(admin, q2),
-        'Un administrateur ne peut pas quitter son quartier',
+        UtilisateurRepository.refusGestion(
+            leader, voisin.copier(quartierId: 'q2')),
+        'Ce membre n\'est pas de ce quartier',
       );
+      // Le leader : seulement par l'admin
+      final Utilisateur autreLeader =
+          voisin.copier(role: RoleUtilisateur.leader);
+      expect(UtilisateurRepository.refusGestion(leader, autreLeader),
+          'Seul l\'administrateur peut gérer le leader');
+      expect(UtilisateurRepository.refusGestion(admin, autreLeader), isNull);
     });
 
     test('pas de restriction pour un compte en attente ou refusé', () {
@@ -397,11 +467,11 @@ void main() {
       });
 
       test('échoue pour un compte bloqué', () async {
-        await repo.bloquerMembre('u1', 'Comportement');
-        final Resultat<dynamic> r = await repo.connexion(
-          MockUtilisateurRepository.emailDemo,
-          MockUtilisateurRepository.motDePasseDemo,
-        );
+        // Un résident bloqué par l'admin (l'admin ne se bloque pas lui-même)
+        repo.ajouterCompte(_residentRim, 'secret123');
+        await repo.bloquerMembre('r1', 'Comportement');
+        final Resultat<dynamic> r =
+            await repo.connexion('rim@houmani.tn', 'secret123');
         expect(r.estSucces, false);
         // Le membre voit la raison donnée par l'admin
         expect(
@@ -594,8 +664,9 @@ void main() {
       });
 
       test('compte bloqué : pas de connexion par SMS', () async {
-        await repo.bloquerMembre('u1', 'Comportement');
-        await repo.envoyerCodeSms('22345678');
+        repo.ajouterCompte(_residentRim, 'secret123', telephoneVerifie: true);
+        await repo.bloquerMembre('r1', 'Comportement');
+        await repo.envoyerCodeSms('21000000');
         final Resultat<Utilisateur> r =
             await repo.connexionParSms(MockUtilisateurRepository.codeSmsDemo);
         expect(
@@ -683,7 +754,7 @@ void main() {
             id: 'q2',
             nom: 'Cité El Wafa',
             localisation: 'Ennasr 1',
-            aUnAdmin: true,
+            aUnLeader: true,
           ),
         );
         expect(r.estSucces, false);
@@ -699,7 +770,7 @@ void main() {
             id: 'q2',
             nom: 'Cité El Wafa',
             localisation: 'Ennasr 1',
-            aUnAdmin: true,
+            aUnLeader: true,
           ),
         );
         expect(r.estSucces, true);
@@ -717,12 +788,25 @@ void main() {
             id: 'q2',
             nom: 'Cité El Wafa',
             localisation: 'Ennasr 1',
-            aUnAdmin: true,
+            aUnLeader: true,
           ),
         );
         expect(r.estSucces, false);
-        expect(r.erreur, 'Un administrateur ne peut pas quitter son quartier');
+        expect(r.erreur,
+            'L\'administrateur visite les cités depuis l\'écran Mon quartier');
         expect(repo.getUtilisateurConnecte().quartierId, 'q1');
+      });
+
+      test('l\'admin visite une autre cité (reste actif et admin)', () async {
+        final Resultat<List<Quartier>> trouves =
+            await repo.rechercherQuartiers('Wafa');
+        final Resultat<void> r =
+            await repo.visiterQuartier(trouves.donnee!.single);
+        expect(r.estSucces, true);
+        final Utilisateur moi = repo.getUtilisateurConnecte();
+        expect(moi.quartierId, 'q2');
+        expect(moi.statut, StatutUtilisateur.actif);
+        expect(moi.estAdmin, true);
       });
 
       test('un résident actif change de quartier et repasse en attente',
@@ -750,7 +834,7 @@ void main() {
             id: 'q1',
             nom: 'Résidence El Yasmine',
             localisation: 'A',
-            aUnAdmin: true,
+            aUnLeader: true,
           ),
         );
         expect(meme.erreur, 'Tu fais déjà partie de ce quartier');
@@ -760,7 +844,7 @@ void main() {
             id: 'q2',
             nom: 'Cité El Wafa',
             localisation: 'Ennasr 1',
-            aUnAdmin: true,
+            aUnLeader: true,
           ),
         );
         expect(r.estSucces, true);
@@ -981,20 +1065,54 @@ void main() {
         expect(Utilisateur.fromMap('m1', {}).motif, '');
       });
 
-      test('Quartier.fromMap : aUnAdmin seulement si true', () {
-        expect(Quartier.fromMap('q', {'aUnAdmin': true}).aUnAdmin, true);
-        expect(Quartier.fromMap('q', {}).aUnAdmin, false);
+      test('Quartier.fromMap : aUnLeader seulement si true', () {
+        expect(Quartier.fromMap('q', {'aUnLeader': true}).aUnLeader, true);
+        expect(Quartier.fromMap('q', {}).aUnLeader, false);
       });
 
-      test('on ne rejoint pas un quartier sans administrateur', () async {
+      test('quartier sans leader : contrat obligatoire, 1er validé = leader',
+          () async {
         await creerCompte();
         await repo.simulerVerificationEmail();
         final Resultat<List<Quartier>> trouves =
             await repo.rechercherQuartiers('Jasmins');
-        final Quartier sansAdmin = trouves.donnee!.single;
-        expect(sansAdmin.aUnAdmin, false);
-        final Resultat<void> r = await repo.rejoindreQuartier(sansAdmin);
-        expect(r.erreur, 'Ce quartier n\'a pas encore d\'administrateur');
+        final Quartier sansLeader = trouves.donnee!.single;
+        expect(sansLeader.aUnLeader, false);
+
+        // Sans contrat : refusé
+        final Resultat<void> sans = await repo.rejoindreQuartier(sansLeader);
+        expect(
+          sans.erreur,
+          'Ce quartier n\'a pas encore de leader : ajoute la photo de '
+          'ton contrat d\'habitation',
+        );
+
+        // Avec contrat : la demande part
+        const String contrat =
+            'https://res.cloudinary.com/pu3lxdrf/image/upload/contrat.jpg';
+        final Resultat<void> avec =
+            await repo.rejoindreQuartier(sansLeader, contratUrl: contrat);
+        expect(avec.estSucces, true);
+        final Utilisateur demandeur = repo.getUtilisateurConnecte();
+        expect(demandeur.contratUrl, contrat);
+        expect(demandeur.statut, StatutUtilisateur.enAttente);
+
+        // L'admin global visite la cité et valide : le demandeur devient leader
+        await repo.connexion(
+          MockUtilisateurRepository.emailDemo,
+          MockUtilisateurRepository.motDePasseDemo,
+        );
+        expect((await repo.visiterQuartier(sansLeader)).estSucces, true);
+        expect((await repo.validerMembre(demandeur.id)).estSucces, true);
+        final Utilisateur leader = (await repo.getMembres(
+          StatutUtilisateur.actif,
+        ))
+            .donnee!
+            .firstWhere((Utilisateur m) => m.id == demandeur.id);
+        expect(leader.role, RoleUtilisateur.leader);
+        final Quartier apres =
+            (await repo.rechercherQuartiers('Jasmins')).donnee!.single;
+        expect(apres.aUnLeader, true);
       });
     });
 

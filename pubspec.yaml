@@ -79,6 +79,7 @@ dependencies:
   path_provider: ^2.1.5
   # M3 : ouvrir le point dans l'application de cartes, appeler un numéro utile.
   url_launcher: ^6.3.3
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -108,6 +109,8 @@ flutter:
   assets:
     - assets/images/logo_couleur.png
     - assets/images/logo_blanc.png
+    # Musique du lancement : extrait de "Houmani" (0:35 → 1:06)
+    - assets/audio/houmani_splash.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

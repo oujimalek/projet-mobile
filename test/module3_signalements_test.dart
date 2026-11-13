@@ -478,7 +478,7 @@ void main() {
       await devenir(salma);
       final resident = await SignalementRepository()
           .changerStatut('r3', StatutSignalement.enCours);
-      expect(resident.erreur, 'Seul l\'admin du quartier peut changer le statut');
+      expect(resident.erreur, 'Seul le leader du quartier (ou l\'admin) peut changer le statut');
       expect(lire('r3').statut, StatutSignalement.enAttente);
 
       await utilisateurs.connexion(
@@ -682,7 +682,7 @@ void main() {
           tester, const SignalementDetailScreen(signalementId: 'r1'));
       expect(find.text('Sa7, ena zeda'), findsNothing);
       expect(find.text('Modifier'), findsNothing); // r1 est en cours
-      expect(find.text('Changer le statut (admin)'), findsOneWidget);
+      expect(find.text('Changer le statut'), findsOneWidget);
 
       await tester.tap(find.text('Résolu'));
       await tester.pumpAndSettle();
@@ -699,7 +699,7 @@ void main() {
       expect(find.text('Sa7, ena zeda'), findsNothing);
       expect(find.text('Ce signalement est clôturé : il ne peut plus être confirmé.'),
           findsOneWidget);
-      expect(find.text('Changer le statut (admin)'), findsNothing);
+      expect(find.text('Changer le statut'), findsNothing);
     });
 
     testWidgets('L\'auteur modifie puis supprime (avec confirmation)',

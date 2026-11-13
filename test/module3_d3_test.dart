@@ -411,7 +411,7 @@ void main() {
       expect(find.byKey(const ValueKey('conseil_resolu')), findsNothing);
     });
 
-    testWidgets('Pas de conseil : événement à venir, annulé, ou pas admin',
+    testWidgets('Pas de conseil : événement à venir, annulé, ou simple résident',
         (WidgetTester tester) async {
       evenementLie('ord', date: DateTime.now().add(const Duration(days: 2)));
       evenementLie('ord',
@@ -420,7 +420,12 @@ void main() {
       expect(find.byKey(const ValueKey('conseil_resolu')), findsNothing);
 
       evenementLie('ord', date: DateTime.now().subtract(const Duration(days: 1)));
-      await devenir(leila); // leader, pas admin
+      // Le leader gère le statut comme l'admin : il voit le conseil
+      await devenir(leila);
+      await afficher(tester, const SignalementDetailScreen(signalementId: 'ord'));
+      expect(find.byKey(const ValueKey('conseil_resolu')), findsOneWidget);
+
+      await devenir(youssef); // simple résident
       await afficher(tester, const SignalementDetailScreen(signalementId: 'ord'));
       expect(find.byKey(const ValueKey('conseil_resolu')), findsNothing);
     });

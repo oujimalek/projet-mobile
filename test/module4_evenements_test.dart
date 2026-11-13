@@ -1204,7 +1204,7 @@ void main() {
       await devenir(sarra);
       await afficher(tester, const EvenementsScreen());
       expect(find.byType(FloatingActionButton), findsNothing);
-      expect(find.textContaining('Les leaders de ta houma'), findsOneWidget);
+      expect(find.textContaining('Le leader de ta houma'), findsOneWidget);
     });
 
     testWidgets('l\'admin voit le bouton +', (tester) async {

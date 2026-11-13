@@ -40,6 +40,7 @@ import 'package:houmani/screens/module3/create_signalement_screen.dart';
 import 'package:houmani/screens/module3/signalements_screen.dart';
 import 'package:houmani/screens/module4/evenements_screen.dart';
 import 'package:houmani/screens/splash_screen.dart';
+import 'package:houmani/data/services/musique_accueil.dart';
 import 'package:houmani/theme/app_theme.dart';
 import 'package:houmani/theme/preference_langue.dart';
 import 'package:houmani/theme/preference_theme.dart';
@@ -89,6 +90,27 @@ Future<void> toucher(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+/// Coche une compétence dans l'écran de modification du profil
+/// (fait défiler cet écran jusqu'à la case, puis la touche).
+Future<void> toucherCompetence(WidgetTester tester, String texte) async {
+  final Finder puce = find.widgetWithText(FilterChip, texte);
+  // Tout l'écran est construit : on défile jusqu'à ce que la case soit
+  // vraiment touchable (dans la partie visible)
+  await tester.scrollUntilVisible(
+    puce.hitTestable(),
+    150,
+    scrollable: find
+        .descendant(
+          of: find.byType(ProfilEditionScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(puce);
+  await tester.pumpAndSettle();
+}
+
 /// Fait défiler le menu latéral jusqu'au widget, puis le touche.
 Future<void> toucherDansMenu(WidgetTester tester, Finder finder) async {
   await tester.scrollUntilVisible(
@@ -121,6 +143,8 @@ void main() {
 
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    // Pas de lecteur audio sur l'ordinateur : musique du splash coupée
+    MusiqueAccueil.active = false;
     // "NoIsolate" : SQLite tourne dans le même fil que le test (temps simulé)
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfiNoIsolate;
@@ -313,15 +337,31 @@ void main() {
     expect(find.byType(ProfilEditionScreen), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).at(0), 'Amira Ben Salem');
-    await toucher(tester, find.text('+ Ajouter'));
-    await tester.enterText(find.byType(TextField).last, 'Jardinage');
+
+    // Compétences courantes : déjà cochées depuis le profil, on en coche une
+    FilterChip puce(String texte) {
+      return tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, texte),
+      );
+    }
+
+    expect(puce('Bricolage').selected, isTrue);
+    expect(puce('Jardinage').selected, isFalse);
+    await toucherCompetence(tester, 'Jardinage');
+    expect(puce('Jardinage').selected, isTrue);
+
+    // "Cours de maths" est hors liste : "Autre" est coché d'office
+    expect(puce('Autre').selected, isTrue);
+    expect(find.text('Cours de maths'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Cours de piano');
     await toucher(tester, find.text('Ajouter'));
-    expect(find.text('Jardinage'), findsOneWidget);
+    expect(find.text('Cours de piano'), findsOneWidget);
 
     await toucher(tester, find.text('Enregistrer les modifications'));
     expect(find.byType(ProfilScreen), findsOneWidget);
     expect(find.text('Amira Ben Salem'), findsOneWidget);
     expect(find.text('Jardinage'), findsOneWidget);
+    expect(find.text('Cours de piano'), findsOneWidget);
   });
 
   testWidgets(
@@ -456,13 +496,14 @@ void main() {
     expect(find.textContaining('Ton profil est complet à'), findsOneWidget);
     await toucher(tester, find.textContaining('Ton profil est complet à'));
     expect(find.byType(ProfilEditionScreen), findsOneWidget);
-    await toucher(tester, find.text('+ Ajouter'));
-    await tester.enterText(find.byType(TextField).last, 'Cuisine');
-    await toucher(tester, find.text('Ajouter'));
+    await toucherCompetence(tester, 'Cuisine');
+    // "Autre" : texte tapé sans appuyer sur Ajouter, gardé à l'enregistrement
+    await toucherCompetence(tester, 'Autre');
+    await tester.enterText(find.byType(TextField).last, 'Cours de piano');
     await toucher(tester, find.text('Enregistrer les modifications'));
     expect(
       UtilisateurRepository().getUtilisateurConnecte().competences,
-      contains('Cuisine'),
+      containsAll(['Cuisine', 'Cours de piano']),
     );
 
     // 5. Profil depuis le menu, puis déconnexion
@@ -948,7 +989,7 @@ void main() {
     expect(find.textContaining('Motif : Insultes'), findsOneWidget);
   });
 
-  testWidgets('Code du quartier : un quartier sans admin ne peut pas être rejoint',
+  testWidgets('Code du quartier : sans leader, le contrat est demandé',
       (WidgetTester tester) async {
     mock.ajouterCompte(compteSansQuartier(), 'secret123');
     await mock.connexion('test@houmani.tn', 'secret123');
@@ -957,9 +998,14 @@ void main() {
 
     await tester.enterText(find.byType(EditableText).first, 'JAS33A');
     await tester.pumpAndSettle();
-    expect(find.textContaining('n\'a pas encore d\'administrateur'),
-        findsWidgets);
-    // Bouton désactivé : toucher ne fait rien
+    // Le bloc du contrat est plus bas dans la liste : on défile
+    await tester.scrollUntilVisible(
+      find.textContaining('contrat d\'habitation'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('n\'a pas encore de leader'), findsWidgets);
+    // Pas de photo du contrat : bouton désactivé, toucher ne fait rien
     await toucher(tester, find.text('Rejoindre la houma'));
     expect(find.byType(CodeQuartierScreen), findsOneWidget);
     expect(mock.getUtilisateurConnecte().quartierId ?? '', isEmpty);

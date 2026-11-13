@@ -122,42 +122,13 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
 
   /// (IA) Demande le besoin, puis cherche les compétences utiles.
   Future<void> _demanderAide() async {
-    final TextEditingController champ = TextEditingController(text: _besoin);
+    // La fenêtre garde son propre controller (voir _DialogueBesoin)
     final String? besoin = await showDialog<String>(
       context: context,
       builder: (contexteDialogue) {
-        return AlertDialog(
-          title: Text(tr('Qui peut m\'aider ?', 'Chkoun ynajem y3aweni ?')),
-          content: TextField(
-            controller: champ,
-            autofocus: true,
-            maxLength: TrouverVoisinM1.besoinMax,
-            maxLines: 3,
-            minLines: 2,
-            decoration: InputDecoration(
-              hintText: tr(
-                'Ex : ma machine à laver fuit',
-                'Mithel : el machine mte3i tsayyeb',
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(contexteDialogue).pop(),
-              child: Text(tr('Annuler', 'Batel')),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(contexteDialogue).pop(champ.text),
-              child: Text(
-                tr('Chercher', 'Lawej'),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        );
+        return _DialogueBesoin(texteInitial: _besoin);
       },
     );
-    champ.dispose();
     if (besoin == null || !mounted) {
       return;
     }
@@ -584,6 +555,65 @@ class _AnnuaireVoisinsScreenState extends State<AnnuaireVoisinsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// (IA) Fenêtre "Qui peut m'aider ?" : le résident décrit son besoin.
+/// Renvoie le texte tapé, ou null si annulé.
+/// StatefulWidget pour que le controller soit libéré (dispose) seulement
+/// quand la fenêtre a fini de se fermer (sinon erreur pendant l'animation).
+class _DialogueBesoin extends StatefulWidget {
+  final String texteInitial;
+
+  const _DialogueBesoin({required this.texteInitial});
+
+  @override
+  State<_DialogueBesoin> createState() {
+    return _DialogueBesoinState();
+  }
+}
+
+class _DialogueBesoinState extends State<_DialogueBesoin> {
+  late final TextEditingController _champ =
+      TextEditingController(text: widget.texteInitial);
+
+  @override
+  void dispose() {
+    _champ.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(tr('Qui peut m\'aider ?', 'Chkoun ynajem y3aweni ?')),
+      content: TextField(
+        controller: _champ,
+        autofocus: true,
+        maxLength: TrouverVoisinM1.besoinMax,
+        maxLines: 3,
+        minLines: 2,
+        decoration: InputDecoration(
+          hintText: tr(
+            'Ex : ma machine à laver fuit',
+            'Mithel : el machine mte3i tsayyeb',
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(tr('Annuler', 'Batel')),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_champ.text),
+          child: Text(
+            tr('Chercher', 'Lawej'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

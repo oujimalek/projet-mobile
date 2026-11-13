@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/quartier.dart';
 import '../../data/models/utilisateur.dart';
 import '../../data/resultat.dart';
 import '../../data/services/localisation.dart';
+import '../../data/services/photos_m3.dart';
 import '../../data/services/utilisateur_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/preference_langue.dart';
@@ -19,7 +21,9 @@ import 'widgets_module1.dart';
 /// Deux façons de choisir son quartier :
 /// - taper le code d'invitation à 6 caractères donné par l'admin ;
 /// - OU chercher le quartier par son nom et le sélectionner.
-/// La demande part ensuite à l'administrateur (écran d'attente).
+/// La demande part ensuite au leader de la houma (ou à l'admin global).
+/// Quartier sans leader : la photo du contrat d'habitation est obligatoire,
+/// l'admin global la vérifie et le premier habitant validé devient leader.
 ///
 /// Ouvert depuis "Mon quartier" par un résident actif : c'est un
 /// changement de quartier (flèche retour, confirmation avant d'envoyer).
@@ -47,6 +51,7 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
   String _erreurRecherche = ''; // ex : pas de réseau
   bool _enChargement = false; // true pendant l'envoi de la demande
   bool _localisation = false; // true pendant la recherche GPS
+  String? _contrat; // photo du contrat d'habitation (chemin sur le téléphone)
 
   @override
   void initState() {
@@ -189,7 +194,26 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     setState(() {
       _enChargement = true;
     });
-    final Resultat<void> resultat = await _repository.rejoindreQuartier(quartier);
+    // Pas encore de leader : la photo du contrat part d'abord sur Cloudinary
+    String contratUrl = '';
+    if (!quartier.aUnLeader && _contrat != null) {
+      final Resultat<String> envoi = await PhotosM3.envoyerFichier(_contrat!);
+      if (!envoi.estSucces) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _enChargement = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(envoi.erreur!)),
+        );
+        return;
+      }
+      contratUrl = envoi.donnee!;
+    }
+    final Resultat<void> resultat =
+        await _repository.rejoindreQuartier(quartier, contratUrl: contratUrl);
     if (resultat.estSucces && adresse.isNotEmpty) {
       // Pas bloquant : si l'adresse ne passe pas, la demande est déjà partie
       await _repository.enregistrerAdresse(adresse);
@@ -208,6 +232,99 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
     }
     // go : après l'envoi de la demande, pas de retour en arrière
     context.go('/attente');
+  }
+
+  /// Photo du contrat d'habitation : appareil photo ou galerie.
+  Future<void> _choisirContrat(ImageSource source) async {
+    final Resultat<String?> choix = await PhotosM3.choisir(source);
+    if (!mounted) {
+      return;
+    }
+    if (!choix.estSucces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(choix.erreur!)),
+      );
+      return;
+    }
+    if (choix.donnee == null) {
+      return; // annulé
+    }
+    setState(() {
+      _contrat = choix.donnee;
+    });
+  }
+
+  /// Bloc "Contrat d'habitation" (quartier sans leader).
+  Widget _blocContrat(Quartier quartier) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(color: AppColors.warning),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr(
+              '${quartier.nom} n\'a pas encore de leader',
+              '${quartier.nom} mazel ma 3andhech leader',
+            ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            tr(
+              'Ajoute la photo de ton contrat d\'habitation : l\'administrateur '
+                  'la vérifie. Le premier habitant validé devient le leader '
+                  'de la houma.',
+              'Zid taswira mta3 contrat el sokna mte3ek : el admin '
+                  'ychoufha. Awel wa7ed yet9bel ywalli leader el houma.',
+            ),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          if (_contrat != null)
+            Row(
+              children: [
+                Icon(Icons.check_circle, color: AppColors.primary, size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    tr('Photo du contrat ajoutée', 'Taswira mta3 el contrat tzedet'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: Text(tr('Photo', 'Taswira')),
+                onPressed: _enChargement
+                    ? null
+                    : () {
+                        _choisirContrat(ImageSource.camera);
+                      },
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.photo_library_outlined),
+                label: Text(tr('Galerie', 'Galerie')),
+                onPressed: _enChargement
+                    ? null
+                    : () {
+                        _choisirContrat(ImageSource.gallery);
+                      },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   /// true : un résident actif change de quartier (venu de "Mon quartier").
@@ -229,9 +346,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
             tr(
               'Tu vas quitter $actuel pour rejoindre ${nouveau.nom}. '
                   'Tu n\'auras plus accès à ton quartier actuel, et '
-                  'l\'administrateur de ${nouveau.nom} devra valider ta demande.',
+                  'le leader de ${nouveau.nom} devra valider ta demande.',
               'Bech to5rej men $actuel w tod5ol l ${nouveau.nom}. '
-                  'Ma 3adech todkhol l houmtek tawa, w el admin mta3 '
+                  'Ma 3adech todkhol l houmtek tawa, w el leader mta3 '
                   '${nouveau.nom} lazem y9abel demande mte3ek.',
             ),
           ),
@@ -257,11 +374,12 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Bouton actif seulement si un quartier est choisi, qu'il a un admin
-    // pour valider la demande, et que rien n'est en cours
+    // Bouton actif seulement si un quartier est choisi, que rien n'est en
+    // cours, et (quartier sans leader) que la photo du contrat est là
     final Quartier? choisi = _quartierChoisi();
-    final bool peutRejoindre =
-        choisi != null && choisi.aUnAdmin && !_enChargement;
+    final bool peutRejoindre = choisi != null &&
+        !_enChargement &&
+        (choisi.aUnLeader || _contrat != null);
     final bool changement = _changement();
 
     return Scaffold(
@@ -326,23 +444,6 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                       style: TextStyle(color: AppColors.error, fontSize: 12),
                     ),
                   ),
-                // Code valide mais personne pour valider la demande
-                if (_code.length == 6 &&
-                    _quartierDuCode != null &&
-                    !_quartierDuCode!.aUnAdmin)
-                  Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      tr(
-                        '${_quartierDuCode!.nom} n\'a pas encore '
-                            'd\'administrateur : impossible de le rejoindre '
-                            'pour l\'instant.',
-                        '${_quartierDuCode!.nom} mazel ma 3andhech admin : '
-                            'ma tnajjamch tod5olha tawa.',
-                      ),
-                      style: TextStyle(color: AppColors.warning, fontSize: 12),
-                    ),
-                  ),
                 _separateurOu(),
 
                 // ----- Recherche d'un quartier -----
@@ -396,6 +497,9 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 ),
                 const SizedBox(height: 24),
 
+                // Quartier sans leader : contrat d'habitation obligatoire
+                if (choisi != null && !choisi.aUnLeader) _blocContrat(choisi),
+
                 PrimaryButton(
                   texte: tr('Rejoindre la houma', 'Od5ol lel houma'),
                   onPressed: peutRejoindre ? _rejoindre : null,
@@ -404,8 +508,10 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                 const SizedBox(height: 10),
                 Text(
                   tr(
-                    'Ta demande sera validée par l\'administrateur du quartier.',
-                    'El admin mta3 el houma bech y9abel demande mte3ek.',
+                    'Ta demande sera validée par le leader du quartier '
+                        '(ou par l\'administrateur).',
+                    'El leader mta3 el houma (wala el admin) bech y9abel '
+                        'demande mte3ek.',
                   ),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
@@ -566,12 +672,12 @@ class _CodeQuartierScreenState extends State<CodeQuartierScreen> {
                         fontSize: 12,
                       ),
                     ),
-                    // Personne pour valider : on prévient avant la demande
-                    if (!quartier.aUnAdmin)
+                    // Pas de leader : on prévient (contrat demandé)
+                    if (!quartier.aUnLeader)
                       Text(
                         tr(
-                          'Pas encore d\'administrateur',
-                          'Mazel ma 3andhech admin',
+                          'Pas encore de leader : contrat demandé',
+                          'Mazel ma 3andhech leader : lazem contrat',
                         ),
                         style: TextStyle(
                           color: AppColors.warning,

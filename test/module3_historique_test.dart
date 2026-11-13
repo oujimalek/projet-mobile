@@ -183,7 +183,7 @@ void main() {
       await utilisateurs.connexion('salma@houmani.tn', 'pw');
       final resultat = await SignalementRepository()
           .changerStatut('r3', StatutSignalement.enCours, note: 'Je m\'en occupe');
-      expect(resultat.erreur, 'Seul l\'admin du quartier peut changer le statut');
+      expect(resultat.erreur, 'Seul le leader du quartier (ou l\'admin) peut changer le statut');
       expect(depot.historiqueDe('r3'), isEmpty);
     });
   });

@@ -50,7 +50,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         PointGps(36.8610, 10.1720),
         PointGps(36.8610, 10.1680),
       ],
-      aUnAdmin: true,
+      aUnLeader: true,
     ),
     Quartier(
       id: 'q2',
@@ -58,9 +58,9 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       localisation: 'Ennasr 1, Ariana',
       codeInvitation: 'WAF18C',
       nbMembres: 18,
-      aUnAdmin: true,
+      aUnLeader: true,
     ),
-    // Pas encore d'administrateur : on ne peut pas le rejoindre
+    // Pas encore de leader : il faut le contrat d'habitation pour entrer
     Quartier(
       id: 'q3',
       nom: 'Résidence Les Jasmins',
@@ -97,6 +97,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Ben Ali',
         email: '',
         telephone: '+216 98 765 432',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc A',
         logement: 'Bloc A - Appt 4',
@@ -109,6 +110,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Trabelsi',
         email: '',
         telephone: '+216 50 123 456',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc C',
         logement: 'Bloc C - Appt 9',
@@ -121,6 +123,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Chaabane',
         email: '',
         telephone: '+216 27 444 555',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc B',
         logement: 'Bloc B - Appt 2',
@@ -134,6 +137,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Trabelsi',
         email: 'youssef@houmani.tn',
         telephone: '+216 22 111 111',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc A',
         logement: 'Bloc A - Appt 7',
@@ -145,6 +149,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Gharbi',
         email: 'salma@houmani.tn',
         telephone: '+216 55 222 222',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc C',
         logement: 'Bloc C - Appt 1',
@@ -156,6 +161,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Mansour',
         email: '',
         telephone: '+216 93 333 333',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc A',
         logement: 'Bloc A - Appt 11',
@@ -167,6 +173,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
         nom: 'Ferchichi',
         email: '',
         telephone: '+216 24 666 777',
+        quartierId: 'q1',
         quartier: 'Résidence El Yasmine',
         residence: 'Résidence El Yasmine, Bloc D',
         logement: 'Bloc D - Appt 3',
@@ -196,10 +203,17 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   /// Ajoute un compte qui peut se connecter (e-mail déjà vérifié).
-  void ajouterCompte(Utilisateur utilisateur, String motDePasse) {
+  void ajouterCompte(
+    Utilisateur utilisateur,
+    String motDePasse, {
+    bool telephoneVerifie = false,
+  }) {
     _membres.add(utilisateur);
     _motsDePasse[utilisateur.id] = motDePasse;
     _emailsVerifies.add(utilisateur.id);
+    if (telephoneVerifie) {
+      _telephonesVerifies.add(utilisateur.id);
+    }
   }
 
   /// Le profil "resté connecté" que restaurerSession() renvoie au
@@ -548,13 +562,17 @@ class MockUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
-  Future<Resultat<void>> rejoindreQuartier(Quartier quartier) async {
+  Future<Resultat<void>> rejoindreQuartier(
+    Quartier quartier, {
+    String contratUrl = '',
+  }) async {
     // Même règle que firestore.rules : e-mail vérifié obligatoire
     if (!_emailsVerifies.contains(_connecte.id)) {
       return const Resultat.echec('Action non autorisée');
     }
     final String? refus =
-        UtilisateurRepository.refusChangement(_connecte, quartier);
+        UtilisateurRepository.refusChangement(_connecte, quartier) ??
+            UtilisateurRepository.refusContrat(quartier, contratUrl);
     if (refus != null) {
       return Resultat.echec(refus);
     }
@@ -566,6 +584,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       dateDemande: DateTime.now(),
       motif: '', // nouvelle demande : on oublie un ancien refus
       role: RoleUtilisateur.resident, // un leader ne l'est plus ailleurs (M4)
+      contratUrl: contratUrl,
     );
 
     // On l'ajoute à la liste des membres (s'il n'y est pas déjà)
@@ -579,6 +598,20 @@ class MockUtilisateurRepository implements UtilisateurRepository {
       _membres.add(demande);
     }
     _remplacer(demande);
+    return const Resultat.succes(null);
+  }
+
+  @override
+  Future<Resultat<void>> visiterQuartier(Quartier quartier) async {
+    final String? refus = UtilisateurRepository.refusVisite(_connecte, quartier);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    _remplacer(_connecte.copier(
+      quartierId: quartier.id,
+      quartier: quartier.nom,
+      residence: quartier.nom,
+    ));
     return const Resultat.succes(null);
   }
 
@@ -605,7 +638,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<String?>> getCodeInvitation() async {
-    if (!_connecte.estAdmin) {
+    if (!_connecte.peutGerer) {
       return const Resultat.echec('Action non autorisée');
     }
     for (final Quartier quartier in _quartiers) {
@@ -633,7 +666,7 @@ class MockUtilisateurRepository implements UtilisateurRepository {
           nbMembres: ancien.nbMembres,
           position: Quartier.milieu(contour),
           contour: List.of(contour),
-          aUnAdmin: ancien.aUnAdmin,
+          aUnLeader: ancien.aUnLeader,
         );
         return const Resultat.succes(null);
       }
@@ -796,10 +829,61 @@ class MockUtilisateurRepository implements UtilisateurRepository {
     }
     for (final Utilisateur membre in _membres) {
       if (membre.id == id) {
+        final String? refusGestion =
+            UtilisateurRepository.refusGestion(_connecte, membre);
+        if (refusGestion != null) {
+          return Resultat.echec(refusGestion);
+        }
+        // Comme Firebase : dans un quartier sans leader, le premier habitant
+        // validé par l'admin devient le leader
+        final int indexQuartier = _indexQuartier(membre.quartierId);
+        if (statut == StatutUtilisateur.actif &&
+            membre.statut == StatutUtilisateur.enAttente &&
+            _connecte.estAdmin &&
+            indexQuartier >= 0 &&
+            !_quartiers[indexQuartier].aUnLeader) {
+          noterLeader(membre.quartierId);
+          _remplacer(membre.copier(
+            statut: statut,
+            motif: texte,
+            role: RoleUtilisateur.leader,
+          ));
+          return const Resultat.succes(null);
+        }
         _remplacer(membre.copier(statut: statut, motif: texte));
         return const Resultat.succes(null);
       }
     }
     return const Resultat.echec('Donnée introuvable');
+  }
+
+  /// Le quartier [quartierId] a maintenant un leader (validation du premier
+  /// habitant, ou résultats d'une élection publiés).
+  void noterLeader(String? quartierId) {
+    final int index = _indexQuartier(quartierId);
+    if (index < 0) {
+      return;
+    }
+    final Quartier ancien = _quartiers[index];
+    _quartiers[index] = Quartier(
+      id: ancien.id,
+      nom: ancien.nom,
+      localisation: ancien.localisation,
+      codeInvitation: ancien.codeInvitation,
+      nbMembres: ancien.nbMembres,
+      position: ancien.position,
+      contour: ancien.contour,
+      aUnLeader: true,
+    );
+  }
+
+  /// La position du quartier [id] dans _quartiers (-1 : inconnu).
+  int _indexQuartier(String? id) {
+    for (int i = 0; i < _quartiers.length; i++) {
+      if (_quartiers[i].id == id) {
+        return i;
+      }
+    }
+    return -1;
   }
 }

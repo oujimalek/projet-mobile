@@ -51,18 +51,59 @@ abstract class UtilisateurRepository {
   /// Partagé par les deux implémentations ; firestore.rules vérifie la
   /// même chose côté serveur.
   static String? refusChangement(Utilisateur utilisateur, Quartier quartier) {
-    // Personne pour valider la demande : elle resterait en attente
-    if (!quartier.aUnAdmin) {
-      return 'Ce quartier n\'a pas encore d\'administrateur';
-    }
     if (utilisateur.statut != StatutUtilisateur.actif) {
       return null; // en attente ou refusé : il choisit librement
     }
     if (utilisateur.estAdmin) {
-      return 'Un administrateur ne peut pas quitter son quartier';
+      return 'L\'administrateur visite les cités depuis l\'écran Mon quartier';
     }
     if (utilisateur.quartierId == quartier.id) {
       return 'Tu fais déjà partie de ce quartier';
+    }
+    return null;
+  }
+
+  /// Le contrat d'habitation manque-t-il ? (null : la demande peut partir)
+  /// Quartier sans leader : le premier habitant prouve qu'il y habite avec
+  /// la photo de son contrat, que l'admin global vérifie. Avec un leader,
+  /// le contrat est facultatif (le leader connaît ses voisins).
+  static String? refusContrat(Quartier quartier, String contratUrl) {
+    if (!quartier.aUnLeader && contratUrl.isEmpty) {
+      return 'Ce quartier n\'a pas encore de leader : ajoute la photo de '
+          'ton contrat d\'habitation';
+    }
+    return null;
+  }
+
+  /// Pourquoi [utilisateur] ne peut pas visiter [quartier] (null : il
+  /// peut). Réservé à l'admin global (actif), vers une autre cité.
+  static String? refusVisite(Utilisateur utilisateur, Quartier quartier) {
+    if (!utilisateur.estAdmin ||
+        utilisateur.statut != StatutUtilisateur.actif) {
+      return 'Action non autorisée';
+    }
+    if (utilisateur.quartierId == quartier.id) {
+      return 'Tu regardes déjà cette cité';
+    }
+    return null;
+  }
+
+  /// Pourquoi [gerant] ne peut pas changer le statut de [membre] (null :
+  /// il peut). Comme firestore.rules : le leader ou l'admin global, actif,
+  /// dans le même quartier ; jamais soi-même ni l'admin ; un leader ne
+  /// touche pas à un autre leader.
+  static String? refusGestion(Utilisateur gerant, Utilisateur membre) {
+    if (!gerant.peutGerer || gerant.statut != StatutUtilisateur.actif) {
+      return 'Action non autorisée';
+    }
+    if (membre.id == gerant.id || membre.estAdmin) {
+      return 'Action non autorisée';
+    }
+    if (membre.quartierId != gerant.quartierId) {
+      return 'Ce membre n\'est pas de ce quartier';
+    }
+    if (membre.estLeader && !gerant.estAdmin) {
+      return 'Seul l\'administrateur peut gérer le leader';
     }
     return null;
   }
@@ -244,8 +285,8 @@ abstract class UtilisateurRepository {
   Future<Resultat<void>> changerEmail(String nouvelEmail, String motDePasse);
 
   /// Supprime le profil puis le compte, et déconnecte (droit à la
-  /// suppression, loi 2004-63). Refusé pour un administrateur : son
-  /// quartier resterait sans admin.
+  /// suppression, loi 2004-63). Refusé pour l'admin global : l'application
+  /// resterait sans administrateur.
   Future<Resultat<void>> supprimerCompte(String motDePasse);
 
   // =====================================================================
@@ -264,9 +305,18 @@ abstract class UtilisateurRepository {
   /// (Firebase exige un e-mail vérifié.)
   /// Sert aussi à CHANGER de quartier (écran Mon quartier) : un résident
   /// actif quitte le sien et attend la validation du nouveau. Refusé pour
-  /// un administrateur (son quartier resterait sans admin) et pour le
+  /// l'admin global (il visite, voir [visiterQuartier]) et pour le
   /// quartier où l'on est déjà.
-  Future<Resultat<void>> rejoindreQuartier(Quartier quartier);
+  /// [contratUrl] : photo du contrat d'habitation (Cloudinary),
+  /// obligatoire si le quartier n'a pas de leader (voir [refusContrat]).
+  Future<Resultat<void>> rejoindreQuartier(
+    Quartier quartier, {
+    String contratUrl = '',
+  });
+
+  /// Admin global : passe sur une autre cité (il y reste actif et admin).
+  /// Voir [refusVisite].
+  Future<Resultat<void>> visiterQuartier(Quartier quartier);
 
   /// M1 - Enregistre l'adresse postale de l'utilisateur connecté (ex :
   /// "12 rue des Jasmins"), vue seulement par l'admin de son quartier qui
@@ -292,8 +342,8 @@ abstract class UtilisateurRepository {
   /// Le quartier de l'utilisateur connecté (`donnee == null` s'il n'en a pas).
   Future<Resultat<Quartier?>> getQuartierConnecte();
 
-  /// Le code d'invitation du quartier, pour que l'admin le partage.
-  /// Réservé à l'admin (`donnee == null` : aucun code trouvé).
+  /// Le code d'invitation du quartier, pour que le leader (ou l'admin) le
+  /// partage. Réservé à eux (`donnee == null` : aucun code trouvé).
   Future<Resultat<String?>> getCodeInvitation();
 
   /// L'admin enregistre les limites de son quartier (au moins 3 coins,
@@ -325,10 +375,12 @@ abstract class UtilisateurRepository {
   /// d'abord. Affichées dans Paramètres → Sécurité.
   Future<List<ConnexionLocale>> dernieresConnexions();
 
-  /// L'admin accepte une demande : le membre devient actif.
+  /// Le leader (ou l'admin global) accepte une demande : le membre devient
+  /// actif. Quartier sans leader : seul l'admin global valide (après avoir
+  /// vérifié le contrat), et ce premier habitant devient le leader.
   Future<Resultat<void>> validerMembre(String id);
 
-  /// L'admin refuse une demande : le membre passe "refuse"
+  /// Le leader (ou l'admin) refuse une demande : le membre passe "refuse"
   /// (il pourra choisir un autre quartier). Le [motif] (3 à 200
   /// caractères, voir refusMotif) est montré au membre.
   Future<Resultat<void>> refuserMembre(String id, String motif);

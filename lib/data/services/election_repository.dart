@@ -32,8 +32,39 @@ abstract class ElectionRepository {
   static const Duration dureeAnticipee = Duration(hours: 12); // par phase
   static const Duration periodicite = Duration(days: 182); // 6 mois
   static const Duration anciennete = Duration(days: 30); // pour être candidat
-  static const int placesMax = 10;
+  static const int placesMax = 1; // un seul leader par houma
   static const int presentationMax = 200;
+
+  /// Nombre de demandes qu'il faut pour une élection anticipée :
+  /// le tiers des membres actifs (arrondi au-dessus), au moins 1.
+  static int seuilAnticipee(int nbActifs) {
+    final int seuil = (nbActifs + 2) ~/ 3;
+    return seuil < 1 ? 1 : seuil;
+  }
+
+  /// true si les demandes atteignent le seuil (l'admin est alerté).
+  static bool seuilAtteint(int nbDemandes, int nbActifs) {
+    return nbDemandes >= seuilAnticipee(nbActifs);
+  }
+
+  /// Les ids des membres qui comptent (seuil, demandes) : les membres
+  /// actifs, sauf l'admin global (il visite la cité, il n'y habite pas).
+  static Set<String> idsVotants(List<Utilisateur> actifs) {
+    final Set<String> ids = {};
+    for (final Utilisateur membre in actifs) {
+      if (!membre.estAdmin) {
+        ids.add(membre.id);
+      }
+    }
+    return ids;
+  }
+
+  /// La date au format jj/mm/aaaa.
+  static String dateCourte(DateTime date) {
+    final String jour = date.day.toString().padLeft(2, '0');
+    final String mois = date.month.toString().padLeft(2, '0');
+    return '$jour/$mois/${date.year}';
+  }
 
   /// Les dates d'une nouvelle élection ouverte à [debut].
   /// Normale : 3 jours de candidatures + 2 jours de vote.
@@ -67,19 +98,39 @@ abstract class ElectionRepository {
   }
 
   /// Pourquoi [admin] ne peut pas ouvrir d'élection (null : il peut).
+  ///
+  /// - Normale : tous les 6 mois (la première : tout de suite).
+  /// - Anticipée : quand le tiers des membres actifs l'a demandée.
   static String? refusOuverture(
     Utilisateur admin,
     Election? derniere,
-    int nbPlaces,
-  ) {
+    int nbPlaces, {
+    bool anticipee = false,
+    int nbDemandes = 0,
+    int nbActifs = 0,
+    DateTime? maintenant,
+  }) {
+    final DateTime instant = maintenant ?? DateTime.now();
     if (!admin.estAdmin) {
       return 'Seul l\'admin ouvre une élection';
     }
-    if (derniere != null && derniere.phase() != PhaseElection.terminee) {
+    if (derniere != null && derniere.phase(instant) != PhaseElection.terminee) {
       return 'Une élection est déjà en cours';
     }
     if (nbPlaces < 1 || nbPlaces > placesMax) {
-      return 'Entre 1 et $placesMax leaders';
+      return 'Un seul leader par houma';
+    }
+    if (anticipee) {
+      final int seuil = seuilAnticipee(nbActifs);
+      if (nbDemandes < seuil) {
+        return 'Il faut $seuil demandes (le tiers des membres) : '
+            '$nbDemandes pour l\'instant';
+      }
+    } else {
+      final DateTime? prochaine = prochaineElection(derniere);
+      if (prochaine != null && prochaine.isAfter(instant)) {
+        return 'Prochaine élection possible le ${dateCourte(prochaine)}';
+      }
     }
     return null;
   }
@@ -172,14 +223,20 @@ abstract class ElectionRepository {
   Future<Resultat<bool>> aDemandeElection();
 
   /// Le nombre de membres qui demandent une nouvelle élection (admin).
+  /// Seules comptent les demandes des résidents encore actifs dans la houma
+  /// (celles des membres partis ou bloqués sont ignorées).
   Future<Resultat<int>> compterDemandes();
+
+  /// Le nombre de membres qui comptent pour le seuil du tiers :
+  /// les membres actifs de la houma, sans l'admin global en visite.
+  Future<Resultat<int>> compterVotants();
 
   // =====================================================================
   // Écritures
   // =====================================================================
 
-  /// L'admin ouvre une élection (normale ou anticipée). Les demandes
-  /// d'élection sont effacées.
+  /// L'admin ouvre une élection (normale ou anticipée), aux conditions de
+  /// [refusOuverture]. Les demandes d'élection sont effacées.
   Future<Resultat<void>> ouvrirElection({
     required int nbPlaces,
     required bool anticipee,
@@ -195,7 +252,7 @@ abstract class ElectionRepository {
   Future<Resultat<void>> voter(Election election, String candidatId);
 
   /// L'admin publie les résultats : les [elus] deviennent leaders, les
-  /// anciens leaders redeviennent résidents.
+  /// anciens leaders redeviennent résidents, et le quartier a son leader.
   Future<Resultat<void>> publierResultats(Election election, List<Candidat> elus);
 
   /// Je demande (ou je retire ma demande d') une nouvelle élection.

@@ -7,6 +7,7 @@ import 'package:houmani/data/models/utilisateur.dart';
 import 'package:houmani/data/resultat.dart';
 import 'package:houmani/data/services/election_repository.dart';
 import 'package:houmani/data/services/utilisateur_repository.dart';
+import 'package:houmani/screens/module4/carte_election_m4.dart';
 import 'package:houmani/screens/module4/election_screen.dart';
 import 'package:houmani/theme/app_theme.dart';
 
@@ -161,6 +162,15 @@ void main() {
       expect(ElectionRepository.elusProposes(candidats, 1).single.id, 'a');
     });
 
+    test('seuil anticipée : le tiers des membres, au moins 1', () {
+      expect(ElectionRepository.seuilAnticipee(0), 1);
+      expect(ElectionRepository.seuilAnticipee(3), 1);
+      expect(ElectionRepository.seuilAnticipee(4), 2);
+      expect(ElectionRepository.seuilAnticipee(9), 3);
+      expect(ElectionRepository.seuilAtteint(2, 9), isFalse);
+      expect(ElectionRepository.seuilAtteint(3, 9), isTrue);
+    });
+
     test('prochaine élection : 6 mois après la dernière publiée', () {
       expect(ElectionRepository.prochaineElection(null), isNull);
       final Election publiee = depot.ajouterElection(
@@ -177,25 +187,98 @@ void main() {
   group('Parcours complet (mock)', () {
     test('seul l\'admin ouvre ; pas deux élections en même temps', () async {
       await devenir(sarra);
-      expect((await depot.ouvrirElection(nbPlaces: 2, anticipee: false)).estSucces,
+      expect((await depot.ouvrirElection(nbPlaces: 1, anticipee: false)).estSucces,
           isFalse);
       await redevenirAdmin();
       expect((await depot.ouvrirElection(nbPlaces: 2, anticipee: false)).estSucces,
+          isFalse); // un seul leader par houma
+      expect((await depot.ouvrirElection(nbPlaces: 1, anticipee: false)).estSucces,
           isTrue);
       expect(depot.elections.single.premiere, isTrue);
-      expect((await depot.ouvrirElection(nbPlaces: 2, anticipee: true)).estSucces,
+      expect((await depot.ouvrirElection(nbPlaces: 1, anticipee: true)).estSucces,
           isFalse);
     });
 
-    test('demandes d\'élection : comptées, puis effacées à l\'ouverture', () async {
+    test('anticipée : refusée sous le tiers, puis ouverte et demandes effacées',
+        () async {
+      final int nbActifs = (await depot.compterVotants()).donnee!;
+      final int seuil = ElectionRepository.seuilAnticipee(nbActifs);
+      expect(seuil, greaterThan(1));
+
+      await devenir(sarra);
+      await depot.demanderElection(true);
+      await redevenirAdmin();
+      final Resultat<void> refus =
+          await depot.ouvrirElection(nbPlaces: 1, anticipee: true);
+      expect(refus.estSucces, isFalse);
+      expect(refus.erreur, contains('le tiers des membres'));
+
+      for (final Utilisateur membre in [nizar, nouveau].take(seuil - 1)) {
+        await devenir(membre);
+        await depot.demanderElection(true);
+      }
+      await redevenirAdmin();
+      expect((await depot.compterDemandes()).donnee, seuil);
+      expect((await depot.ouvrirElection(nbPlaces: 1, anticipee: true)).estSucces,
+          isTrue);
+      expect((await depot.compterDemandes()).donnee, 0);
+    });
+
+    test('l\'admin en visite ne compte pas dans les membres', () async {
+      final int actifs =
+          (await utilisateurs.compterMembres(StatutUtilisateur.actif)).donnee!;
+      expect((await depot.compterVotants()).donnee, actifs - 1);
+    });
+
+    test('la demande d\'un membre bloqué ne compte plus', () async {
       await devenir(sarra);
       await depot.demanderElection(true);
       await devenir(nizar);
       await depot.demanderElection(true);
       await redevenirAdmin();
       expect((await depot.compterDemandes()).donnee, 2);
-      await depot.ouvrirElection(nbPlaces: 1, anticipee: true);
-      expect((await depot.compterDemandes()).donnee, 0);
+      await utilisateurs.bloquerMembre(sarra.id, 'Test');
+      expect((await depot.compterDemandes()).donnee, 1);
+    });
+
+    test('publier : refusé si l\'élu n\'est plus membre actif', () async {
+      final Election election = enDepouillement();
+      depot.ajouterCandidat(election, sarra, voix: 3);
+      await utilisateurs.bloquerMembre(sarra.id, 'Test');
+      final List<Candidat> candidats = (await depot.getCandidats(election.id)).donnee!;
+      final Resultat<void> resultat = await depot.publierResultats(
+        election,
+        ElectionRepository.elusProposes(candidats, 1),
+      );
+      expect(resultat.estSucces, isFalse);
+      expect(depot.elections.single.publiee, isFalse);
+    });
+
+    test('semestrielle : refusée moins de 6 mois après la dernière', () async {
+      depot.ajouterElection(
+        debut: maintenant.subtract(const Duration(days: 40)),
+        finCandidatures: maintenant.subtract(const Duration(days: 37)),
+        finVote: maintenant.subtract(const Duration(days: 35)),
+        nbPlaces: 1,
+        publiee: true,
+      );
+      final Resultat<void> refus =
+          await depot.ouvrirElection(nbPlaces: 1, anticipee: false);
+      expect(refus.estSucces, isFalse);
+      expect(refus.erreur, startsWith('Prochaine élection possible le'));
+    });
+
+    test('semestrielle : possible 6 mois après la dernière', () async {
+      depot.ajouterElection(
+        debut: maintenant.subtract(const Duration(days: 190)),
+        finCandidatures: maintenant.subtract(const Duration(days: 187)),
+        finVote: maintenant.subtract(const Duration(days: 185)),
+        nbPlaces: 1,
+        publiee: true,
+      );
+      expect((await depot.ouvrirElection(nbPlaces: 1, anticipee: false)).estSucces,
+          isTrue);
+      expect(depot.elections.last.premiere, isFalse);
     });
 
     test('vote : une seule voix, pendant le vote', () async {
@@ -235,7 +318,7 @@ void main() {
     testWidgets('aucune élection : membre → demander une élection', (tester) async {
       await devenir(sarra);
       await afficher(tester, const ElectionScreen());
-      expect(find.text('Pas encore de leaders élus.'), findsOneWidget);
+      expect(find.text('Pas encore de leader élu.'), findsOneWidget);
       await tester.tap(find.text('Demander une nouvelle élection'));
       await tester.pumpAndSettle();
       expect(find.text('Retirer ma demande'), findsOneWidget);
@@ -271,6 +354,62 @@ void main() {
       await tester.tap(find.text('Confirmer mon vote'));
       await tester.pumpAndSettle();
       expect(find.textContaining('ton vote est enregistré'), findsOneWidget);
+    });
+  });
+
+  group('CarteElectionM4', () {
+    Widget carte({bool alerteSeulement = false}) {
+      return Scaffold(body: CarteElectionM4(alerteSeulement: alerteSeulement));
+    }
+
+    testWidgets('aucune élection : la carte le dit', (tester) async {
+      await devenir(sarra);
+      await afficher(tester, carte());
+      expect(find.text('Élection du leader'), findsOneWidget);
+      expect(find.text('La première élection n\'a pas encore eu lieu'),
+          findsOneWidget);
+    });
+
+    testWidgets('candidatures : date de fin affichée, tap ouvre l\'écran',
+        (tester) async {
+      enCandidatures();
+      await devenir(nizar);
+      await afficher(tester, carte());
+      expect(find.textContaining('Candidatures ouvertes jusqu\'au'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('carteElection')));
+      await tester.pumpAndSettle();
+      expect(find.byType(ElectionScreen), findsOneWidget);
+    });
+
+    testWidgets('accueil : rien pour un membre ni sans alerte', (tester) async {
+      await afficher(tester, carte(alerteSeulement: true)); // admin, rien à faire
+      expect(find.byKey(const Key('carteElection')), findsNothing);
+    });
+
+    testWidgets('accueil : l\'admin voit le vote à dépouiller', (tester) async {
+      enDepouillement();
+      await afficher(tester, carte(alerteSeulement: true));
+      expect(find.text('Vote terminé : publie le résultat'), findsOneWidget);
+    });
+
+    testWidgets('accueil : l\'admin voit l\'élection semestrielle due',
+        (tester) async {
+      depot.ajouterElection(
+        debut: maintenant.subtract(const Duration(days: 190)),
+        finCandidatures: maintenant.subtract(const Duration(days: 187)),
+        finVote: maintenant.subtract(const Duration(days: 185)),
+        nbPlaces: 1,
+        publiee: true,
+        elusNoms: const ['Nizar H.'],
+      );
+      await afficher(tester, carte(alerteSeulement: true));
+      expect(find.text('L\'élection semestrielle est due'), findsOneWidget);
+    });
+
+    testWidgets('échec du chargement : la carte ne s\'affiche pas', (tester) async {
+      depot.erreur = 'Pas de réseau';
+      await afficher(tester, carte());
+      expect(find.byKey(const Key('carteElection')), findsNothing);
     });
   });
 }

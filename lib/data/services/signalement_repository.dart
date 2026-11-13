@@ -299,8 +299,8 @@ abstract class SignalementRepository {
   }
 
   static String? refusChangementStatut(Utilisateur moi) {
-    if (!moi.estAdmin) {
-      return 'Seul l\'admin du quartier peut changer le statut';
+    if (!moi.peutGerer) {
+      return 'Seul le leader du quartier (ou l\'admin) peut changer le statut';
     }
     return null;
   }

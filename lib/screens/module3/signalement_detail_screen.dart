@@ -223,9 +223,9 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
         ),
       ));
     }
-    // Conseil à l'admin : l'événement a eu lieu, le signalement est ouvert
+    // Conseil au leader (ou à l'admin) : l'événement a eu lieu, le signalement est ouvert
     final bool aEuLieu = evenements.any((e) => e.estPasse && !e.annule);
-    if (moi.estAdmin && !signalement.estCloture && aEuLieu) {
+    if (moi.peutGerer && !signalement.estCloture && aEuLieu) {
       lignes.add(Container(
         key: const ValueKey('conseil_resolu'),
         margin: const EdgeInsets.only(top: 8),
@@ -728,7 +728,7 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
       ));
     }
     enfants.addAll(_actionsAuteur(signalement, moi));
-    if (moi.estAdmin) {
+    if (moi.peutGerer) {
       enfants.add(const SizedBox(height: 24));
       enfants.add(_zoneAdmin(signalement));
     }
@@ -1142,7 +1142,7 @@ class _SignalementDetailScreenState extends State<SignalementDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  tr('Changer le statut (admin)', 'Badel el 7ala (admin)'),
+                  tr('Changer le statut', 'Badel el 7ala'),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),

@@ -12,10 +12,11 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import 'widgets_module1.dart';
 
-/// M1 - Utilisateurs : écran 8, liste des membres (administrateur).
+/// M1 - Utilisateurs : écran 8, liste des membres (leader ou admin).
 ///
 /// Trois onglets : demandes en attente, membres actifs, membres bloqués.
-/// L'admin valide ou refuse les demandes, bloque ou débloque un membre.
+/// Le leader (ou l'admin) valide ou refuse les demandes, bloque ou débloque
+/// un membre. Seul l'admin nomme ou retire le leader, et gère le leader.
 class AdminMembresScreen extends StatefulWidget {
   const AdminMembresScreen({super.key});
 
@@ -312,7 +313,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
               ],
             ),
           ),
-          const Pastille(texte: 'Admin'),
+          Pastille(texte: admin.estAdmin ? 'Admin' : 'Leader'),
         ],
       ),
     );
@@ -510,6 +511,18 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                       const SizedBox(height: 4),
                       _badgeAdresse(_verdicts[membre.id]),
                     ],
+                    // Premier habitant d'une cité sans leader : son contrat
+                    if (_onglet == StatutUtilisateur.enAttente &&
+                        membre.contratUrl.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: () {
+                          _voirContrat(membre);
+                        },
+                        icon: const Icon(Icons.description_outlined, size: 18),
+                        label: Text(
+                          tr('Voir le contrat d\'habitation', 'Chouf el contrat'),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -618,7 +631,7 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
                   tr('Refuser la demande ?', 'Torfodh el demande ?'),
                   tr(
                     '${membre.nomComplet} ne pourra pas rejoindre le quartier. '
-                        'Il pourra faire une nouvelle demande.',
+                        'Cette personne pourra faire une nouvelle demande.',
                     '${membre.nomComplet} ma ynajjamch yodkhol lel houma. '
                         'Ynajjem yab3ath demande jdida.',
                   ),
@@ -639,9 +652,17 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
           ],
         );
       case StatutUtilisateur.actif:
-        // L'admin ne peut pas se bloquer lui-même
-        if (membre.id == _repository.getUtilisateurConnecte().id) {
+        final Utilisateur moi = _repository.getUtilisateurConnecte();
+        // Personne ne se bloque lui-même ; l'admin n'est jamais géré ici ;
+        // seul l'admin gère le leader (mêmes règles que refusGestion)
+        if (membre.id == moi.id ||
+            membre.estAdmin ||
+            (membre.estLeader && !moi.estAdmin)) {
           return const SizedBox();
+        }
+        // Le leader peut seulement bloquer : nommer un leader, c'est l'admin
+        if (!moi.estAdmin) {
+          return _boutonBloquer(membre);
         }
         return Row(
           children: [
@@ -667,6 +688,41 @@ class _AdminMembresScreenState extends State<AdminMembresScreen> {
       case StatutUtilisateur.refuse:
         return const SizedBox(); // pas d'onglet "refusés"
     }
+  }
+
+  /// Le contrat d'habitation envoyé avec la demande (photo Cloudinary).
+  Future<void> _voirContrat(Utilisateur membre) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            tr('Contrat de ${membre.prenom}', 'Contrat mta3 ${membre.prenom}'),
+          ),
+          content: InteractiveViewer(
+            child: Image.network(
+              membre.contratUrl,
+              errorBuilder: (context, erreur, pile) {
+                return Text(
+                  tr(
+                    'Impossible d\'afficher le contrat (pas de réseau ?)',
+                    'Ma najjamnech nwarriw el contrat (ma famech réseau ?)',
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(tr('Fermer', 'Sakker')),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// M4 - Le bouton qui nomme un membre leader, ou lui retire ce rôle.

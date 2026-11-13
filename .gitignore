@@ -52,3 +52,6 @@ app.*.map.json
 # Chaque membre les régénère (voir README, "Configuration Firebase").
 android/app/google-services.json
 lib/firebase_options.dart
+
+# Scénario de démo local : contient des mots de passe, jamais publié.
+docs/demo/

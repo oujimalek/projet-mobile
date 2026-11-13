@@ -608,7 +608,7 @@ void main() {
           findsOneWidget);
       expect(find.text('Fuite d\'eau devant l\'entrée'), findsOneWidget);
       expect(find.text('Sa7, ena zeda'), findsNothing);
-      expect(find.text('Changer le statut (admin)'), findsNothing);
+      expect(find.text('Changer le statut'), findsNothing);
     });
 
     testWidgets('Modifier hors ligne : refusé avec un message',

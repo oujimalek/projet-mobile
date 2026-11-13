@@ -12,8 +12,8 @@ enum StatutUtilisateur {
 /// Le rôle d'un membre dans sa houma.
 enum RoleUtilisateur {
   resident, // membre normal
-  admin, // administrateur du quartier : valide les inscriptions
-  leader, // élu (ou nommé par l'admin) : organise événements et sondages (M4)
+  admin, // admin global de l'application (un seul) : visite chaque cité
+  leader, // un par houma : 1er habitant validé, puis élu ; valide les membres
 }
 
 /// M1 - Un utilisateur (habitant) de Houmani.
@@ -51,6 +51,11 @@ class Utilisateur {
   // Champ à part dans Firestore (`adresse`), écrit par enregistrerAdresse.
   final String adresse;
 
+  // Photo du contrat d'habitation (adresse Cloudinary), envoyée avec la
+  // demande. Obligatoire pour le premier habitant d'un quartier (sans
+  // leader) : l'admin global la vérifie. Vide sinon.
+  final String contratUrl;
+
   const Utilisateur({
     required this.id,
     required this.prenom,
@@ -73,6 +78,7 @@ class Utilisateur {
     this.avatar = '',
     this.motif = '',
     this.adresse = '',
+    this.contratUrl = '',
   });
 
   String get nomComplet => '$prenom $nom';
@@ -94,6 +100,9 @@ class Utilisateur {
   /// M4 : leader du quartier (organise les événements et les sondages).
   bool get estLeader => role == RoleUtilisateur.leader;
 
+  /// Le leader ou l'admin global : valide les membres de la houma.
+  bool get peutGerer => estAdmin || estLeader;
+
   /// Renvoie une copie de l'utilisateur avec certains champs modifiés.
   /// Les champs non donnés gardent leur valeur actuelle.
   /// Exemple : utilisateur.copier(statut: StatutUtilisateur.actif)
@@ -113,6 +122,7 @@ class Utilisateur {
     String? motif,
     RoleUtilisateur? role,
     String? adresse,
+    String? contratUrl,
   }) {
     return Utilisateur(
       id: id,
@@ -134,6 +144,7 @@ class Utilisateur {
       avatar: avatar ?? this.avatar,
       motif: motif ?? this.motif,
       adresse: adresse ?? this.adresse,
+      contratUrl: contratUrl ?? this.contratUrl,
     );
   }
 
@@ -183,6 +194,7 @@ class Utilisateur {
       avatar: map['avatar'] ?? '',
       motif: map['motif'] ?? '',
       adresse: map['adresse'] ?? '',
+      contratUrl: map['contratUrl'] ?? '',
       dateDemande: date?.toDate(),
     );
   }

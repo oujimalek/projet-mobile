@@ -18,6 +18,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/houmani_logo.dart';
 import 'module1/widgets_module1.dart';
 import 'module4/bandeau_rappel_m4.dart';
+import 'module4/carte_election_m4.dart';
 import 'module4/evenement_detail_screen.dart';
 import 'module4/module4_widgets.dart';
 import 'module4/push_m4.dart';
@@ -68,7 +69,7 @@ class _AccueilScreenState extends State<AccueilScreen> {
   }
 
   Future<void> _chargerDemandesEnAttente() async {
-    if (!_utilisateurs.getUtilisateurConnecte().estAdmin) {
+    if (!_utilisateurs.getUtilisateurConnecte().peutGerer) {
       return;
     }
     final Resultat<int> resultat =
@@ -134,10 +135,20 @@ class _AccueilScreenState extends State<AccueilScreen> {
     // ----- M4 : rappel des événements de demain / aujourd'hui -----
     contenu.add(const BandeauRappelM4());
 
-    // ----- Admin : demandes en attente -----
-    if (utilisateur.estAdmin && _enAttente > 0) {
+    // ----- Leader ou admin : demandes en attente -----
+    if (utilisateur.peutGerer && _enAttente > 0) {
       contenu.add(_carteDemandesEnAttente());
       contenu.add(const SizedBox(height: 20));
+    }
+
+    // ----- Admin global : alerte élection (demandes au tiers, élection
+    // semestrielle due, résultat à publier) dans la cité visitée -----
+    if (utilisateur.estAdmin) {
+      // La clé : une autre cité visitée → la carte se recharge
+      contenu.add(CarteElectionM4(
+        key: ValueKey('election-${utilisateur.quartierId}'),
+        alerteSeulement: true,
+      ));
     }
 
     // ----- Profil incomplet : invitation à le compléter -----

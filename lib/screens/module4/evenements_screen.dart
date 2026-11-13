@@ -14,6 +14,7 @@ import '../../widgets/arch_date_block.dart';
 import 'assistant_ia_carte.dart';
 import 'brouillons_screen.dart';
 import 'calendrier_screen.dart';
+import 'carte_election_m4.dart';
 import 'historique_screen.dart';
 import 'election_screen.dart';
 import 'evenement_detail_screen.dart';
@@ -351,9 +352,9 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
             },
             icon: Icon(Icons.calendar_month_outlined, color: AppColors.card),
           ),
-          // Élection des leaders (pour tout le monde)
+          // Élection du leader (pour tout le monde)
           IconButton(
-            tooltip: 'Élection des leaders',
+            tooltip: 'Élection du leader',
             onPressed: () {
               ouvrirEcranM4<void>(context, const ElectionScreen());
             },
@@ -462,6 +463,8 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
             _chargerSondages();
           },
         ),
+      // L'élection du leader : un événement spécial, en tête de liste
+      const CarteElectionM4(),
       _champRecherche(),
       const SizedBox(height: 10),
       _filtresRapides(),
@@ -476,7 +479,7 @@ class _EvenementsScreenState extends State<EvenementsScreen> {
           texte: _evenements.isEmpty
               ? (EvenementRepository.peutOrganiser(_moi)
                   ? 'Aucun événement pour l\'instant.\nOrganise le premier avec le bouton + !'
-                  : 'Aucun événement pour l\'instant.\nLes leaders de ta houma les annonceront ici.')
+                  : 'Aucun événement pour l\'instant.\nLe leader de ta houma les annoncera ici.')
               : tr('Aucun événement ne correspond à ta recherche', 'Ma l9ina 7atta événement'),
           icone: Icons.event_busy_outlined,
         ),

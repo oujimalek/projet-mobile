@@ -41,14 +41,27 @@ service cloud.firestore {
       return actif() && moi().quartierId == q;
     }
 
-    // Admin actif du quartier q
+    // L'admin global (un seul pour toute l'application). Son quartierId
+    // est la cité qu'il visite en ce moment (il en change librement) :
+    // adminDe(q) = l'admin global, quand il regarde la cité q.
     function adminDe(q) {
       return membreDe(q) && moi().role == 'admin';
     }
 
-    // M4 : leader ou admin actif du quartier q (organise événements et sondages)
+    // Leader de la houma q, ou admin global qui la visite : valide les
+    // membres, organise événements et sondages.
     function organisateurDe(q) {
       return membreDe(q) && moi().role in ['leader', 'admin'];
+    }
+
+    // Adresse d'une image de NOTRE compte Cloudinary
+    function imageCloudinary(url) {
+      return url is string
+        && url.matches('^https://res[.]cloudinary[.]com/pu3lxdrf/.*');
+    }
+
+    function quartierChemin(q) {
+      return /databases/$(database)/documents/quartiers/$(q);
     }
 
     // Seuls ces champs changent dans la modification
@@ -62,12 +75,13 @@ service cloud.firestore {
       // Lire : SON propre document (même en attente, refusé ou bloqué :
       // l'app doit pouvoir afficher le bon écran), ou, dans le même
       // quartier : les membres actifs (pour un résident actif), tout le
-      // monde (pour l'admin, qui valide les demandes).
+      // monde (pour le leader et l'admin, qui valident les demandes).
       // Les requêtes des résidents doivent donc filtrer statut == 'actif'.
       allow read: if connecte() && (
         monUid() == uid
         || (actif() && moi().quartierId == resource.data.quartierId
-            && (resource.data.statut == 'actif' || moi().role == 'admin'))
+            && (resource.data.statut == 'actif'
+                || moi().role in ['admin', 'leader']))
       );
 
       // Créer : uniquement son propre document, à l'inscription,
@@ -96,11 +110,13 @@ service cloud.firestore {
              'competences', 'avatar']);
 
       // Rejoindre / changer de quartier : compte en attente ou refusé, OU
-      // résident actif qui quitte son quartier pour un AUTRE (écran Mon
-      // quartier ; l'admin ne peut pas : son quartier resterait sans admin).
+      // membre actif qui quitte son quartier pour un AUTRE (écran Mon
+      // quartier ; pas l'admin global : lui, il visite, voir plus bas).
       // E-mail vérifié, quartier existant, le statut (re)devient "enAttente"
       // et la date de demande est l'heure du serveur (pas de triche sur
       // l'ordre de la file d'attente).
+      // Contrat d'habitation (photo Cloudinary) : obligatoire si le quartier
+      // n'a pas encore de leader (l'admin global le vérifie), sinon optionnel.
       allow update: if connecte()
         && monUid() == uid
         && request.auth.token.email_verified == true
@@ -109,13 +125,27 @@ service cloud.firestore {
                 && resource.data.role != 'admin'
                 && request.resource.data.quartierId != resource.data.quartierId))
         && changeSeulement(['quartierId', 'quartierNom', 'residence',
-             'statut', 'dateDemande', 'motif', 'role'])
+             'statut', 'dateDemande', 'motif', 'role', 'contratUrl'])
         // M4 : un leader qui change de quartier redevient résident
         && request.resource.data.get('role', 'resident') == 'resident'
         && request.resource.data.statut == 'enAttente'
         && request.resource.data.get('motif', '') == ''
         && request.resource.data.dateDemande == request.time
-        && exists(/databases/$(database)/documents/quartiers/$(request.resource.data.quartierId));
+        && exists(quartierChemin(request.resource.data.quartierId))
+        && (request.resource.data.get('contratUrl', '') == ''
+            || imageCloudinary(request.resource.data.contratUrl))
+        && (get(quartierChemin(request.resource.data.quartierId)).data.get('aUnLeader', false) == true
+            || imageCloudinary(request.resource.data.get('contratUrl', '')));
+
+      // Admin global : visite une autre cité (sélecteur de l'écran Mon
+      // quartier). Seuls la cité et son nom changent, vers un quartier qui
+      // existe ; il reste actif et admin.
+      allow update: if connecte()
+        && monUid() == uid
+        && resource.data.statut == 'actif'
+        && resource.data.role == 'admin'
+        && changeSeulement(['quartierId', 'quartierNom', 'residence'])
+        && exists(quartierChemin(request.resource.data.quartierId));
 
       // M1 - Son adresse postale (avec la demande, vérifiée par l'admin sur
       // la carte) : seul ce champ change, texte de 150 caractères au plus.
@@ -125,13 +155,26 @@ service cloud.firestore {
         && request.resource.data.adresse is string
         && request.resource.data.adresse.size() <= 150;
 
-      // Admin du quartier : change UNIQUEMENT le statut d'un membre
+      // Leader de la houma, ou admin global : change le statut d'un membre
       // (valider, refuser, bloquer, débloquer) et le motif, jamais le sien.
+      // Personne ne touche à l'admin ; le leader ne touche pas à un autre
+      // leader (seul l'admin le peut).
+      // Premier habitant d'un quartier SANS leader : l'admin global le
+      // valide ET le nomme leader, dans le même lot que aUnLeader = true
+      // sur le quartier.
       // Refuser / bloquer : motif obligatoire (3 à 200 caractères, montré au
       // membre). Valider / débloquer : motif effacé.
-      allow update: if adminDe(resource.data.quartierId)
+      allow update: if organisateurDe(resource.data.quartierId)
         && monUid() != uid
-        && changeSeulement(['statut', 'motif'])
+        && resource.data.get('role', 'resident') != 'admin'
+        && (moi().role == 'admin' || resource.data.get('role', 'resident') != 'leader')
+        && changeSeulement(['statut', 'motif', 'role'])
+        && (request.resource.data.get('role', 'resident') == resource.data.get('role', 'resident')
+            || (moi().role == 'admin'
+                && request.resource.data.role == 'leader'
+                && request.resource.data.statut == 'actif'
+                && get(quartierChemin(resource.data.quartierId)).data.get('aUnLeader', false) == false
+                && getAfter(quartierChemin(resource.data.quartierId)).data.get('aUnLeader', false) == true))
         && ((request.resource.data.statut == 'actif'
              && request.resource.data.get('motif', '') == '')
             || (request.resource.data.statut in ['bloque', 'refuse']
@@ -139,7 +182,7 @@ service cloud.firestore {
                 && request.resource.data.motif.size() >= 3
                 && request.resource.data.motif.size() <= 200));
 
-      // M4 - Admin du quartier : nomme un membre actif leader, ou lui
+      // M4 - Admin global : nomme un membre actif leader, ou lui
       // retire ce rôle. Seulement entre "resident" et "leader" (on ne
       // devient jamais admin ainsi, et l'admin ne se change pas lui-même).
       allow update: if adminDe(resource.data.quartierId)
@@ -157,8 +200,8 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email;
 
       // Supprimer son compte (droit à la suppression, loi 2004-63) :
-      // son propre document seulement, et pas l'admin (le quartier
-      // resterait sans administrateur).
+      // son propre document seulement, et pas l'admin global
+      // (l'application resterait sans administrateur).
       allow delete: if connecte()
         && monUid() == uid
         && resource.data.role != 'admin';
@@ -203,12 +246,12 @@ service cloud.firestore {
 
     // ===================== M1 · Codes d'invitation =====================
     // get (lire LE code tapé) : oui. list (lister tous les codes) : non,
-    // sauf l'admin, et seulement les codes de SON quartier (la requête doit
-    // filtrer quartierId), pour l'afficher dans l'écran Mon quartier.
+    // sauf le leader et l'admin, et seulement les codes de LEUR quartier (la
+    // requête doit filtrer quartierId), pour l'afficher dans Mon quartier.
     // Création : à la main dans la console (voir docs/schema_firestore.md).
     match /codesQuartier/{code} {
       allow get: if connecte();
-      allow list: if adminDe(resource.data.quartierId);
+      allow list: if organisateurDe(resource.data.quartierId);
       allow write: if false;
     }
 
@@ -227,6 +270,11 @@ service cloud.firestore {
         && request.resource.data.contour.size() >= 3
         && request.resource.data.contour.size() <= 100
         && request.resource.data.position is latlng;
+      // M1 : l'admin global note que le quartier a son premier leader
+      // (dans le lot qui valide ce premier habitant)
+      allow update: if adminDe(q)
+        && changeSeulement(['aUnLeader'])
+        && request.resource.data.aUnLeader == true;
 
       // ---------- M2 · Services ----------
       match /services/{serviceId} {
@@ -390,8 +438,8 @@ service cloud.firestore {
                'danger', 'position', 'photoUrl'])
           && contenuValide();
 
-        // L'admin change le statut.
-        allow update: if adminDe(q)
+        // Le leader (ou l'admin global) change le statut.
+        allow update: if organisateurDe(q)
           && changeSeulement(['statut'])
           && request.resource.data.statut in ['enAttente', 'enCours', 'resolu', 'refuse'];
 
@@ -447,10 +495,10 @@ service cloud.firestore {
                 && getAfter(chemin()).data.statut == 'enAttente'
                 && etape().statut == 'enAttente')
               ||
-              // Changement de statut par l'admin, dans le même lot : le
-              // statut change vraiment, et l'étape le recopie. Refuser
-              // demande une explication (3 caractères au moins).
-              (adminDe(q)
+              // Changement de statut par le leader ou l'admin, dans le même
+              // lot : le statut change vraiment, et l'étape le recopie.
+              // Refuser demande une explication (3 caractères au moins).
+              (organisateurDe(q)
                 && get(chemin()).data.statut != etape().statut
                 && getAfter(chemin()).data.statut == etape().statut
                 && (etape().statut != 'refuse' || etape().note.size() >= 3))

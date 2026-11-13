@@ -591,7 +591,7 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   Future<Resultat<void>> supprimerCompte(String motDePasse) async {
     if (_connecte.estAdmin) {
       return const Resultat.echec(
-        'Un administrateur ne peut pas supprimer son compte : '
+        'L\'administrateur ne peut pas supprimer son compte : '
         'contacte l\'équipe Houmani',
       );
     }
@@ -673,13 +673,18 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   }
 
   @override
-  Future<Resultat<void>> rejoindreQuartier(Quartier quartier) async {
+  Future<Resultat<void>> rejoindreQuartier(
+    Quartier quartier, {
+    String contratUrl = '',
+  }) async {
     final String? refus =
-        UtilisateurRepository.refusChangement(_connecte, quartier);
+        UtilisateurRepository.refusChangement(_connecte, quartier) ??
+            UtilisateurRepository.refusContrat(quartier, contratUrl);
     if (refus != null) {
       return Resultat.echec(refus);
     }
     final Utilisateur demande = _connecte.copier(
+      contratUrl: contratUrl,
       quartierId: quartier.id,
       quartier: quartier.nom,
       residence: quartier.nom, // comme le mock : lu par le module 3
@@ -697,8 +702,40 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
         'motif': '',
         'role': RoleUtilisateur.resident.name,
         'dateDemande': FieldValue.serverTimestamp(), // l'heure du serveur
+        // Le contrat de cette demande (vide : on oublie l'ancien)
+        'contratUrl': contratUrl,
       });
       await _memoriser(demande);
+      return const Resultat.succes(null);
+    } on FirebaseException catch (e) {
+      return Resultat.echec(_messageFirestore(e.code));
+    }
+  }
+
+  @override
+  Future<Resultat<void>> visiterQuartier(Quartier quartier) async {
+    final String? refus =
+        UtilisateurRepository.refusVisite(_connecte, quartier);
+    if (refus != null) {
+      return Resultat.echec(refus);
+    }
+    final Utilisateur visiteur = _connecte.copier(
+      quartierId: quartier.id,
+      quartier: quartier.nom,
+      residence: quartier.nom,
+    );
+    try {
+      // firestore.rules : l'admin ne change que ces 3 champs
+      await _utilisateurs.doc(visiteur.id).update({
+        'quartierId': quartier.id,
+        'quartierNom': quartier.nom,
+        'residence': quartier.nom,
+      });
+      // Rien de l'ancienne cité ne reste sur le téléphone (signalements
+      // en cache, rappels, abonnements push)
+      await NettoyageLocal.viderTout(visiteur.id);
+      await _memoriser(visiteur);
+      await _cache.enregistrerQuartier(quartier);
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));
@@ -751,12 +788,12 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
 
   @override
   Future<Resultat<String?>> getCodeInvitation() async {
-    if (!_connecte.estAdmin) {
+    if (!_connecte.peutGerer) {
       return const Resultat.echec('Action non autorisée');
     }
     try {
       // Le filtre sur quartierId est obligatoire : firestore.rules ne laisse
-      // l'admin lister QUE les codes de son quartier
+      // le leader (ou l'admin) lister QUE les codes de son quartier
       final QuerySnapshot<Map<String, dynamic>> resultat = await _base
           .collection('codesQuartier')
           .where('quartierId', isEqualTo: _connecte.quartierId)
@@ -896,8 +933,6 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
   // Outils internes
   // =====================================================================
 
-  /// L'admin ne change QUE le statut et le motif (seuls champs permis par
-  /// firestore.rules). Motif vide pour actif, 3 à 200 caractères sinon.
   @override
   Future<Resultat<void>> changerRole(String id, RoleUtilisateur role) async {
     try {
@@ -920,6 +955,9 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
     }
   }
 
+  /// Le leader ou l'admin change le statut et le motif (seuls champs
+  /// permis par firestore.rules, sauf le 1er leader). Motif vide pour
+  /// actif, 3 à 200 caractères sinon.
   Future<Resultat<void>> _changerStatut(
     String id,
     StatutUtilisateur statut,
@@ -933,7 +971,44 @@ class FirebaseUtilisateurRepository implements UtilisateurRepository {
       }
     }
     try {
-      await _utilisateurs.doc(id).update({'statut': statut.name, 'motif': texte});
+      final DocumentSnapshot<Map<String, dynamic>> document =
+          await _utilisateurs.doc(id).get();
+      if (!document.exists) {
+        return const Resultat.echec('Membre introuvable');
+      }
+      final Utilisateur membre = Utilisateur.fromMap(id, document.data()!);
+      final String? refus =
+          UtilisateurRepository.refusGestion(_connecte, membre);
+      if (refus != null) {
+        return Resultat.echec(refus);
+      }
+      final DocumentReference<Map<String, dynamic>> refQuartier =
+          _quartiers.doc(_connecte.quartierId);
+      // Premier habitant d'un quartier sans leader, validé par l'admin
+      // global (contrat vérifié) : il devient le leader, dans le même lot
+      // que aUnLeader = true (firestore.rules vérifie les deux ensemble).
+      bool premierLeader = false;
+      if (statut == StatutUtilisateur.actif &&
+          membre.statut == StatutUtilisateur.enAttente &&
+          _connecte.estAdmin) {
+        final DocumentSnapshot<Map<String, dynamic>> documentQuartier =
+            await refQuartier.get();
+        premierLeader = documentQuartier.data()?['aUnLeader'] != true;
+      }
+      if (premierLeader) {
+        final WriteBatch lot = _base.batch();
+        lot.update(_utilisateurs.doc(id), {
+          'statut': statut.name,
+          'motif': texte,
+          'role': RoleUtilisateur.leader.name,
+        });
+        lot.update(refQuartier, {'aUnLeader': true});
+        await lot.commit();
+      } else {
+        await _utilisateurs
+            .doc(id)
+            .update({'statut': statut.name, 'motif': texte});
+      }
       return const Resultat.succes(null);
     } on FirebaseException catch (e) {
       return Resultat.echec(_messageFirestore(e.code));

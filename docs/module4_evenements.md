@@ -12,7 +12,7 @@ Les voisins d'une même houma :
   l'événement après coup et **pointent leur présence par QR code** ;
 - **créent des sondages** et **votent** (vote secret, un vote par membre,
   définitif) ;
-- **élisent leurs leaders** (rôle Leader, élection tous les 6 mois).
+- **élisent leur leader** (un seul par houma, élection tous les 6 mois).
 
 Le module écrit dans `quartiers/{q}/evenements`, `sondages`, `elections` et
 `demandesElection`. Il lit l'utilisateur connecté du module 1
@@ -41,18 +41,34 @@ Seul un membre **actif** du quartier voit le module.
 ### Le rôle Leader
 
 - Rôle du module 1 (`RoleUtilisateur.leader`), à côté de `resident` et `admin`.
-- L'admin nomme ou retire un leader (écran « Membres du quartier »).
-- Élection tous les 6 mois : 3 jours de candidatures puis 2 jours de vote,
-  1 voix par membre, vote secret. L'admin choisit le nombre de places, coche
-  les élus (égalité : il tranche) et publie : les élus deviennent leaders,
-  les anciens redeviennent résidents.
-- Élection anticipée : les membres appuient sur « Demander une nouvelle
-  élection » ; l'admin voit le nombre de demandes et peut ouvrir une
-  élection de 24 h (12 h + 12 h).
+- **Un admin pour toute l'application** (l'admin global) et **un leader par
+  houma**, élu par les résidents. L'admin global visite les cités (son
+  `quartierId` est la cité qu'il regarde) ; il n'habite nulle part et ne
+  compte pas dans les membres.
+- **Le premier leader** : le premier habitant d'une houma sans leader envoie
+  son contrat d'habitation (photo Cloudinary) ; l'admin global le vérifie,
+  le valide et le nomme leader (`aUnLeader` = `true` sur le quartier).
+- **Élection normale** : au plus tôt 6 mois après la dernière élection
+  publiée (avant, le bouton est grisé avec la date possible). 3 jours de
+  candidatures puis 2 jours de vote, 1 voix par membre, vote secret. Une
+  seule place. L'admin coche l'élu (égalité : il tranche) et publie :
+  l'élu devient leader, l'ancien redevient résident. Si l'élu n'est plus
+  membre actif, la publication est refusée (pas 6 mois sans leader).
+- **Élection anticipée** (24 h : 12 h + 12 h) : les membres appuient sur
+  « Demander une nouvelle élection ». Quand les demandes atteignent **le
+  tiers des membres actifs** (`seuilAnticipee`, arrondi au-dessus), l'admin
+  est alerté et peut l'ouvrir ; avant, c'est refusé. Seules comptent les
+  demandes des membres encore actifs.
+- **Un événement spécial** : la carte « Élection du leader »
+  (`carte_election_m4.dart`) est en tête de la liste des événements
+  (état de l'élection, date de la prochaine). Sur l'Accueil, l'admin voit
+  une alerte quand il a quelque chose à faire : résultat à publier, tiers
+  des demandes atteint, élection des 6 mois due.
 - Candidats : tout membre pendant la première élection, ensuite les membres
   depuis au moins 30 jours. L'admin ne peut pas être leader.
 - Sans Cloud Functions (offre gratuite Spark), la phase de l'élection est
-  calculée à partir des dates enregistrées.
+  calculée à partir des dates enregistrées ; le délai de 6 mois et le seuil
+  du tiers sont vérifiés par l'application (pas par les règles).
 
 ## 3. Les écrans (`lib/screens/module4/`)
 
@@ -64,7 +80,7 @@ Seul un membre **actif** du quartier voit le module.
 | Questions, qui apporte quoi, avis, sondages de l'événement | `vie_evenement_widgets.dart` |
 | Sondage (résultats en direct, camembert, compte à rebours) | `sondage_screen.dart`, `graphique_sondage.dart` |
 | Nouveau sondage (dont sondage de date) | `sondage_form_screen.dart` |
-| Élection des leaders | `election_screen.dart` |
+| Élection du leader (+ la carte « événement spécial » et l'alerte admin) | `election_screen.dart`, `carte_election_m4.dart` |
 | Calendrier | `calendrier_screen.dart` |
 | Statistiques (admin) | `statistiques_screen.dart` |
 | Carte du lieu | `carte_evenement.dart` |

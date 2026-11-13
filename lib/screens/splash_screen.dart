@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/models/utilisateur.dart';
+import '../data/services/musique_accueil.dart';
 import '../data/services/utilisateur_repository.dart';
 import '../theme/app_theme.dart';
 import '../widgets/houmani_logo.dart';
@@ -27,6 +28,8 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    // Musique "Houmani" au lancement (continue sur l'écran suivant)
+    MusiqueAccueil.jouer();
     _demarrer();
   }
 

@@ -26,9 +26,11 @@ class Quartier {
   final PointGps? position;
   // Les coins du quartier, dans l'ordre (vide : pas de contour)
   final List<PointGps> contour;
-  // true : un administrateur gère ce quartier et peut valider les
-  // demandes. Écrit seulement par un script (admin SDK), pas par l'app.
-  final bool aUnAdmin;
+  // true : le quartier a déjà un leader (le premier habitant validé par
+  // l'admin global, puis l'élu). Sans leader, la demande pour rejoindre
+  // doit avoir un contrat d'habitation, vérifié par l'admin global.
+  // Écrit par l'admin (quand il valide le premier habitant).
+  final bool aUnLeader;
 
   const Quartier({
     required this.id,
@@ -38,7 +40,7 @@ class Quartier {
     this.nbMembres = 0,
     this.position,
     this.contour = const [],
-    this.aUnAdmin = false,
+    this.aUnLeader = false,
   });
 
   /// Le quartier peut-il être affiché sur la carte ?
@@ -137,7 +139,7 @@ class Quartier {
       localisation: map['localisation'] ?? '',
       position: lirePoint(map['position']),
       contour: contour,
-      aUnAdmin: map['aUnAdmin'] == true,
+      aUnLeader: map['aUnLeader'] == true,
     );
   }
 

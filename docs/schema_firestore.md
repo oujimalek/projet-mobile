@@ -181,7 +181,7 @@ l'application affiche « compte bloqué » et le déconnecte.
 | `nbMembres` | **non stocké** | | `count()` sur `utilisateurs` où `quartierId == id` et `statut == actif` |
 | `position` | `position` | geopoint (optionnel) | Le centre du quartier sur la carte |
 | `contour` | `contour` | array de geopoint (optionnel) | Les coins du quartier, dans l'ordre (3 au minimum pour dessiner la zone) |
-| `aUnAdmin` | `aUnAdmin` | bool (optionnel, `false` si absent) | `true` quand le quartier a un admin. Sinon l'app affiche « Pas encore d'administrateur » et empêche de le rejoindre (personne ne validerait la demande). Écrit à la main (section 8), jamais par l'app |
+| `aUnLeader` | `aUnLeader` | bool (optionnel, `false` si absent) | `true` quand la houma a un leader. Sinon, pour la rejoindre, il faut envoyer son contrat d'habitation (`contratUrl`), que l'admin global vérifie : ce premier habitant devient leader. Écrit par l'admin global (validation du premier habitant, publication d'une élection), jamais remis à `false` |
 
 Sans `position` ni `contour`, l'écran « Mon quartier » affiche un message à
 la place de la carte (OpenStreetMap, aucune clé d'API).
@@ -435,38 +435,41 @@ Si l'index manque, l'erreur affiche un lien qui le crée en un clic.
 Ces index sont écrits dans `firestore.indexes.json` (à la racine du projet).
 Pour les créer sur Firebase : `firebase deploy --only firestore:indexes`.
 
-## 8. Démarrage : créer le premier quartier et le premier admin
+## 8. Démarrage : créer un quartier et l'admin global
+
+Les rôles : **un admin global** pour toute l'application, et **un leader
+par houma**, élu par les résidents (voir `docs/module4_evenements.md`).
 
 Les règles interdisent de créer un quartier ou de se nommer admin depuis
-l'application (sinon n'importe qui pourrait le faire). La toute première
-fois, on le fait **à la main dans la console Firebase**, qui n'est pas
-soumise aux règles. À faire une seule fois.
+l'application (sinon n'importe qui pourrait le faire). On le fait **à la
+main dans la console Firebase**, qui n'est pas soumise aux règles.
 
 **Étape 1 : créer le quartier et son code.**
 Console Firebase → *Firestore Database* → *Démarrer une collection* :
 - collection `quartiers`, ID automatique, champs
   `nom` (string) = `Résidence El Yasmine`,
   `localisation` (string) = `Ennasr 2, Ariana`,
-  `aUnAdmin` (boolean) = `false`.
+  `aUnLeader` (boolean) = `false`.
   Noter l'ID généré.
 - collection `codesQuartier`, ID du document = `YAS72B`, champs
   `quartierId` (string) = l'ID noté, `quartierNom` (string) = `Résidence El Yasmine`.
 
-**Étape 2 : créer son compte dans l'application.**
-S'inscrire et valider l'e-mail. Tant que le quartier n'a pas d'admin
-(`aUnAdmin` = `false`), l'app refuse de le rejoindre : pour le futur admin,
-mettre provisoirement `aUnAdmin` = `true`, entrer le code `YAS72B`. Le
-compte est `enAttente`.
+**Étape 2 : l'admin global (une seule fois pour toute l'application).**
+S'inscrire dans l'application et valider l'e-mail. Puis console →
+`utilisateurs` → le document de ce compte → `statut` = `actif`,
+`role` = `admin`, `quartierId` / `quartierNom` = une cité existante
+(celle qu'il « visite » au départ ; il en change ensuite depuis l'écran
+Mon quartier). Relancer l'application.
 
-**Étape 3 : se nommer admin.**
-Console → `utilisateurs` → le document de son compte → modifier
-`statut` = `actif` et `role` = `admin`. Vérifier que le quartier a bien
-`aUnAdmin` = `true`. Relancer l'application. Cet admin valide ensuite tous
-les autres voisins depuis l'écran « Membres du quartier ».
-
-Si l'admin perd son rôle (ou supprime son compte), remettre `aUnAdmin` =
-`false` : les voisins voient alors « Pas encore d'administrateur » au lieu
-d'attendre une validation qui ne viendrait jamais.
+**Étape 3 : le premier leader de la houma.**
+Le premier habitant rejoint le quartier avec le code `YAS72B` et envoie la
+photo de son **contrat d'habitation** (obligatoire tant que
+`aUnLeader` = `false`). L'admin global, en visite dans cette cité, vérifie
+le contrat dans « Membres du quartier » et le valide : ce membre devient
+leader et le quartier passe à `aUnLeader` = `true`. Ensuite, le leader
+valide les nouveaux habitants (le contrat devient optionnel), et la houma
+élit son leader tous les 6 mois (ou plus tôt si le tiers des membres le
+demande).
 
 **Étape 4 (optionnelle) : placer le quartier sur la carte.**
 Le plus simple : l'admin ouvre « Mon quartier » → « Tracer les limites » et

@@ -13,12 +13,14 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import 'module4_widgets.dart';
 
-/// M4 - Élection des leaders du quartier.
+/// M4 - Élection du leader de la houma (un seul leader, élu par les
+/// résidents).
 ///
 /// L'écran change selon la phase (calculée à partir des dates) :
-/// - pas d'élection en cours : les leaders actuels, la date de la prochaine
-///   élection, "Demander une nouvelle élection" (membres), "Ouvrir
-///   l'élection" (admin) ;
+/// - pas d'élection en cours : le leader actuel, la date de la prochaine
+///   élection (tous les 6 mois), "Demander une nouvelle élection"
+///   (membres), "Ouvrir l'élection" (admin global : normale quand les
+///   6 mois sont passés, anticipée quand le tiers des membres l'a demandée) ;
 /// - candidatures : la liste des candidats, "Me porter candidat" ;
 /// - vote : choisir un candidat (vote secret, une seule fois) ;
 /// - dépouillement : le classement ; l'admin publie les résultats.
@@ -38,14 +40,14 @@ class _ElectionScreenState extends State<ElectionScreen> {
   List<Candidat> _candidats = [];
   String? _monVote; // candidat choisi (null : pas encore voté)
   bool _aDemande = false;
-  int _nbDemandes = 0;
+  int _nbDemandes = 0; // admin seulement (les demandes sont privées)
+  int _nbActifs = 0; // membres actifs : pour le seuil du tiers
   bool _enChargement = true;
   bool _envoiEnCours = false;
   String? _erreur;
 
   // Choix de l'utilisateur
   String? _choixVote;
-  int _nbPlaces = 3; // admin : nombre de leaders à élire
   final Set<String> _elusChoisis = {}; // admin : élus cochés au dépouillement
 
   Utilisateur get _moi => UtilisateurRepository().getUtilisateurConnecte();
@@ -84,6 +86,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
     if (_moi.estAdmin) {
       nbDemandes = (await _depot.compterDemandes()).donnee ?? 0;
     }
+    final int nbActifs = (await _depot.compterVotants()).donnee ?? 0;
     if (!mounted) {
       return;
     }
@@ -94,6 +97,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       _monVote = monVote;
       _aDemande = aDemande;
       _nbDemandes = nbDemandes;
+      _nbActifs = nbActifs;
       _choixVote = monVote;
       // Dépouillement : les N premiers sont cochés d'office
       _elusChoisis.clear();
@@ -157,7 +161,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
     return Scaffold(
       body: Column(
         children: [
-          AppHeader(titre: tr('Élection des leaders', 'Intikhabet el leaders')),
+          AppHeader(titre: tr('Élection du leader', 'Intikhabet el leader')),
           Expanded(child: corps),
         ],
       ),
@@ -186,14 +190,14 @@ class _ElectionScreenState extends State<ElectionScreen> {
   List<Widget> _sansElectionEnCours(Election? derniere) {
     final List<Widget> enfants = [];
 
-    // Les leaders actuels
+    // Le leader actuel (les anciennes élections pouvaient en avoir plusieurs)
     final List<String> leaders = derniere?.elusNoms ?? [];
-    enfants.add(_titre('Les leaders de ta houma'));
+    enfants.add(_titre(tr('Le leader de ta houma', 'El leader mta3 houmtek')));
     enfants.add(
       AppCard(
         child: leaders.isEmpty
             ? Text(
-                'Pas encore de leaders élus.',
+                tr('Pas encore de leader élu.', 'Mazel 7atta leader mantakhab.'),
                 style: TextStyle(color: AppColors.textSecondary),
               )
             : Column(
@@ -228,10 +232,19 @@ class _ElectionScreenState extends State<ElectionScreen> {
 
   /// Membre : demander (ou retirer sa demande d') une élection anticipée.
   List<Widget> _demandeMembre() {
+    final int seuil = ElectionRepository.seuilAnticipee(_nbActifs);
     return [
       Text(
-        'Pas satisfait des leaders ? Demande une nouvelle élection : '
-        'l\'admin voit le nombre de demandes et peut ouvrir une élection de 24 h.',
+        tr(
+          'Le leader est élu pour 6 mois. Pas satisfait ? Demande une '
+              'élection anticipée : quand le tiers des membres '
+              '($seuil sur $_nbActifs) l\'a demandée, l\'admin est alerté '
+              'et peut ouvrir une élection de 24 h.',
+          'El leader yetntakheb 3al 6 chhar. Mouch mrigel ? Otlob intikhabet '
+              'mosta3jla : ki thoulth el sokkan ($seuil men $_nbActifs) '
+              'yotolbouha, el admin ywoslou tanbih w ynajjem y7el '
+              'intikhabet 24 s.',
+        ),
         style: TextStyle(color: AppColors.textSecondary),
       ),
       const SizedBox(height: 12),
@@ -254,54 +267,69 @@ class _ElectionScreenState extends State<ElectionScreen> {
     ];
   }
 
-  /// Admin : nombre de places, demandes reçues, ouvrir l'élection.
+  /// Admin : demandes reçues (sur le seuil du tiers), ouvrir l'élection.
+  /// Chaque bouton n'est actif que si ElectionRepository.refusOuverture
+  /// l'accepte ; sinon la raison est écrite dessous.
   List<Widget> _ouvertureAdmin(Election? derniere) {
+    final int seuil = ElectionRepository.seuilAnticipee(_nbActifs);
+    final bool atteint =
+        ElectionRepository.seuilAtteint(_nbDemandes, _nbActifs);
+    final String? refusNormale = ElectionRepository.refusOuverture(
+      _moi,
+      derniere,
+      1,
+    );
+    final String? refusAnticipee = ElectionRepository.refusOuverture(
+      _moi,
+      derniere,
+      1,
+      anticipee: true,
+      nbDemandes: _nbDemandes,
+      nbActifs: _nbActifs,
+    );
     return [
-      _titre('Ouvrir une élection'),
-      _ligneInfo(Icons.campaign_outlined,
-          '$_nbDemandes membre${_nbDemandes > 1 ? 's demandent' : ' demande'} une nouvelle élection.'),
-      const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: Text(tr('Nombre de leaders à élire', '9addech men leader bech nentakhbou'),
-                style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-          IconButton(
-            onPressed: _nbPlaces > 1 ? () => setState(() => _nbPlaces--) : null,
-            icon: const Icon(Icons.remove_circle_outline),
-          ),
-          Text('$_nbPlaces',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          IconButton(
-            onPressed: _nbPlaces < ElectionRepository.placesMax
-                ? () => setState(() => _nbPlaces++)
-                : null,
-            icon: const Icon(Icons.add_circle_outline),
-          ),
-        ],
+      _titre(tr('Ouvrir une élection', '7ell intikhabet')),
+      _ligneInfo(
+        atteint ? Icons.notification_important_outlined : Icons.campaign_outlined,
+        '$_nbDemandes / $seuil demandes d\'élection anticipée '
+        '(le tiers des $_nbActifs membres)'
+        '${atteint ? ' : seuil atteint' : ''}.',
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: 12),
       PrimaryButton(
         texte: 'Ouvrir l\'élection (3 j + 2 j)',
-        onPressed: _envoiEnCours
+        onPressed: _envoiEnCours || refusNormale != null
             ? null
             : () => _action(
-                  () => _depot.ouvrirElection(nbPlaces: _nbPlaces, anticipee: false),
+                  () => _depot.ouvrirElection(nbPlaces: 1, anticipee: false),
                   'L\'élection est ouverte : 3 jours de candidatures',
                 ),
       ),
+      if (refusNormale != null) _raison(refusNormale),
       const SizedBox(height: 10),
       SecondaryButton(
         texte: tr('Élection anticipée (24 h)', 'Intikhabet mosta3jla (24 h)'),
-        onPressed: _envoiEnCours
+        onPressed: _envoiEnCours || refusAnticipee != null
             ? null
             : () => _action(
-                  () => _depot.ouvrirElection(nbPlaces: _nbPlaces, anticipee: true),
+                  () => _depot.ouvrirElection(nbPlaces: 1, anticipee: true),
                   'Élection anticipée ouverte : 12 h de candidatures',
                 ),
       ),
+      if (refusAnticipee != null) _raison(refusAnticipee),
     ];
+  }
+
+  /// Pourquoi un bouton est désactivé (petit texte sous le bouton).
+  Widget _raison(String texte) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        texte,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+      ),
+    );
   }
 
   // ----- Candidatures -----
@@ -323,8 +351,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       _bandeauPhase(
         Icons.person_add_alt_1_outlined,
         'Candidatures ouvertes',
-        'Jusqu\'au ${_quand(election.finCandidatures)} · '
-            '${election.nbPlaces} place${election.nbPlaces > 1 ? 's' : ''}'
+        'Jusqu\'au ${_quand(election.finCandidatures)}'
             '${election.anticipee ? ' · élection anticipée' : ''}',
       ),
       const SizedBox(height: 16),
@@ -381,8 +408,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       _bandeauPhase(
         Icons.how_to_vote_outlined,
         'Vote ouvert',
-        'Jusqu\'au ${_quand(election.finVote)} · ${election.nbPlaces} '
-            'place${election.nbPlaces > 1 ? 's' : ''} · vote secret',
+        'Jusqu\'au ${_quand(election.finVote)} · vote secret',
       ),
       const SizedBox(height: 16),
       _titre(aVote ? 'Ton vote' : 'Choisis ton candidat'),
@@ -443,7 +469,9 @@ class _ElectionScreenState extends State<ElectionScreen> {
         Icons.fact_check_outlined,
         'Vote terminé',
         _moi.estAdmin
-            ? 'Coche les ${election.nbPlaces} élus puis publie les résultats.'
+            ? (election.nbPlaces > 1
+                ? 'Coche les ${election.nbPlaces} élus puis publie les résultats.'
+                : 'Coche l\'élu puis publie les résultats.')
             : 'En attente de la publication des résultats par l\'admin.',
       ),
       const SizedBox(height: 16),
@@ -454,7 +482,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
       enfants.add(Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: _ligneInfo(Icons.balance,
-            'Égalité pour la dernière place : à toi de choisir qui est élu.'),
+            'Égalité en tête : à toi de choisir qui est élu.'),
       ));
     }
     for (final Candidat candidat in _candidats) {
@@ -505,7 +533,7 @@ class _ElectionScreenState extends State<ElectionScreen> {
         onPressed: elus.isEmpty || _envoiEnCours
             ? null
             : () => _action(() => _depot.publierResultats(election, elus),
-                'Résultats publiés : les élus sont maintenant leaders'),
+                'Résultats publiés : la houma a son leader'),
       ));
     }
     return enfants;

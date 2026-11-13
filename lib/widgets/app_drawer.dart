@@ -53,7 +53,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   Future<void> _chargerDemandesEnAttente() async {
-    if (!_repository.getUtilisateurConnecte().estAdmin) {
+    if (!_repository.getUtilisateurConnecte().peutGerer) {
       return;
     }
     final Resultat<int> resultat =
@@ -118,7 +118,7 @@ class _AppDrawerState extends State<AppDrawer> {
         onTap: () => _ouvrir('/profil/quartier'),
       ),
     ];
-    if (utilisateur.estAdmin) {
+    if (utilisateur.peutGerer) {
       rubriquesCompte.add(
         _rubrique(
           icone: Icons.groups_outlined,
